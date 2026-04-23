@@ -38,11 +38,7 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     const keywordList = data.keywordList || [];
-
-    // 입력한 키워드와 정확히 일치하는 항목 찾기
-    const matched = keywordList.find(k =>
-      k.relKeyword === keyword
-    );
+    const matched = keywordList.find(k => k.relKeyword === keyword);
 
     if (matched) {
       return res.status(200).json({
@@ -54,7 +50,7 @@ export default async function handler(req, res) {
     } else {
       return res.status(200).json({ keyword, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, total: 0 });
     }
-  } catch (e) {
+  } catch(e) {
     return res.status(500).json({ error: e.message });
   }
 }
