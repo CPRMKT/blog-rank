@@ -12,7 +12,7 @@ body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14px
 .logo span{color:#666;font-weight:400;font-size:13px;margin-left:6px}
 .main{max-width:1300px;margin:0 auto;padding:20px 16px}
 .card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:20px 24px;margin-bottom:16px}
-.card-title{font-size:15px;font-weight:700;margin-bottom:4px;color:#111;display:flex;align-items:center;gap:8px}
+.card-title{font-size:15px;font-weight:700;margin-bottom:4px;color:#111}
 .card-sub{font-size:12px;color:#888;margin-bottom:16px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 input[type=text],input[type=password],textarea{border:1px solid #ddd;border-radius:8px;padding:0 12px;font-size:13px;background:#fff;color:#1a1a1a;outline:none;transition:border .15s;font-family:inherit}
@@ -26,8 +26,6 @@ input:focus,textarea:focus{border-color:#1a73e8}
 .btn.green{background:#34a853;border-color:#34a853;color:#fff}
 .btn.green:hover{background:#2d8f46}
 .btn.sm{height:32px;padding:0 14px;font-size:12px}
-.saved-tag{display:inline-block;padding:2px 8px;border-radius:20px;background:#e6f4ea;color:#1e8e3e;font-size:11px;font-weight:700}
-.err{color:#d32f2f;font-size:12px;margin-top:6px}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
 .tab{display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;border:1px solid #ddd;font-size:12px;cursor:pointer;background:#fff;color:#666;transition:all .15s;user-select:none}
 .tab:hover{border-color:#1a73e8;color:#1a73e8}
@@ -67,6 +65,7 @@ tr:hover td{background:#f8fbff}
 .comp-high{color:#d32f2f;font-weight:700}
 .notice{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;font-size:12px;color:#888;margin-top:12px;line-height:1.7}
 .row{display:flex;gap:8px;align-items:flex-start}
+.loading-posts{text-align:center;padding:24px;color:#aaa;font-size:13px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -82,9 +81,7 @@ tr:hover td{background:#f8fbff}
 <div class="main">
 
   <div class="card">
-    <div class="card-title">
-      블로그 대량 등록
-    </div>
+    <div class="card-title">블로그 대량 등록</div>
     <div class="card-sub">블로그 URL 또는 ID를 한 줄에 하나씩 붙여넣으세요 (최대 100개)</div>
     <div class="row">
       <textarea id="bulkInput" rows="4" style="flex:1" placeholder="https://blog.naver.com/blog_id_1&#10;blog.naver.com/blog_id_2&#10;blog_id_3"></textarea>
@@ -120,7 +117,7 @@ tr:hover td{background:#f8fbff}
     <div class="tbl-wrap">
       <table>
         <colgroup>
-          <col style="width:80px">
+          <col style="width:90px">
           <col style="width:auto">
           <col style="width:190px">
           <col style="width:65px">
@@ -154,14 +151,6 @@ let cur = null;
 let postData = {};
 let allBlogIds = [];
 
-const SAMPLE = [
-  {time:'25분 전', title:'샘플 포스팅 1 - 키워드를 입력해보세요'},
-  {time:'1시간 전', title:'샘플 포스팅 2 - 상위 노출 키워드 확인'},
-  {time:'2시간 전', title:'샘플 포스팅 3 - 블로그 순위 모니터링'},
-  {time:'4시간 전', title:'샘플 포스팅 4 - 네이버 블로그 검색 순위'},
-  {time:'6시간 전', title:'샘플 포스팅 5 - 경쟁지수 분석'},
-];
-
 function extractId(v) {
   v = v.trim();
   if (!v) return null;
@@ -171,26 +160,50 @@ function extractId(v) {
   return v;
 }
 
-function makePosts() {
-  return SAMPLE.map(p => ({...p, kw:'', rank:null, vol:null, comp:null, loading:false}));
-}
-
-function addBulk() {
+async function addBulk() {
   const lines = document.getElementById('bulkInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  let added = 0;
+  let added = [];
   lines.forEach(line => {
     const id = extractId(line);
     if (!id || allBlogIds.includes(id)) return;
     allBlogIds.push(id);
     blogs.push(id);
-    postData[id] = makePosts();
-    added++;
+    postData[id] = { loading: true, posts: [] };
+    added.push(id);
   });
   document.getElementById('bulkInput').value = '';
-  if (added === 0) { alert('새로 추가된 블로그가 없습니다'); return; }
+  if (added.length === 0) { alert('새로 추가된 블로그가 없습니다'); return; }
   renderTabs();
   if (!cur) selectBlog(blogs[0]);
   document.getElementById('mainCard').style.display = '';
+  updateStats();
+
+  for (const id of added) {
+    fetchPosts(id);
+  }
+}
+
+async function fetchPosts(id) {
+  try {
+    const res = await fetch(`/api/posts?blogId=${id}`);
+    const data = await res.json();
+    if (data.items && data.items.length > 0) {
+      postData[id] = {
+        loading: false,
+        posts: data.items.map(p => ({
+          time: p.time,
+          title: p.title,
+          link: p.link,
+          kw: '', rank: null, vol: null, comp: null, loading: false
+        }))
+      };
+    } else {
+      postData[id] = { loading: false, posts: [] };
+    }
+  } catch(e) {
+    postData[id] = { loading: false, posts: [] };
+  }
+  if (cur === id) renderPosts(id);
   updateStats();
 }
 
@@ -237,23 +250,34 @@ function selectBlog(id) {
 }
 
 function updateStats() {
-  const total = blogs.reduce((a,id)=>a+(postData[id]||[]).length,0);
-  const done = blogs.reduce((a,id)=>a+(postData[id]||[]).filter(p=>p.rank!==null).length,0);
-  const top = blogs.reduce((a,id)=>a+(postData[id]||[]).filter(p=>p.rank>0&&p.rank<=10).length,0);
+  const allPosts = blogs.flatMap(id => (postData[id]?.posts || []));
+  const done = allPosts.filter(p=>p.rank!==null).length;
+  const top = allPosts.filter(p=>p.rank>0&&p.rank<=10).length;
   document.getElementById('sCnt').textContent = blogs.length;
-  document.getElementById('sPost').textContent = total;
+  document.getElementById('sPost').textContent = allPosts.length;
   document.getElementById('sDone').textContent = done;
   document.getElementById('sTop').textContent = top;
 }
 
 function renderPosts(id) {
-  document.getElementById('postLabel').textContent = id + '의 포스팅';
+  document.getElementById('postLabel').textContent = id + '의 최신 포스팅';
   document.getElementById('visitLink').href = 'https://blog.naver.com/' + id;
-  const posts = postData[id] || [];
+  const state = postData[id];
+  if (!state || state.loading) {
+    document.getElementById('postBody').innerHTML = `<tr><td colspan="6" class="loading-posts"><span class="spinner"></span> 포스팅 불러오는 중...</td></tr>`;
+    return;
+  }
+  const posts = state.posts;
+  if (posts.length === 0) {
+    document.getElementById('postBody').innerHTML = `<tr><td colspan="6" class="loading-posts">포스팅을 불러올 수 없습니다</td></tr>`;
+    return;
+  }
   document.getElementById('postBody').innerHTML = posts.map((p,i) => `
     <tr>
       <td class="muted">${p.time}</td>
-      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333" title="${p.title}">${p.title}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.title}">
+        <a href="${p.link}" target="_blank" style="color:#1a73e8;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${p.title}</a>
+      </td>
       <td>
         <div style="display:flex;gap:4px;align-items:center">
           <input class="kw-inp" id="kw-${id}-${i}" type="text" value="${p.kw||''}" placeholder="키워드 입력"
@@ -297,11 +321,11 @@ async function doSearch(blogId, idx) {
   const kw = document.getElementById(`kw-${blogId}-${idx}`).value.trim();
   if (!kw) { alert('키워드를 입력하세요'); return; }
 
-  postData[blogId][idx].kw = kw;
-  postData[blogId][idx].loading = true;
-  postData[blogId][idx].rank = null;
-  postData[blogId][idx].vol = null;
-  postData[blogId][idx].comp = null;
+  postData[blogId].posts[idx].kw = kw;
+  postData[blogId].posts[idx].loading = true;
+  postData[blogId].posts[idx].rank = null;
+  postData[blogId].posts[idx].vol = null;
+  postData[blogId].posts[idx].comp = null;
   renderPosts(blogId);
 
   try {
@@ -324,35 +348,34 @@ async function doSearch(blogId, idx) {
     }
 
     const comp = total > 0 ? Math.min(1, total / 10000) : null;
-
-    postData[blogId][idx].rank = rank;
-    postData[blogId][idx].vol = total;
-    postData[blogId][idx].comp = comp !== null ? parseFloat(comp.toFixed(2)) : null;
+    postData[blogId].posts[idx].rank = rank;
+    postData[blogId].posts[idx].vol = total;
+    postData[blogId].posts[idx].comp = comp !== null ? parseFloat(comp.toFixed(2)) : null;
   } catch(e) {
     alert('조회 오류: ' + e.message);
-    postData[blogId][idx].rank = null;
+    postData[blogId].posts[idx].rank = null;
   }
 
-  postData[blogId][idx].loading = false;
+  postData[blogId].posts[idx].loading = false;
   renderPosts(blogId);
   updateStats();
 }
 
 async function allSearch() {
   if (!cur) return;
-  const posts = postData[cur];
+  const posts = postData[cur]?.posts || [];
   for (let i = 0; i < posts.length; i++) {
     const kw = document.getElementById(`kw-${cur}-${i}`)?.value.trim();
     if (!kw) continue;
     await doSearch(cur, i);
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300));
   }
 }
 
 function exportCSV() {
   const rows = [['블로그ID','발행일','제목','키워드','순위','검색량','경쟁지수']];
   blogs.forEach(id => {
-    (postData[id]||[]).forEach(p => {
+    (postData[id]?.posts||[]).forEach(p => {
       rows.push([id, p.time, p.title, p.kw||'',
         p.rank===null?'':p.rank===0?'없음':p.rank,
         p.vol===null?'':p.vol,
