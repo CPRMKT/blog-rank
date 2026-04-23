@@ -10,13 +10,15 @@ export default async function handler(req, res) {
   const CUSTOMER_ID = process.env.NAVER_AD_CUSTOMER_ID;
 
   try {
-    const timestamp = String(Math.floor(Date.now()));
+    const timestamp = String(Date.now());
     const method = 'GET';
     const path = '/keywordstool';
 
+    // 네이버 공식 방식: timestamp.METHOD.path
+    const message = timestamp + '.' + method + '.' + path;
     const signature = crypto
       .createHmac('sha256', SECRET)
-      .update(`${timestamp}.${method}.${path}`)
+      .update(message)
       .digest('base64');
 
     const url = `https://api.searchad.naver.com/keywordstool?hintKeywords=${encodeURIComponent(keyword)}&showDetail=1`;
@@ -32,26 +34,16 @@ export default async function handler(req, res) {
       }
     });
 
-    const data = await response.json();
-    const keywordList = data.keywordList || [];
-    const matched = keywordList.find(k => k.relKeyword === keyword);
+    const text = await response.text();
+    
+    // 전체 응답 텍스트 확인
+    return res.status(200).json({
+      status: response.status,
+      keyword,
+      message,
+      responseText: text.slice(0, 500)
+    });
 
-    if (matched) {
-      return res.status(200).json({
-        keyword,
-        monthlyPcQcCnt: matched.monthlyPcQcCnt || 0,
-        monthlyMobileQcCnt: matched.monthlyMobileQcCnt || 0,
-        total: (matched.monthlyPcQcCnt || 0) + (matched.monthlyMobileQcCnt || 0)
-      });
-    } else {
-      return res.status(200).json({
-        keyword,
-        monthlyPcQcCnt: 0,
-        monthlyMobileQcCnt: 0,
-        total: 0,
-        debug: { status: response.status, listLength: keywordList.length }
-      });
-    }
   } catch(e) {
     return res.status(500).json({ error: e.message });
   }
