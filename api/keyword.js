@@ -13,13 +13,12 @@ export default async function handler(req, res) {
     const timestamp = String(Date.now());
     const method = 'GET';
     const path = '/keywordstool';
-    const message = `${timestamp}.${method}.${path}`;
+    const message = timestamp + '.' + method + '.' + path;
 
-    // 네이버 공식: createHmac(secret, message) 순서
-    const signature = crypto
-      .createHmac('sha256', message)
-      .update(SECRET)
-      .digest('base64');
+    // SECRET을 그대로 문자열로 사용
+    const hmac = crypto.createHmac('sha256', SECRET);
+    hmac.update(message, 'utf8');
+    const signature = hmac.digest('base64');
 
     const url = `https://api.searchad.naver.com/keywordstool?hintKeywords=${encodeURIComponent(keyword)}&showDetail=1`;
 
@@ -29,16 +28,35 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json; charset=UTF-8',
         'X-Timestamp': timestamp,
         'X-API-KEY': LICENSE,
-        'X-Customer': CUSTOMER_ID,
+        'X-Customer': String(CUSTOMER_ID),
         'X-Signature': signature,
       }
     });
 
     const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e) { data = text; }
+
+    if (response.status === 200) {
+      const keywordList = data.keywordList || [];
+      const matched = keywordList.find(k => k.relKeyword === keyword);
+      if (matched) {
+        return res.status(200).json({
+          keyword,
+          monthlyPcQcCnt: matched.monthlyPcQcCnt || 0,
+          monthlyMobileQcCnt: matched.monthlyMobileQcCnt || 0,
+          total: (matched.monthlyPcQcCnt || 0) + (matched.monthlyMobileQcCnt || 0)
+        });
+      }
+      return res.status(200).json({ keyword, total: 0, debug: { listLength: keywordList.length } });
+    }
+
     return res.status(200).json({
       status: response.status,
       keyword,
-      responseText: text.slice(0, 500)
+      message,
+      signature,
+      error: data
     });
 
   } catch(e) {
