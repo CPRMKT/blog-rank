@@ -160,6 +160,21 @@ function extractId(v) {
   return v;
 }
 
+// DB 공통 호출 함수
+async function dbCall(action, data) {
+  try {
+    const res = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, data })
+    });
+    return res.json();
+  } catch(e) {
+    console.error('DB 오류:', e);
+    return { ok: false };
+  }
+}
+
 async function addBulk() {
   const lines = document.getElementById('bulkInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
   let added = [];
@@ -177,6 +192,9 @@ async function addBulk() {
   if (!cur) selectBlog(blogs[0]);
   document.getElementById('mainCard').style.display = '';
   updateStats();
+
+  // DB에 블로그 저장
+  dbCall('save_blogs', { blogs: added.map(id => ({ blog_url: 'https://blog.naver.com/'+id, blog_id: id })) });
 
   for (const id of added) {
     fetchPosts(id);
@@ -197,6 +215,14 @@ async function fetchPosts(id) {
           kw: '', rank: null, vol: null, comp: null, loading: false
         }))
       };
+      // DB에 포스팅 저장
+      dbCall('save_posts', { posts: postData[id].posts.map(p => ({
+        blog_id: id,
+        post_url: p.link,
+        title: p.title,
+        published_at: p.time,
+        keyword: ''
+      }))});
     } else {
       postData[id] = { loading: false, posts: [] };
     }
@@ -351,6 +377,17 @@ async function doSearch(blogId, idx) {
     postData[blogId].posts[idx].rank = rank;
     postData[blogId].posts[idx].vol = total;
     postData[blogId].posts[idx].comp = comp !== null ? parseFloat(comp.toFixed(2)) : null;
+
+    // DB에 순위 저장
+    dbCall('save_rank', {
+      post_url: postData[blogId].posts[idx].link,
+      blog_id: blogId,
+      keyword: kw,
+      rank: rank,
+      search_volume: total,
+      competition: postData[blogId].posts[idx].comp
+    });
+
   } catch(e) {
     alert('조회 오류: ' + e.message);
     postData[blogId].posts[idx].rank = null;
