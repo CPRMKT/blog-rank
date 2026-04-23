@@ -76,9 +76,6 @@ tr:hover td{background:#f8fbff}
 .kw-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0f4ff;border:1px solid #c5d8ff;border-radius:20px;font-size:12px;color:#1a73e8}
 .kw-tag .del{cursor:pointer;opacity:.5;font-size:11px}
 .kw-tag .del:hover{opacity:1;color:#d32f2f}
-.empty{text-align:center;padding:60px;color:#aaa;font-size:13px}
-
-/* 상단 매장 드롭다운 */
 .store-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:20}
 .store-dropdown-btn{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;transition:background .15s;border:none;background:none;font-family:inherit}
 .store-dropdown-btn:hover{background:#f0f4ff}
@@ -99,13 +96,9 @@ tr:hover td{background:#f8fbff}
 .store-add-form.show{display:block}
 .store-add-form input{width:100%;height:36px;margin-bottom:8px}
 .store-add-form .btns{display:flex;gap:6px;justify-content:flex-end}
-
-/* 포스팅 헤더 */
 .post-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 .page-title{font-size:15px;font-weight:700;color:#111}
 .page-sub{font-size:12px;color:#888;margin-left:8px}
-
-/* 순위 테이블 셀 */
 .rank-post{font-size:12px;color:#333;padding:2px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .rank-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
 .rank-num.top3{background:#1a73e8;color:#fff}
@@ -116,7 +109,6 @@ tr:hover td{background:#f8fbff}
 </head>
 <body>
 
-<!-- 사이드바 -->
 <div class="sidebar">
   <div class="sidebar-logo">
     <div class="logo">블로그 순위 모니터링<span>네이버 블로그 검색 순위 조회</span></div>
@@ -132,10 +124,9 @@ tr:hover td{background:#f8fbff}
   </div>
 </div>
 
-<!-- 메인 콘텐츠 -->
 <div class="content">
 
-  <!-- 포스팅 순위 조회 페이지 -->
+  <!-- 포스팅 순위 조회 -->
   <div id="page-post">
     <div class="post-header">
       <div><span class="page-title">포스팅 순위 조회</span><span class="page-sub">네이버 블로그 검색 순위</span></div>
@@ -195,13 +186,11 @@ tr:hover td{background:#f8fbff}
     </div>
   </div>
 
-  <!-- 매장 블로그 순위 페이지 -->
+  <!-- 매장 블로그 순위 -->
   <div id="page-store" style="display:none">
-
-    <!-- ① 상단 매장명 + 드롭다운 -->
     <div class="store-header" style="position:relative">
       <div id="storeDropdownBtn" class="store-dropdown-btn" onclick="toggleDropdown()">
-        <span class="store-name" id="storeHeaderName">매장을 선택하세요</span>
+        <span class="store-name" id="storeHeaderName">매장 선택</span>
         <span class="arrow">▼</span>
       </div>
       <div class="store-dropdown" id="storeDropdown">
@@ -217,52 +206,38 @@ tr:hover td{background:#f8fbff}
         </div>
       </div>
       <div style="margin-left:auto">
-        <button class="btn sm green" id="checkBtn" onclick="checkStore()" style="display:none">순위 조회</button>
+        <button class="btn sm green" id="checkBtn" onclick="checkStore()">순위 조회</button>
       </div>
     </div>
 
-    <!-- 매장 없을 때 빈 화면 -->
-    <div id="storeEmptyView">
-      <div class="empty">
-        <div style="font-size:40px;margin-bottom:16px">🏪</div>
-        <div style="font-size:15px;font-weight:700;margin-bottom:8px">등록된 매장이 없습니다</div>
-        <div>상단 드롭다운에서 매장을 추가하세요</div>
+    <div class="main">
+      <!-- ② 키워드 등록 -->
+      <div class="card">
+        <div class="card-title">블로그 순위 확인할 키워드 등록하기</div>
+        <div class="card-sub">키워드 별 블로그 탭 순위를 확인할 수 있습니다 (최대 30개)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="kwInput" placeholder="키워드 입력 (지역+업종 / 예: 수영역 칼국수, 부산 수영 맛집)" style="flex:1"
+            onkeydown="if(event.key==='Enter')addKeyword()">
+          <button class="btn primary" onclick="addKeyword()">등록</button>
+          <span id="kwCount" style="font-size:12px;color:#aaa;white-space:nowrap">0/30</span>
+        </div>
+        <div class="kw-tags" id="kwTags"><span class="muted">등록된 키워드가 없습니다</span></div>
       </div>
-    </div>
 
-    <!-- 매장 선택 후 상세 -->
-    <div id="storeDetailView" style="display:none">
-      <div class="main">
-
-        <!-- ② 키워드 등록 -->
-        <div class="card">
-          <div class="card-title">블로그 순위 확인할 키워드 등록하기</div>
-          <div class="card-sub">키워드 별 블로그 탭 순위를 확인할 수 있습니다 (최대 30개)</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="kwInput" placeholder="키워드 입력 (지역+업종 / 예: 수영역 칼국수, 부산 수영 맛집)" style="flex:1"
-              onkeydown="if(event.key==='Enter')addKeyword()">
-            <button class="btn primary" onclick="addKeyword()">등록</button>
-            <span id="kwCount" style="font-size:12px;color:#aaa;white-space:nowrap">0/30</span>
-          </div>
-          <div class="kw-tags" id="kwTags"></div>
-        </div>
-
-        <!-- ③ 순위 추적 테이블 -->
-        <div class="card">
-          <div class="topbar">
-            <div>
-              <div class="card-title">블로그 탭 순위 추적</div>
-              <div class="card-sub">키워드 별 블로그 탭 검색 순위를 한 눈에</div>
-            </div>
-          </div>
-          <div class="tbl-wrap">
-            <table>
-              <thead id="rankHead"></thead>
-              <tbody id="rankBody"></tbody>
-            </table>
+      <!-- ③ 순위 추적 테이블 -->
+      <div class="card">
+        <div class="topbar">
+          <div>
+            <div class="card-title">블로그 탭 순위 추적</div>
+            <div class="card-sub">키워드 별 블로그 탭 검색 순위를 한 눈에</div>
           </div>
         </div>
-
+        <div class="tbl-wrap">
+          <table>
+            <thead id="rankHead"></thead>
+            <tbody id="rankBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -270,16 +245,11 @@ tr:hover td{background:#f8fbff}
 </div>
 
 <script>
-// ========== 공통 ==========
 async function dbCall(action, data) {
   try {
-    const res = await fetch('/api/db', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, data })
-    });
+    const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action,data}) });
     return res.json();
-  } catch(e) { return { ok: false }; }
+  } catch(e) { return {ok:false}; }
 }
 
 function showPage(page) {
@@ -289,12 +259,9 @@ function showPage(page) {
   document.getElementById('menu-store').classList.toggle('active', page==='store');
 }
 
-// 드롭다운 토글
 function toggleDropdown() {
-  const btn = document.getElementById('storeDropdownBtn');
-  const dd = document.getElementById('storeDropdown');
-  btn.classList.toggle('open');
-  dd.classList.toggle('show');
+  document.getElementById('storeDropdownBtn').classList.toggle('open');
+  document.getElementById('storeDropdown').classList.toggle('show');
 }
 
 function closeDropdown() {
@@ -306,9 +273,7 @@ function closeDropdown() {
 function toggleAddForm() {
   const form = document.getElementById('storeAddForm');
   form.classList.toggle('show');
-  if (form.classList.contains('show')) {
-    setTimeout(() => document.getElementById('addStoreName').focus(), 100);
-  }
+  if (form.classList.contains('show')) setTimeout(() => document.getElementById('addStoreName').focus(), 100);
 }
 
 document.addEventListener('click', function(e) {
@@ -316,99 +281,93 @@ document.addEventListener('click', function(e) {
   if (header && !header.contains(e.target)) closeDropdown();
 });
 
-// ========== 포스팅 순위 조회 ==========
-let blogs = [], cur = null, postData = {}, allBlogIds = [];
+// ========== 포스팅 순위 ==========
+let blogs=[], cur=null, postData={}, allBlogIds=[];
 
 function extractId(v) {
-  v = v.trim();
-  if (!v) return null;
-  const m = v.match(/blog\.naver\.com\/([^/?#\s]+)/);
-  if (m) return m[1];
-  if (v.startsWith('http')) return null;
+  v=v.trim(); if(!v) return null;
+  const m=v.match(/blog\.naver\.com\/([^/?#\s]+)/);
+  if(m) return m[1];
+  if(v.startsWith('http')) return null;
   return v;
 }
 
 async function addBulk() {
-  const lines = document.getElementById('bulkInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  let added = [];
-  lines.forEach(line => {
-    const id = extractId(line);
-    if (!id || allBlogIds.includes(id)) return;
+  const lines=document.getElementById('bulkInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  let added=[];
+  lines.forEach(line=>{
+    const id=extractId(line);
+    if(!id||allBlogIds.includes(id)) return;
     allBlogIds.push(id); blogs.push(id);
-    postData[id] = { loading: true, posts: [] };
+    postData[id]={loading:true,posts:[]};
     added.push(id);
   });
-  document.getElementById('bulkInput').value = '';
-  if (added.length === 0) { alert('새로 추가된 블로그가 없습니다'); return; }
-  renderTabs();
-  if (!cur) selectBlog(blogs[0]);
-  document.getElementById('mainCard').style.display = '';
+  document.getElementById('bulkInput').value='';
+  if(added.length===0){alert('새로 추가된 블로그가 없습니다');return;}
+  renderTabs(); if(!cur) selectBlog(blogs[0]);
+  document.getElementById('mainCard').style.display='';
   updateStats();
-  dbCall('save_blogs', { blogs: added.map(id => ({ blog_url: 'https://blog.naver.com/'+id, blog_id: id })) });
-  for (const id of added) fetchPosts(id);
+  dbCall('save_blogs',{blogs:added.map(id=>({blog_url:'https://blog.naver.com/'+id,blog_id:id}))});
+  for(const id of added) fetchPosts(id);
 }
 
 async function fetchPosts(id) {
   try {
-    const res = await fetch(`/api/posts?blogId=${id}`);
-    const data = await res.json();
-    if (data.items && data.items.length > 0) {
-      postData[id] = { loading: false, posts: data.items.map(p => ({ time: p.time, title: p.title, link: p.link, kw: '', rank: null, vol: null, comp: null, loading: false })) };
-      dbCall('save_posts', { posts: postData[id].posts.map(p => ({ blog_id: id, post_url: p.link, title: p.title, published_at: p.time, keyword: '' }))});
-    } else { postData[id] = { loading: false, posts: [] }; }
-  } catch(e) { postData[id] = { loading: false, posts: [] }; }
-  if (cur === id) renderPosts(id);
+    const res=await fetch(`/api/posts?blogId=${id}`);
+    const data=await res.json();
+    if(data.items&&data.items.length>0){
+      postData[id]={loading:false,posts:data.items.map(p=>({time:p.time,title:p.title,link:p.link,kw:'',rank:null,vol:null,comp:null,loading:false}))};
+      dbCall('save_posts',{posts:postData[id].posts.map(p=>({blog_id:id,post_url:p.link,title:p.title,published_at:p.time,keyword:''}))});
+    } else {postData[id]={loading:false,posts:[]};}
+  } catch(e){postData[id]={loading:false,posts:[]};}
+  if(cur===id) renderPosts(id);
   updateStats();
 }
 
-function clearAll() {
-  if (!confirm('모든 블로그를 삭제할까요?')) return;
-  blogs=[]; allBlogIds=[]; cur=null; postData={};
-  renderTabs();
-  document.getElementById('mainCard').style.display = 'none';
-  updateStats();
+function clearAll(){
+  if(!confirm('모든 블로그를 삭제할까요?')) return;
+  blogs=[];allBlogIds=[];cur=null;postData={};
+  renderTabs(); document.getElementById('mainCard').style.display='none'; updateStats();
 }
 
-function removeBlog(id, e) {
+function removeBlog(id,e){
   e.stopPropagation();
-  blogs = blogs.filter(b=>b!==id); allBlogIds = allBlogIds.filter(b=>b!==id);
-  delete postData[id];
-  if (cur===id) cur = blogs[0]||null;
-  renderTabs();
-  if (cur) renderPosts(cur); else document.getElementById('mainCard').style.display='none';
+  blogs=blogs.filter(b=>b!==id); allBlogIds=allBlogIds.filter(b=>b!==id);
+  delete postData[id]; if(cur===id) cur=blogs[0]||null;
+  renderTabs(); if(cur) renderPosts(cur); else document.getElementById('mainCard').style.display='none';
   updateStats();
 }
 
-function filterTabs() {
-  const q = document.getElementById('searchFilter').value.toLowerCase();
-  document.querySelectorAll('.tab').forEach(t => { t.style.display = t.dataset.id.toLowerCase().includes(q) ? '' : 'none'; });
+function filterTabs(){
+  const q=document.getElementById('searchFilter').value.toLowerCase();
+  document.querySelectorAll('.tab').forEach(t=>{t.style.display=t.dataset.id.toLowerCase().includes(q)?'':'none';});
 }
 
-function renderTabs() {
-  document.getElementById('tabsArea').innerHTML = blogs.map(id =>
+function renderTabs(){
+  document.getElementById('tabsArea').innerHTML=blogs.map(id=>
     `<div class="tab${id===cur?' active':''}" data-id="${id}" onclick="selectBlog('${id}')">
       <span class="dot"></span>${id}<span class="xbtn" onclick="removeBlog('${id}',event)">✕</span>
     </div>`).join('');
 }
 
-function selectBlog(id) { cur = id; renderTabs(); renderPosts(id); }
+function selectBlog(id){cur=id;renderTabs();renderPosts(id);}
 
-function updateStats() {
-  const allPosts = blogs.flatMap(id => (postData[id]?.posts || []));
-  document.getElementById('sCnt').textContent = blogs.length;
-  document.getElementById('sPost').textContent = allPosts.length;
-  document.getElementById('sDone').textContent = allPosts.filter(p=>p.rank!==null).length;
-  document.getElementById('sTop').textContent = allPosts.filter(p=>p.rank>0&&p.rank<=10).length;
+function updateStats(){
+  const allPosts=blogs.flatMap(id=>(postData[id]?.posts||[]));
+  document.getElementById('sCnt').textContent=blogs.length;
+  document.getElementById('sPost').textContent=allPosts.length;
+  document.getElementById('sDone').textContent=allPosts.filter(p=>p.rank!==null).length;
+  document.getElementById('sTop').textContent=allPosts.filter(p=>p.rank>0&&p.rank<=10).length;
 }
 
-function renderPosts(id) {
-  document.getElementById('postLabel').textContent = id + '의 최신 포스팅';
-  document.getElementById('visitLink').href = 'https://blog.naver.com/' + id;
-  const state = postData[id];
-  if (!state || state.loading) { document.getElementById('postBody').innerHTML = `<tr><td colspan="6" class="loading-posts"><span class="spinner"></span> 불러오는 중...</td></tr>`; return; }
-  const posts = state.posts;
-  if (posts.length === 0) { document.getElementById('postBody').innerHTML = `<tr><td colspan="6" class="loading-posts">포스팅을 불러올 수 없습니다</td></tr>`; return; }
-  document.getElementById('postBody').innerHTML = posts.map((p,i) => `
+function renderPosts(id){
+  document.getElementById('postLabel').textContent=id+'의 최신 포스팅';
+  document.getElementById('visitLink').href='https://blog.naver.com/'+id;
+  const state=postData[id];
+  if(!state||state.loading){document.getElementById('postBody').innerHTML=`<tr><td colspan="6" class="loading-posts"><span class="spinner"></span> 불러오는 중...</td></tr>`;return;}
+  const posts=state.posts;
+  if(posts.length===0){document.getElementById('postBody').innerHTML=`<tr><td colspan="6" class="loading-posts">포스팅을 불러올 수 없습니다</td></tr>`;return;}
+  document.getElementById('postBody').innerHTML=posts.map((p,i)=>`
     <tr>
       <td class="muted">${p.time}</td>
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.title}">
@@ -416,7 +375,7 @@ function renderPosts(id) {
       </td>
       <td><div style="display:flex;gap:4px;align-items:center">
         <input class="kw-inp" id="kw-${id}-${i}" type="text" value="${p.kw||''}" placeholder="키워드 입력" onkeydown="if(event.key==='Enter')doSearch('${id}',${i})"/>
-        <button class="sbtn" onclick="doSearch('${id}',${i})">${p.loading ? '<span class="spinner"></span>' : '🔍'}</button>
+        <button class="sbtn" onclick="doSearch('${id}',${i})">${p.loading?'<span class="spinner"></span>':'🔍'}</button>
       </div></td>
       <td style="text-align:center">${rankHtml(p.rank,p.loading)}</td>
       <td style="text-align:center">${volHtml(p.vol,p.loading)}</td>
@@ -424,225 +383,200 @@ function renderPosts(id) {
     </tr>`).join('');
 }
 
-function rankHtml(rank, loading) {
-  if (loading) return '<span class="spinner"></span>';
-  if (rank===null) return '<span class="muted">-</span>';
-  if (rank===0) return '<span class="muted" style="font-size:11px">없음</span>';
-  const cls = rank===1?'r1':rank===2?'r2':rank===3?'r3':rank<=10?'r10':'rn';
+function rankHtml(rank,loading){
+  if(loading) return '<span class="spinner"></span>';
+  if(rank===null) return '<span class="muted">-</span>';
+  if(rank===0) return '<span class="muted" style="font-size:11px">없음</span>';
+  const cls=rank===1?'r1':rank===2?'r2':rank===3?'r3':rank<=10?'r10':'rn';
   return `<span class="badge ${cls}">${rank}위</span>`;
 }
 
-function volHtml(vol, loading) {
-  if (loading) return '';
-  if (vol===null) return '<span class="muted">-</span>';
+function volHtml(vol,loading){
+  if(loading) return '';
+  if(vol===null) return '<span class="muted">-</span>';
   return `<span style="font-size:12px">${Number(vol).toLocaleString()}</span>`;
 }
 
-function compHtml(comp, loading) {
-  if (loading) return '';
-  if (comp===null) return '<span class="muted">-</span>';
-  const v = parseFloat(comp);
-  if (isNaN(v)) return '<span class="muted">-</span>';
-  const cls = v<0.3?'comp-low':v<0.7?'comp-mid':'comp-high';
-  const label = v<0.3?'낮음':v<0.7?'보통':'높음';
+function compHtml(comp,loading){
+  if(loading) return '';
+  if(comp===null) return '<span class="muted">-</span>';
+  const v=parseFloat(comp); if(isNaN(v)) return '<span class="muted">-</span>';
+  const cls=v<0.3?'comp-low':v<0.7?'comp-mid':'comp-high';
+  const label=v<0.3?'낮음':v<0.7?'보통':'높음';
   return `<span class="${cls}" style="font-size:12px">${v.toFixed(2)} (${label})</span>`;
 }
 
-async function doSearch(blogId, idx) {
-  const kw = document.getElementById(`kw-${blogId}-${idx}`).value.trim();
-  if (!kw) { alert('키워드를 입력하세요'); return; }
-  postData[blogId].posts[idx].kw = kw; postData[blogId].posts[idx].loading = true;
-  postData[blogId].posts[idx].rank = null; postData[blogId].posts[idx].vol = null; postData[blogId].posts[idx].comp = null;
+async function doSearch(blogId,idx){
+  const kw=document.getElementById(`kw-${blogId}-${idx}`).value.trim();
+  if(!kw){alert('키워드를 입력하세요');return;}
+  postData[blogId].posts[idx].kw=kw; postData[blogId].posts[idx].loading=true;
+  postData[blogId].posts[idx].rank=null; postData[blogId].posts[idx].vol=null; postData[blogId].posts[idx].comp=null;
   renderPosts(blogId);
-  try {
-    const res = await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
-    if (!res.ok) { const err = await res.json(); throw new Error(err.error || '서버 오류'); }
-    const data = await res.json();
-    const items = data.items || []; const total = data.total || 0;
-    let rank = 0;
-    for (let i = 0; i < items.length; i++) {
-      const link = (items[i].link || '') + (items[i].bloggername || '');
-      if (link.toLowerCase().includes(blogId.toLowerCase())) { rank = i + 1; break; }
+  try{
+    const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
+    if(!res.ok){const err=await res.json();throw new Error(err.error||'서버 오류');}
+    const data=await res.json();
+    const items=data.items||[]; const total=data.total||0;
+    let rank=0;
+    for(let i=0;i<items.length;i++){
+      const link=(items[i].link||'')+(items[i].bloggername||'');
+      if(link.toLowerCase().includes(blogId.toLowerCase())){rank=i+1;break;}
     }
-    const comp = total > 0 ? Math.min(1, total / 10000) : null;
-    postData[blogId].posts[idx].rank = rank;
-    postData[blogId].posts[idx].vol = total;
-    postData[blogId].posts[idx].comp = comp !== null ? parseFloat(comp.toFixed(2)) : null;
-    dbCall('save_rank', { post_url: postData[blogId].posts[idx].link, blog_id: blogId, keyword: kw, rank, search_volume: total, competition: postData[blogId].posts[idx].comp });
-  } catch(e) { alert('조회 오류: ' + e.message); postData[blogId].posts[idx].rank = null; }
-  postData[blogId].posts[idx].loading = false;
+    const comp=total>0?Math.min(1,total/10000):null;
+    postData[blogId].posts[idx].rank=rank;
+    postData[blogId].posts[idx].vol=total;
+    postData[blogId].posts[idx].comp=comp!==null?parseFloat(comp.toFixed(2)):null;
+    dbCall('save_rank',{post_url:postData[blogId].posts[idx].link,blog_id:blogId,keyword:kw,rank,search_volume:total,competition:postData[blogId].posts[idx].comp});
+  }catch(e){alert('조회 오류: '+e.message);postData[blogId].posts[idx].rank=null;}
+  postData[blogId].posts[idx].loading=false;
   renderPosts(blogId); updateStats();
 }
 
-async function allSearch() {
-  if (!cur) return;
-  const posts = postData[cur]?.posts || [];
-  for (let i = 0; i < posts.length; i++) {
-    const kw = document.getElementById(`kw-${cur}-${i}`)?.value.trim();
-    if (!kw) continue;
-    await doSearch(cur, i);
-    await new Promise(r => setTimeout(r, 300));
+async function allSearch(){
+  if(!cur) return;
+  const posts=postData[cur]?.posts||[];
+  for(let i=0;i<posts.length;i++){
+    const kw=document.getElementById(`kw-${cur}-${i}`)?.value.trim();
+    if(!kw) continue;
+    await doSearch(cur,i);
+    await new Promise(r=>setTimeout(r,300));
   }
 }
 
-function exportCSV() {
-  const rows = [['블로그ID','발행일','제목','키워드','순위','검색량','경쟁지수']];
-  blogs.forEach(id => {
-    (postData[id]?.posts||[]).forEach(p => {
-      rows.push([id, p.time, p.title, p.kw||'', p.rank===null?'':p.rank===0?'없음':p.rank, p.vol===null?'':p.vol, p.comp===null?'':p.comp]);
+function exportCSV(){
+  const rows=[['블로그ID','발행일','제목','키워드','순위','검색량','경쟁지수']];
+  blogs.forEach(id=>{
+    (postData[id]?.posts||[]).forEach(p=>{
+      rows.push([id,p.time,p.title,p.kw||'',p.rank===null?'':p.rank===0?'없음':p.rank,p.vol===null?'':p.vol,p.comp===null?'':p.comp]);
     });
   });
-  const csv = '\uFEFF' + rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download = `블로그순위_${new Date().toISOString().slice(0,10)}.csv`;
+  const csv='\uFEFF'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`블로그순위_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
 
 // ========== 매장 블로그 순위 ==========
-let stores = JSON.parse(localStorage.getItem('stores') || '[]');
-let rankData = JSON.parse(localStorage.getItem('rankData') || '{}');
-let curStore = null;
+let stores=JSON.parse(localStorage.getItem('stores')||'[]');
+let rankData=JSON.parse(localStorage.getItem('rankData')||'{}');
+let curStore=null;
 
-function saveStores() {
-  localStorage.setItem('stores', JSON.stringify(stores));
-  localStorage.setItem('rankData', JSON.stringify(rankData));
+function saveStores(){
+  localStorage.setItem('stores',JSON.stringify(stores));
+  localStorage.setItem('rankData',JSON.stringify(rankData));
 }
 
-function today() {
-  const d = new Date();
+function today(){
+  const d=new Date();
   return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function getDates() {
-  const dates = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+function getDates(){
+  const dates=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
     dates.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
   }
   return dates;
 }
 
-function addStore() {
-  const name = document.getElementById('addStoreName').value.trim();
-  if (!name) { alert('매장명을 입력하세요'); return; }
-  if (stores.find(s=>s.name===name)) { alert('이미 등록된 매장명입니다'); return; }
-  const store = { id: Date.now().toString(), name, keywords: [] };
-  stores.push(store);
-  saveStores();
-  document.getElementById('addStoreName').value = '';
-  closeDropdown();
-  renderStoreDropdown();
-  selectStore(store.id);
+function addStore(){
+  const name=document.getElementById('addStoreName').value.trim();
+  if(!name){alert('매장명을 입력하세요');return;}
+  if(stores.find(s=>s.name===name)){alert('이미 등록된 매장명입니다');return;}
+  const store={id:Date.now().toString(),name,keywords:[]};
+  stores.push(store); saveStores();
+  document.getElementById('addStoreName').value='';
+  closeDropdown(); renderStoreDropdown(); selectStore(store.id);
 }
 
-function removeStore(id, e) {
+function removeStore(id,e){
   e.stopPropagation();
-  if (!confirm('매장을 삭제할까요?')) return;
-  stores = stores.filter(s=>s.id!==id);
-  delete rankData[id];
-  saveStores();
-  if (curStore===id) {
-    curStore = null;
-    document.getElementById('storeHeaderName').textContent = '매장을 선택하세요';
-    document.getElementById('storeDetailView').style.display = 'none';
-    document.getElementById('storeEmptyView').style.display = '';
-    document.getElementById('checkBtn').style.display = 'none';
+  if(!confirm('매장을 삭제할까요?')) return;
+  stores=stores.filter(s=>s.id!==id); delete rankData[id]; saveStores();
+  if(curStore===id){
+    curStore=null;
+    document.getElementById('storeHeaderName').textContent='매장 선택';
+    renderKeywords(); renderRankTable();
   }
   renderStoreDropdown();
 }
 
-function renderStoreDropdown() {
-  const list = document.getElementById('storeDropdownList');
-  if (stores.length === 0) {
-    list.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:#aaa">등록된 매장이 없습니다</div>';
+function renderStoreDropdown(){
+  const list=document.getElementById('storeDropdownList');
+  if(stores.length===0){
+    list.innerHTML='<div style="padding:10px 16px;font-size:12px;color:#aaa">등록된 매장이 없습니다</div>';
     return;
   }
-  list.innerHTML = stores.map(s =>
+  list.innerHTML=stores.map(s=>
     `<div class="store-dropdown-item${s.id===curStore?' active':''}" onclick="selectStore('${s.id}')">
       <span>🏪 ${s.name}</span>
       <span class="store-dropdown-del" onclick="removeStore('${s.id}',event)">✕</span>
     </div>`).join('');
 }
 
-function selectStore(id) {
-  curStore = id;
-  closeDropdown();
-  renderStoreDropdown();
-  const store = stores.find(s=>s.id===id);
-  if (!store) return;
-  document.getElementById('storeHeaderName').textContent = store.name;
-  document.getElementById('storeEmptyView').style.display = 'none';
-  document.getElementById('storeDetailView').style.display = '';
-  document.getElementById('checkBtn').style.display = '';
-  document.getElementById('kwCount').textContent = `${store.keywords.length}/30`;
-  renderKeywords();
-  renderRankTable();
+function selectStore(id){
+  curStore=id; closeDropdown(); renderStoreDropdown();
+  const store=stores.find(s=>s.id===id);
+  if(!store) return;
+  document.getElementById('storeHeaderName').textContent=store.name;
+  document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
+  renderKeywords(); renderRankTable();
 }
 
-function addKeyword() {
-  const kw = document.getElementById('kwInput').value.trim();
-  if (!kw) return;
-  const store = stores.find(s=>s.id===curStore);
-  if (!store) return;
-  if (store.keywords.includes(kw)) { alert('이미 등록된 키워드입니다'); return; }
-  if (store.keywords.length >= 30) { alert('키워드는 최대 30개까지 등록 가능합니다'); return; }
-  store.keywords.push(kw);
-  saveStores();
-  document.getElementById('kwInput').value = '';
-  document.getElementById('kwCount').textContent = `${store.keywords.length}/30`;
-  renderKeywords();
-  renderRankTable();
+function addKeyword(){
+  const kw=document.getElementById('kwInput').value.trim(); if(!kw) return;
+  const store=stores.find(s=>s.id===curStore);
+  if(!store){alert('먼저 매장을 선택하세요');return;}
+  if(store.keywords.includes(kw)){alert('이미 등록된 키워드입니다');return;}
+  if(store.keywords.length>=30){alert('키워드는 최대 30개까지 등록 가능합니다');return;}
+  store.keywords.push(kw); saveStores();
+  document.getElementById('kwInput').value='';
+  document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
+  renderKeywords(); renderRankTable();
 }
 
-function removeKeyword(kw) {
-  const store = stores.find(s=>s.id===curStore);
-  if (!store) return;
-  store.keywords = store.keywords.filter(k=>k!==kw);
-  saveStores();
-  document.getElementById('kwCount').textContent = `${store.keywords.length}/30`;
-  renderKeywords();
-  renderRankTable();
+function removeKeyword(kw){
+  const store=stores.find(s=>s.id===curStore); if(!store) return;
+  store.keywords=store.keywords.filter(k=>k!==kw); saveStores();
+  document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
+  renderKeywords(); renderRankTable();
 }
 
-function renderKeywords() {
-  const store = stores.find(s=>s.id===curStore);
-  if (!store) return;
-  document.getElementById('kwTags').innerHTML = store.keywords.length === 0
-    ? '<span class="muted">등록된 키워드가 없습니다</span>'
-    : store.keywords.map(kw =>
-        `<span class="kw-tag">${kw} <span class="del" onclick="removeKeyword('${kw}')">✕</span></span>`
-      ).join('');
+function renderKeywords(){
+  const store=stores.find(s=>s.id===curStore);
+  document.getElementById('kwTags').innerHTML=(!store||store.keywords.length===0)
+    ?'<span class="muted">등록된 키워드가 없습니다</span>'
+    :store.keywords.map(kw=>`<span class="kw-tag">${kw} <span class="del" onclick="removeKeyword('${kw}')">✕</span></span>`).join('');
 }
 
-function renderRankTable() {
-  const store = stores.find(s=>s.id===curStore);
-  if (!store) return;
-  const dates = getDates();
-  const data = rankData[store.id] || {};
+function renderRankTable(){
+  const store=stores.find(s=>s.id===curStore);
+  const dates=getDates();
+  const data=store?rankData[store.id]||{}:{};
 
-  document.getElementById('rankHead').innerHTML = `<tr>
+  document.getElementById('rankHead').innerHTML=`<tr>
     <th style="width:150px">키워드</th>
     ${dates.map(d=>`<th style="min-width:150px">${d}</th>`).join('')}
   </tr>`;
 
-  if (store.keywords.length === 0) {
-    document.getElementById('rankBody').innerHTML = `<tr><td colspan="${dates.length+1}" style="text-align:center;padding:32px;color:#aaa">키워드를 등록하세요</td></tr>`;
+  if(!store||store.keywords.length===0){
+    document.getElementById('rankBody').innerHTML=`<tr><td colspan="${dates.length+1}" style="text-align:center;padding:32px;color:#aaa">키워드를 등록하세요</td></tr>`;
     return;
   }
 
-  document.getElementById('rankBody').innerHTML = store.keywords.map(kw => {
-    const kwData = data[kw] || {};
+  document.getElementById('rankBody').innerHTML=store.keywords.map(kw=>{
+    const kwData=data[kw]||{};
     return `<tr>
       <td>
         <div class="rank-kw-title">${kw}</div>
         <div class="rank-kw-vol">검색량 ${(kwData._vol||0).toLocaleString()}</div>
       </td>
-      ${dates.map(d => {
-        const posts = kwData[d];
-        if (!posts || posts.length === 0) return `<td><span class="muted">-</span></td>`;
-        return `<td>${posts.slice(0,10).map((p,i) =>
+      ${dates.map(d=>{
+        const posts=kwData[d];
+        if(!posts||posts.length===0) return `<td><span class="muted">-</span></td>`;
+        return `<td>${posts.slice(0,10).map((p,i)=>
           `<div class="rank-post">
             <span class="rank-num ${i<3?'top3':'normal'}">${i+1}</span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;display:inline-block" title="${p}">${p}</span>
@@ -653,38 +587,37 @@ function renderRankTable() {
   }).join('');
 }
 
-async function checkStore() {
-  const store = stores.find(s=>s.id===curStore);
-  if (!store) { alert('매장을 선택하세요'); return; }
-  if (store.keywords.length === 0) { alert('키워드를 먼저 등록하세요'); return; }
-  const btn = document.getElementById('checkBtn');
-  btn.textContent = '조회 중...'; btn.disabled = true;
-  const todayStr = today();
-  if (!rankData[store.id]) rankData[store.id] = {};
-  for (const kw of store.keywords) {
-    try {
-      const res = await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
-      const data = await res.json();
-      const items = (data.items || []).slice(0, 10);
-      const titles = items.map(p => p.title.replace(/<[^>]+>/g,''));
-      if (!rankData[store.id][kw]) rankData[store.id][kw] = {};
-      rankData[store.id][kw][todayStr] = titles;
-      rankData[store.id][kw]._vol = data.total || 0;
-      dbCall('save_rank', { post_url: `keyword:${kw}`, blog_id: store.id, keyword: kw, rank: null, search_volume: data.total||0, competition: null });
-      await new Promise(r => setTimeout(r, 300));
-    } catch(e) { console.error(kw, e); }
+async function checkStore(){
+  const store=stores.find(s=>s.id===curStore);
+  if(!store){alert('매장을 선택하세요');return;}
+  if(store.keywords.length===0){alert('키워드를 먼저 등록하세요');return;}
+  const btn=document.getElementById('checkBtn');
+  btn.textContent='조회 중...'; btn.disabled=true;
+  const todayStr=today();
+  if(!rankData[store.id]) rankData[store.id]={};
+  for(const kw of store.keywords){
+    try{
+      const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
+      const data=await res.json();
+      const items=(data.items||[]).slice(0,10);
+      const titles=items.map(p=>p.title.replace(/<[^>]+>/g,''));
+      if(!rankData[store.id][kw]) rankData[store.id][kw]={};
+      rankData[store.id][kw][todayStr]=titles;
+      rankData[store.id][kw]._vol=data.total||0;
+      dbCall('save_rank',{post_url:`keyword:${kw}`,blog_id:store.id,keyword:kw,rank:null,search_volume:data.total||0,competition:null});
+      await new Promise(r=>setTimeout(r,300));
+    }catch(e){console.error(kw,e);}
   }
-  saveStores();
-  renderRankTable();
-  btn.textContent = '순위 조회'; btn.disabled = false;
+  saveStores(); renderRankTable();
+  btn.textContent='순위 조회'; btn.disabled=false;
   alert('순위 조회 완료!');
 }
 
-// 초기화
+// 초기화 - 매장 등록 여부와 상관없이 항상 상세화면 표시
 renderStoreDropdown();
-if (stores.length > 0) {
-  document.getElementById('storeHeaderName').textContent = stores[0].name;
-}
+renderKeywords();
+renderRankTable();
+if(stores.length>0) selectStore(stores[0].id);
 </script>
 </body>
 </html>
