@@ -17,23 +17,7 @@ body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14px
 .menu-item:hover{background:#f0f4ff;color:#1a73e8}
 .menu-item.active{background:#e8f0fe;color:#1a73e8;font-weight:700;border-left-color:#1a73e8}
 .menu-item .icon{font-size:15px;width:20px;text-align:center}
-.divider{height:1px;background:#f0f0f0;margin:4px 0}
-.store-section{padding:8px 0;flex:1}
-.store-section-header{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 4px}
-.store-section-label{font-size:10px;color:#aaa;font-weight:700;letter-spacing:.5px}
-.store-add-btn{font-size:11px;color:#1a73e8;cursor:pointer;background:none;border:none;font-family:inherit;padding:0}
-.store-add-btn:hover{text-decoration:underline}
-.store-menu-item{display:flex;align-items:center;justify-content:space-between;padding:7px 20px;font-size:12px;color:#555;cursor:pointer;transition:all .15s}
-.store-menu-item:hover{background:#f0f4ff;color:#1a73e8}
-.store-menu-item.active{background:#e8f0fe;color:#1a73e8;font-weight:700}
-.store-menu-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.store-del{font-size:10px;opacity:0;color:#d32f2f;cursor:pointer;padding:2px 4px;flex-shrink:0}
-.store-menu-item:hover .store-del{opacity:.6}
-.store-del:hover{opacity:1!important}
 .content{flex:1;overflow-y:auto;height:100vh}
-.topbar-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-.page-title{font-size:15px;font-weight:700;color:#111}
-.page-sub{font-size:12px;color:#888;margin-left:8px}
 .main{padding:20px 24px}
 .card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:20px 24px;margin-bottom:16px}
 .card-title{font-size:15px;font-weight:700;margin-bottom:4px;color:#111}
@@ -59,7 +43,7 @@ input:focus,textarea:focus{border-color:#1a73e8}
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
 th{text-align:left;padding:10px;border-bottom:2px solid #eee;color:#666;font-weight:700;font-size:11px;letter-spacing:.3px;background:#fafafa;white-space:nowrap}
-td{padding:9px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+td{padding:9px 10px;border-bottom:1px solid #f0f0f0;vertical-align:top}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#f8fbff}
 .badge{display:inline-block;min-width:44px;text-align:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700}
@@ -92,26 +76,42 @@ tr:hover td{background:#f8fbff}
 .kw-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0f4ff;border:1px solid #c5d8ff;border-radius:20px;font-size:12px;color:#1a73e8}
 .kw-tag .del{cursor:pointer;opacity:.5;font-size:11px}
 .kw-tag .del:hover{opacity:1;color:#d32f2f}
-.empty{text-align:center;padding:48px;color:#aaa;font-size:13px}
-.modal-bg{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.3);z-index:100;align-items:center;justify-content:center}
-.modal-bg.show{display:flex}
-.modal{background:#fff;border-radius:12px;padding:24px;width:400px;box-shadow:0 8px 32px rgba(0,0,0,.15)}
-.modal-title{font-size:15px;font-weight:700;margin-bottom:16px}
-.modal-row{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.modal-label{font-size:12px;color:#666;font-weight:500}
-.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.empty{text-align:center;padding:60px;color:#aaa;font-size:13px}
 
-/* 순위 테이블 - 날짜별 */
-.rank-kw-title{font-weight:700;font-size:13px;margin-bottom:2px}
-.rank-kw-vol{font-size:11px;color:#aaa}
-.rank-cell{text-align:left;padding:6px 8px;vertical-align:top}
-.rank-post{font-size:12px;color:#333;padding:3px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.4}
+/* 상단 매장 드롭다운 */
+.store-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:20}
+.store-dropdown-btn{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;transition:background .15s;border:none;background:none;font-family:inherit}
+.store-dropdown-btn:hover{background:#f0f4ff}
+.store-dropdown-btn .store-name{font-size:15px;font-weight:700;color:#111}
+.store-dropdown-btn .arrow{font-size:12px;color:#888;transition:transform .2s}
+.store-dropdown-btn.open .arrow{transform:rotate(180deg)}
+.store-dropdown{position:absolute;top:52px;left:0;background:#fff;border:1px solid #e0e0e0;border-radius:0 0 12px 12px;box-shadow:0 4px 16px rgba(0,0,0,.08);min-width:260px;z-index:30;display:none}
+.store-dropdown.show{display:block}
+.store-dropdown-item{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;font-size:13px;color:#333;cursor:pointer;transition:background .15s}
+.store-dropdown-item:hover{background:#f0f4ff;color:#1a73e8}
+.store-dropdown-item.active{background:#e8f0fe;color:#1a73e8;font-weight:700}
+.store-dropdown-del{font-size:11px;color:#d32f2f;opacity:.4;padding:2px 4px}
+.store-dropdown-del:hover{opacity:1}
+.store-dropdown-divider{height:1px;background:#f0f0f0;margin:4px 0}
+.store-dropdown-add{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;color:#1a73e8;cursor:pointer;transition:background .15s}
+.store-dropdown-add:hover{background:#f0f4ff}
+.store-add-form{padding:12px 16px;border-top:1px solid #f0f0f0;display:none}
+.store-add-form.show{display:block}
+.store-add-form input{width:100%;height:36px;margin-bottom:8px}
+.store-add-form .btns{display:flex;gap:6px;justify-content:flex-end}
+
+/* 포스팅 헤더 */
+.post-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.page-title{font-size:15px;font-weight:700;color:#111}
+.page-sub{font-size:12px;color:#888;margin-left:8px}
+
+/* 순위 테이블 셀 */
+.rank-post{font-size:12px;color:#333;padding:2px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .rank-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
 .rank-num.top3{background:#1a73e8;color:#fff}
 .rank-num.normal{background:#f0f0f0;color:#555}
-.rank-empty{color:#ccc;font-size:12px;padding:4px 0}
-.up{color:#1e8e3e;font-size:11px;font-weight:700}
-.down{color:#d32f2f;font-size:11px;font-weight:700}
+.rank-kw-title{font-weight:700;font-size:13px}
+.rank-kw-vol{font-size:11px;color:#aaa;margin-top:2px}
 </style>
 </head>
 <body>
@@ -130,14 +130,6 @@ tr:hover td{background:#f8fbff}
       <span class="icon">🏪</span> 매장 블로그 순위
     </div>
   </div>
-  <div class="divider"></div>
-  <div class="store-section" id="storeSidebar" style="display:none">
-    <div class="store-section-header">
-      <span class="store-section-label">매장 목록</span>
-      <button class="store-add-btn" onclick="showAddStore()">+ 추가</button>
-    </div>
-    <div id="storeSidebarList"></div>
-  </div>
 </div>
 
 <!-- 메인 콘텐츠 -->
@@ -145,7 +137,7 @@ tr:hover td{background:#f8fbff}
 
   <!-- 포스팅 순위 조회 페이지 -->
   <div id="page-post">
-    <div class="topbar-header">
+    <div class="post-header">
       <div><span class="page-title">포스팅 순위 조회</span><span class="page-sub">네이버 블로그 검색 순위</span></div>
       <button class="btn sm green" onclick="exportCSV()">엑셀 다운로드</button>
     </div>
@@ -206,34 +198,43 @@ tr:hover td{background:#f8fbff}
   <!-- 매장 블로그 순위 페이지 -->
   <div id="page-store" style="display:none">
 
-    <!-- 매장 추가 화면 -->
-    <div id="view-add-store">
-      <div class="topbar-header">
-        <div><span class="page-title">매장 추가</span></div>
+    <!-- ① 상단 매장명 + 드롭다운 -->
+    <div class="store-header" style="position:relative">
+      <div id="storeDropdownBtn" class="store-dropdown-btn" onclick="toggleDropdown()">
+        <span class="store-name" id="storeHeaderName">매장을 선택하세요</span>
+        <span class="arrow">▼</span>
       </div>
-      <div class="main" style="max-width:700px;margin:60px auto">
-        <div style="font-size:22px;font-weight:700;margin-bottom:24px">매장 순위 관리 시작하려면<br>매장명을 입력하세요</div>
-        <div style="display:flex;flex-direction:column;gap:16px;margin-bottom:24px;color:#555;font-size:14px">
-          <div>① 관리할 매장명을 입력하세요</div>
-          <div>② 매장별 키워드를 등록하면 블로그 순위를 추적합니다</div>
+      <div class="store-dropdown" id="storeDropdown">
+        <div id="storeDropdownList"></div>
+        <div class="store-dropdown-divider"></div>
+        <div class="store-dropdown-add" onclick="toggleAddForm()">＋ 매장 추가하기</div>
+        <div class="store-add-form" id="storeAddForm">
+          <input type="text" id="addStoreName" placeholder="매장명 입력" onkeydown="if(event.key==='Enter')addStore()">
+          <div class="btns">
+            <button class="btn sm" onclick="toggleAddForm()">취소</button>
+            <button class="btn sm primary" onclick="addStore()">추가</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="addStoreName" placeholder="매장명 입력 (예: 조계목할국수 수영직영점)" style="flex:1;height:48px;font-size:15px"
-            onkeydown="if(event.key==='Enter')addStore()">
-          <button class="btn primary" style="height:48px;font-size:15px;padding:0 24px" onclick="addStore()">등록</button>
-        </div>
+      </div>
+      <div style="margin-left:auto">
+        <button class="btn sm green" id="checkBtn" onclick="checkStore()" style="display:none">순위 조회</button>
       </div>
     </div>
 
-    <!-- 매장 상세 화면 -->
-    <div id="view-store-detail" style="display:none">
-      <div class="topbar-header">
-        <div><span class="page-title" id="storePageTitle"></span><span class="page-sub" id="storePageSub"></span></div>
-        <button class="btn sm green" onclick="checkStore()">순위 조회</button>
+    <!-- 매장 없을 때 빈 화면 -->
+    <div id="storeEmptyView">
+      <div class="empty">
+        <div style="font-size:40px;margin-bottom:16px">🏪</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px">등록된 매장이 없습니다</div>
+        <div>상단 드롭다운에서 매장을 추가하세요</div>
       </div>
+    </div>
+
+    <!-- 매장 선택 후 상세 -->
+    <div id="storeDetailView" style="display:none">
       <div class="main">
 
-        <!-- 키워드 등록 -->
+        <!-- ② 키워드 등록 -->
         <div class="card">
           <div class="card-title">블로그 순위 확인할 키워드 등록하기</div>
           <div class="card-sub">키워드 별 블로그 탭 순위를 확인할 수 있습니다 (최대 30개)</div>
@@ -246,12 +247,12 @@ tr:hover td{background:#f8fbff}
           <div class="kw-tags" id="kwTags"></div>
         </div>
 
-        <!-- 순위 추적 테이블 -->
+        <!-- ③ 순위 추적 테이블 -->
         <div class="card">
           <div class="topbar">
             <div>
               <div class="card-title">블로그 탭 순위 추적</div>
-              <div class="card-sub" id="storeRankSub">키워드 별 블로그 탭 검색 순위를 한 눈에</div>
+              <div class="card-sub">키워드 별 블로그 탭 검색 순위를 한 눈에</div>
             </div>
           </div>
           <div class="tbl-wrap">
@@ -264,22 +265,8 @@ tr:hover td{background:#f8fbff}
 
       </div>
     </div>
-
-    <!-- 빈 화면 (매장 선택 전) -->
-    <div id="view-store-empty">
-      <div class="topbar-header">
-        <div><span class="page-title">매장 블로그 순위</span></div>
-        <button class="btn sm primary" onclick="showAddStore()">+ 매장 추가</button>
-      </div>
-      <div class="empty">
-        <div style="font-size:40px;margin-bottom:16px">🏪</div>
-        <div style="font-size:15px;font-weight:700;margin-bottom:8px">등록된 매장이 없습니다</div>
-        <div style="margin-bottom:20px">왼쪽 상단 "+ 추가" 버튼으로 매장을 등록하세요</div>
-        <button class="btn primary" onclick="showAddStore()">매장 추가하기</button>
-      </div>
-    </div>
-
   </div>
+
 </div>
 
 <script>
@@ -300,24 +287,34 @@ function showPage(page) {
   document.getElementById('page-store').style.display = page==='store' ? '' : 'none';
   document.getElementById('menu-post').classList.toggle('active', page==='post');
   document.getElementById('menu-store').classList.toggle('active', page==='store');
-  document.getElementById('storeSidebar').style.display = page==='store' ? '' : 'none';
-  if (page==='store') {
-    if (stores.length === 0) showStoreView('empty');
-    else if (!curStore) showStoreView('empty');
+}
+
+// 드롭다운 토글
+function toggleDropdown() {
+  const btn = document.getElementById('storeDropdownBtn');
+  const dd = document.getElementById('storeDropdown');
+  btn.classList.toggle('open');
+  dd.classList.toggle('show');
+}
+
+function closeDropdown() {
+  document.getElementById('storeDropdownBtn').classList.remove('open');
+  document.getElementById('storeDropdown').classList.remove('show');
+  document.getElementById('storeAddForm').classList.remove('show');
+}
+
+function toggleAddForm() {
+  const form = document.getElementById('storeAddForm');
+  form.classList.toggle('show');
+  if (form.classList.contains('show')) {
+    setTimeout(() => document.getElementById('addStoreName').focus(), 100);
   }
 }
 
-function showStoreView(view) {
-  document.getElementById('view-add-store').style.display = view==='add' ? '' : 'none';
-  document.getElementById('view-store-detail').style.display = view==='detail' ? '' : 'none';
-  document.getElementById('view-store-empty').style.display = view==='empty' ? '' : 'none';
-}
-
-function showAddStore() {
-  showPage('store');
-  showStoreView('add');
-  setTimeout(() => document.getElementById('addStoreName').focus(), 100);
-}
+document.addEventListener('click', function(e) {
+  const header = document.querySelector('.store-header');
+  if (header && !header.contains(e.target)) closeDropdown();
+});
 
 // ========== 포스팅 순위 조회 ==========
 let blogs = [], cur = null, postData = {}, allBlogIds = [];
@@ -535,7 +532,8 @@ function addStore() {
   stores.push(store);
   saveStores();
   document.getElementById('addStoreName').value = '';
-  renderStoreSidebar();
+  closeDropdown();
+  renderStoreDropdown();
   selectStore(store.id);
 }
 
@@ -547,32 +545,37 @@ function removeStore(id, e) {
   saveStores();
   if (curStore===id) {
     curStore = null;
-    showStoreView(stores.length > 0 ? 'empty' : 'empty');
+    document.getElementById('storeHeaderName').textContent = '매장을 선택하세요';
+    document.getElementById('storeDetailView').style.display = 'none';
+    document.getElementById('storeEmptyView').style.display = '';
+    document.getElementById('checkBtn').style.display = 'none';
   }
-  renderStoreSidebar();
+  renderStoreDropdown();
 }
 
-function renderStoreSidebar() {
-  const list = document.getElementById('storeSidebarList');
+function renderStoreDropdown() {
+  const list = document.getElementById('storeDropdownList');
   if (stores.length === 0) {
-    list.innerHTML = '<div style="padding:8px 20px;font-size:12px;color:#aaa">등록된 매장이 없습니다</div>';
+    list.innerHTML = '<div style="padding:10px 16px;font-size:12px;color:#aaa">등록된 매장이 없습니다</div>';
     return;
   }
   list.innerHTML = stores.map(s =>
-    `<div class="store-menu-item${s.id===curStore?' active':''}" onclick="selectStore('${s.id}')">
-      <span class="store-menu-name">🏪 ${s.name}</span>
-      <span class="store-del" onclick="removeStore('${s.id}',event)">✕</span>
+    `<div class="store-dropdown-item${s.id===curStore?' active':''}" onclick="selectStore('${s.id}')">
+      <span>🏪 ${s.name}</span>
+      <span class="store-dropdown-del" onclick="removeStore('${s.id}',event)">✕</span>
     </div>`).join('');
 }
 
 function selectStore(id) {
   curStore = id;
-  renderStoreSidebar();
+  closeDropdown();
+  renderStoreDropdown();
   const store = stores.find(s=>s.id===id);
   if (!store) return;
-  showStoreView('detail');
-  document.getElementById('storePageTitle').textContent = store.name;
-  document.getElementById('storePageSub').textContent = `키워드 ${store.keywords.length}개`;
+  document.getElementById('storeHeaderName').textContent = store.name;
+  document.getElementById('storeEmptyView').style.display = 'none';
+  document.getElementById('storeDetailView').style.display = '';
+  document.getElementById('checkBtn').style.display = '';
   document.getElementById('kwCount').textContent = `${store.keywords.length}/30`;
   renderKeywords();
   renderRankTable();
@@ -619,14 +622,13 @@ function renderRankTable() {
   const dates = getDates();
   const data = rankData[store.id] || {};
 
-  // 헤더
   document.getElementById('rankHead').innerHTML = `<tr>
-    <th style="width:160px">키워드</th>
-    ${dates.map(d=>`<th style="text-align:left;min-width:160px">${d}</th>`).join('')}
+    <th style="width:150px">키워드</th>
+    ${dates.map(d=>`<th style="min-width:150px">${d}</th>`).join('')}
   </tr>`;
 
   if (store.keywords.length === 0) {
-    document.getElementById('rankBody').innerHTML = `<tr><td colspan="${dates.length+1}" class="empty">키워드를 등록하세요</td></tr>`;
+    document.getElementById('rankBody').innerHTML = `<tr><td colspan="${dates.length+1}" style="text-align:center;padding:32px;color:#aaa">키워드를 등록하세요</td></tr>`;
     return;
   }
 
@@ -635,15 +637,15 @@ function renderRankTable() {
     return `<tr>
       <td>
         <div class="rank-kw-title">${kw}</div>
-        <div class="rank-kw-vol">검색량 ${kwData._vol || 0}</div>
+        <div class="rank-kw-vol">검색량 ${(kwData._vol||0).toLocaleString()}</div>
       </td>
       ${dates.map(d => {
-        const posts = kwData[d] || [];
-        if (posts.length === 0) return `<td class="rank-cell"><span class="rank-empty">-</span></td>`;
-        return `<td class="rank-cell">${posts.slice(0,10).map((p,i) =>
+        const posts = kwData[d];
+        if (!posts || posts.length === 0) return `<td><span class="muted">-</span></td>`;
+        return `<td>${posts.slice(0,10).map((p,i) =>
           `<div class="rank-post">
             <span class="rank-num ${i<3?'top3':'normal'}">${i+1}</span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px" title="${p}">${p}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;display:inline-block" title="${p}">${p}</span>
           </div>`
         ).join('')}</td>`;
       }).join('')}
@@ -655,43 +657,33 @@ async function checkStore() {
   const store = stores.find(s=>s.id===curStore);
   if (!store) { alert('매장을 선택하세요'); return; }
   if (store.keywords.length === 0) { alert('키워드를 먼저 등록하세요'); return; }
-
+  const btn = document.getElementById('checkBtn');
+  btn.textContent = '조회 중...'; btn.disabled = true;
   const todayStr = today();
   if (!rankData[store.id]) rankData[store.id] = {};
-
   for (const kw of store.keywords) {
     try {
       const res = await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
       const data = await res.json();
       const items = (data.items || []).slice(0, 10);
       const titles = items.map(p => p.title.replace(/<[^>]+>/g,''));
-
       if (!rankData[store.id][kw]) rankData[store.id][kw] = {};
       rankData[store.id][kw][todayStr] = titles;
       rankData[store.id][kw]._vol = data.total || 0;
-
-      dbCall('save_rank', {
-        post_url: `keyword:${kw}`,
-        blog_id: store.id,
-        keyword: kw,
-        rank: null,
-        search_volume: data.total || 0,
-        competition: null
-      });
-
+      dbCall('save_rank', { post_url: `keyword:${kw}`, blog_id: store.id, keyword: kw, rank: null, search_volume: data.total||0, competition: null });
       await new Promise(r => setTimeout(r, 300));
     } catch(e) { console.error(kw, e); }
   }
-
   saveStores();
   renderRankTable();
+  btn.textContent = '순위 조회'; btn.disabled = false;
   alert('순위 조회 완료!');
 }
 
 // 초기화
-renderStoreSidebar();
+renderStoreDropdown();
 if (stores.length > 0) {
-  // 저장된 매장 있으면 첫번째 선택
+  document.getElementById('storeHeaderName').textContent = stores[0].name;
 }
 </script>
 </body>
