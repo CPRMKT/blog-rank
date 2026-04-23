@@ -15,11 +15,10 @@ export default async function handler(req, res) {
     const path = '/keywordstool';
     const message = `${timestamp}.${method}.${path}`;
 
-    // 비밀키를 base64 디코딩 후 사용
-    const secretBuffer = Buffer.from(SECRET, 'base64');
+    // 네이버 공식: createHmac(secret, message) 순서
     const signature = crypto
-      .createHmac('sha256', secretBuffer)
-      .update(message)
+      .createHmac('sha256', message)
+      .update(SECRET)
       .digest('base64');
 
     const url = `https://api.searchad.naver.com/keywordstool?hintKeywords=${encodeURIComponent(keyword)}&showDetail=1`;
