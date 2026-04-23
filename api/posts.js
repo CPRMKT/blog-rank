@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         });
       }
 
-      if (items.length >= 10) break;
+      if (items.length >= 30) break;
     }
 
     return res.status(200).json({ blogId, items });
