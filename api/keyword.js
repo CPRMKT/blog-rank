@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const CUSTOMER_ID = process.env.NAVER_AD_CUSTOMER_ID;
 
   if (!LICENSE || !SECRET || !CUSTOMER_ID) {
-    return res.status(500).json({ error: 'API 키 미설정' });
+    return res.status(500).json({ error: 'API 키 미설정', LICENSE: !!LICENSE, SECRET: !!SECRET, CUSTOMER_ID: !!CUSTOMER_ID });
   }
 
   try {
@@ -37,19 +37,15 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-    const keywordList = data.keywordList || [];
-    const matched = keywordList.find(k => k.relKeyword === keyword);
+    
+    // 디버깅용: 전체 응답 반환
+    return res.status(200).json({
+      debug: true,
+      status: response.status,
+      keyword,
+      rawData: data
+    });
 
-    if (matched) {
-      return res.status(200).json({
-        keyword,
-        monthlyPcQcCnt: matched.monthlyPcQcCnt || 0,
-        monthlyMobileQcCnt: matched.monthlyMobileQcCnt || 0,
-        total: (matched.monthlyPcQcCnt || 0) + (matched.monthlyMobileQcCnt || 0)
-      });
-    } else {
-      return res.status(200).json({ keyword, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, total: 0 });
-    }
   } catch(e) {
     return res.status(500).json({ error: e.message });
   }
