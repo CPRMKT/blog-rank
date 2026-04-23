@@ -13,11 +13,12 @@ export default async function handler(req, res) {
     const timestamp = String(Date.now());
     const method = 'GET';
     const path = '/keywordstool';
+    const message = `${timestamp}.${method}.${path}`;
 
-    // 네이버 공식 방식: timestamp.METHOD.path
-    const message = timestamp + '.' + method + '.' + path;
+    // 비밀키를 base64 디코딩 후 사용
+    const secretBuffer = Buffer.from(SECRET, 'base64');
     const signature = crypto
-      .createHmac('sha256', SECRET)
+      .createHmac('sha256', secretBuffer)
       .update(message)
       .digest('base64');
 
@@ -35,12 +36,9 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
-    
-    // 전체 응답 텍스트 확인
     return res.status(200).json({
       status: response.status,
       keyword,
-      message,
       responseText: text.slice(0, 500)
     });
 
