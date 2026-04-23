@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>매장 블로그 순위 관리</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14px;background:#f4f6f9;color:#1a1a1a;min-height:100vh}
+.header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:18px;font-weight:700;color:#1a73e8}
+.logo span{color:#666;font-weight:400;font-size:13px;margin-left:6px}
+.nav-btns{display:flex;gap:8px}
+.main{max-width:1300px;margin:0 auto;padding:20px 16px}
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:20px 24px;margin-bottom:16px}
+.card-title{font-size:15px;font-weight:700;margin-bottom:4px;color:#111}
+.card-sub{font-size:12px;color:#888;margin-bottom:16px}
+input[type=text],textarea{border:1px solid #ddd;border-radius:8px;padding:0 12px;font-size:13px;background:#fff;color:#1a1a1a;outline:none;transition:border .15s;font-family:inherit}
+input[type=text]{height:38px}
+textarea{padding:10px 12px;resize:vertical;line-height:1.6}
+input:focus,textarea:focus{border-color:#1a73e8}
+.btn{height:38px;padding:0 18px;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer;background:#fff;color:#333;white-space:nowrap;transition:all .15s;font-weight:500;font-family:inherit}
+.btn:hover{background:#f0f4ff;border-color:#1a73e8;color:#1a73e8}
+.btn.primary{background:#1a73e8;border-color:#1a73e8;color:#fff}
+.btn.primary:hover{background:#1558b0}
+.btn.danger{background:#fff;border-color:#d32f2f;color:#d32f2f}
+.btn.danger:hover{background:#fde8e8}
+.btn.sm{height:32px;padding:0 14px;font-size:12px}
+.btn.green{background:#34a853;border-color:#34a853;color:#fff}
+.btn.green:hover{background:#2d8f46}
+.row{display:flex;gap:8px;align-items:center}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.store-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.store-item{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;transition:all .15s;background:#fff}
+.store-item:hover{border-color:#1a73e8;background:#f8fbff}
+.store-item.active{border-color:#1a73e8;background:#e8f0fe}
+.store-name{font-weight:700;font-size:14px}
+.store-blog{font-size:12px;color:#888;margin-top:2px}
+.kw-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.kw-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0f4ff;border:1px solid #c5d8ff;border-radius:20px;font-size:12px;color:#1a73e8}
+.kw-tag .del{cursor:pointer;opacity:.5;font-size:11px}
+.kw-tag .del:hover{opacity:1;color:#d32f2f}
+.tbl-wrap{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
+th{text-align:center;padding:10px;border-bottom:2px solid #eee;color:#666;font-weight:700;font-size:11px;letter-spacing:.3px;background:#fafafa;white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:9px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;text-align:center}
+td:first-child{text-align:left;font-weight:500}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fbff}
+.badge{display:inline-block;min-width:44px;text-align:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700}
+.r1{background:#fff8e1;color:#e65100}
+.r2{background:#e3f2fd;color:#0d47a1}
+.r3{background:#e8f5e9;color:#1b5e20}
+.r10{background:#f3e5f5;color:#4a148c}
+.r30{background:#fce4ec;color:#880e4f}
+.rn{background:#f5f5f5;color:#777}
+.muted{color:#aaa;font-size:12px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:#1a73e8;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.empty{text-align:center;padding:40px;color:#aaa;font-size:13px}
+.stat-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat{background:#f8f9fa;border-radius:8px;padding:12px 16px;min-width:120px;flex:1}
+.stat-label{font-size:11px;color:#888;margin-bottom:4px}
+.stat-val{font-size:22px;font-weight:700;color:#111}
+.up{color:#1e8e3e;font-size:11px;font-weight:700}
+.down{color:#d32f2f;font-size:11px;font-weight:700}
+.same{color:#aaa;font-size:11px}
+@media(max-width:640px){.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">매장 블로그 순위 <span>키워드별 날짜 순위 추적</span></div>
+  <div class="nav-btns">
+    <a href="/"><button class="btn sm">포스팅 순위 조회</button></a>
+    <button class="btn sm green" onclick="checkAllNow()">전체 순위 조회</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 매장 등록 -->
+  <div class="card">
+    <div class="card-title">매장 등록</div>
+    <div class="card-sub">매장명과 네이버 블로그 ID를 입력하세요</div>
+    <div class="row">
+      <input type="text" id="storeName" placeholder="매장명 (예: 조계목할국수 수영직영점)" style="flex:2">
+      <input type="text" id="storeBlog" placeholder="블로그 ID (예: ojh3529)" style="flex:1">
+      <button class="btn primary" onclick="addStore()">매장 추가</button>
+    </div>
+    <div class="store-list" id="storeList">
+      <div class="empty" id="storeEmpty">등록된 매장이 없습니다</div>
+    </div>
+  </div>
+
+  <!-- 키워드 + 순위 -->
+  <div class="card" id="kwCard" style="display:none">
+    <div class="topbar">
+      <div>
+        <div class="card-title" id="kwCardTitle"></div>
+        <div class="card-sub" id="kwCardSub"></div>
+      </div>
+      <button class="btn sm green" onclick="checkStore()">이 매장 순위 조회</button>
+    </div>
+
+    <!-- 키워드 등록 -->
+    <div class="row" style="margin-bottom:8px">
+      <input type="text" id="kwInput" placeholder="키워드 입력 (예: 부산 수영역 맛집)" style="flex:1"
+        onkeydown="if(event.key==='Enter')addKeyword()">
+      <button class="btn primary" onclick="addKeyword()">키워드 추가</button>
+    </div>
+    <div class="kw-tags" id="kwTags"></div>
+
+    <!-- 순위 테이블 -->
+    <div class="tbl-wrap">
+      <table id="rankTable">
+        <thead id="rankHead"></thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// 데이터 구조
+let stores = JSON.parse(localStorage.getItem('stores') || '[]');
+let rankData = JSON.parse(localStorage.getItem('rankData') || '{}');
+let curStore = null;
+
+// 날짜 포맷
+function today() {
+  const d = new Date();
+  return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function fullDate() {
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+
+// DB 호출
+async function dbCall(action, data) {
+  try {
+    const res = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, data })
+    });
+    return res.json();
+  } catch(e) {
+    console.error('DB 오류:', e);
+    return { ok: false };
+  }
+}
+
+// 저장
+function save() {
+  localStorage.setItem('stores', JSON.stringify(stores));
+  localStorage.setItem('rankData', JSON.stringify(rankData));
+}
+
+// 매장 추가
+function addStore() {
+  const name = document.getElementById('storeName').value.trim();
+  const blog = document.getElementById('storeBlog').value.trim().replace(/.*blog\.naver\.com\//,'').split('/')[0];
+  if (!name || !blog) { alert('매장명과 블로그 ID를 입력하세요'); return; }
+  if (stores.find(s=>s.blog===blog)) { alert('이미 등록된 블로그입니다'); return; }
+
+  const store = { id: Date.now().toString(), name, blog, keywords: [] };
+  stores.push(store);
+  save();
+
+  // DB 저장
+  dbCall('save_blogs', { blogs: [{ blog_url: 'https://blog.naver.com/'+blog, blog_id: blog }] });
+
+  document.getElementById('storeName').value = '';
+  document.getElementById('storeBlog').value = '';
+  renderStores();
+  selectStore(store.id);
+}
+
+// 매장 삭제
+function removeStore(id, e) {
+  e.stopPropagation();
+  if (!confirm('매장을 삭제할까요?')) return;
+  stores = stores.filter(s=>s.id!==id);
+  delete rankData[id];
+  save();
+  if (curStore===id) {
+    curStore = null;
+    document.getElementById('kwCard').style.display = 'none';
+  }
+  renderStores();
+}
+
+// 매장 목록 렌더
+function renderStores() {
+  const list = document.getElementById('storeList');
+  const empty = document.getElementById('storeEmpty');
+  if (stores.length === 0) {
+    list.innerHTML = '<div class="empty" id="storeEmpty">등록된 매장이 없습니다</div>';
+    return;
+  }
+  list.innerHTML = stores.map(s => {
+    const kws = s.keywords.length;
+    const lastCheck = rankData[s.id]?.lastCheck || '-';
+    return `<div class="store-item${s.id===curStore?' active':''}" onclick="selectStore('${s.id}')">
+      <div>
+        <div class="store-name">${s.name}</div>
+        <div class="store-blog">blog.naver.com/${s.blog} · 키워드 ${kws}개 · 마지막 조회: ${lastCheck}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:#aaa">${kws}개 키워드</span>
+        <button class="btn sm danger" onclick="removeStore('${s.id}',event)">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 매장 선택
+function selectStore(id) {
+  curStore = id;
+  renderStores();
+  const store = stores.find(s=>s.id===id);
+  if (!store) return;
+  document.getElementById('kwCard').style.display = '';
+  document.getElementById('kwCardTitle').textContent = store.name;
+  document.getElementById('kwCardSub').textContent = 'blog.naver.com/' + store.blog;
+  renderKeywords();
+  renderRankTable();
+}
+
+// 키워드 추가
+function addKeyword() {
+  const kw = document.getElementById('kwInput').value.trim();
+  if (!kw) return;
+  const store = stores.find(s=>s.id===curStore);
+  if (!store) return;
+  if (store.keywords.includes(kw)) { alert('이미 등록된 키워드입니다'); return; }
+  if (store.keywords.length >= 30) { alert('키워드는 최대 30개까지 등록 가능합니다'); return; }
+  store.keywords.push(kw);
+  save();
+  document.getElementById('kwInput').value = '';
+  renderKeywords();
+  renderRankTable();
+}
+
+// 키워드 삭제
+function removeKeyword(kw) {
+  const store = stores.find(s=>s.id===curStore);
+  if (!store) return;
+  store.keywords = store.keywords.filter(k=>k!==kw);
+  save();
+  renderKeywords();
+  renderRankTable();
+}
+
+// 키워드 태그 렌더
+function renderKeywords() {
+  const store = stores.find(s=>s.id===curStore);
+  if (!store) return;
+  document.getElementById('kwTags').innerHTML = store.keywords.length === 0
+    ? '<span class="muted">등록된 키워드가 없습니다</span>'
+    : store.keywords.map(kw =>
+        `<span class="kw-tag">${kw} <span class="del" onclick="removeKeyword('${kw}')">✕</span></span>`
+      ).join('');
+}
+
+// 날짜 컬럼 생성 (최근 7일)
+function getDates() {
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
+  }
+  return dates;
+}
+
+// 순위 테이블 렌더
+function renderRankTable() {
+  const store = stores.find(s=>s.id===curStore);
+  if (!store) return;
+  const dates = getDates();
+  const data = rankData[store.id] || {};
+
+  // 헤더
+  document.getElementById('rankHead').innerHTML = `<tr>
+    <th style="width:160px">키워드</th>
+    ${dates.map(d=>`<th>${d}</th>`).join('')}
+  </tr>`;
+
+  if (store.keywords.length === 0) {
+    document.getElementById('rankBody').innerHTML = `<tr><td colspan="${dates.length+1}" class="empty">키워드를 등록하세요</td></tr>`;
+    return;
+  }
+
+  document.getElementById('rankBody').innerHTML = store.keywords.map(kw => {
+    const kwData = data[kw] || {};
+    return `<tr>
+      <td>${kw}</td>
+      ${dates.map((d,i) => {
+        const rank = kwData[d];
+        const prevRank = kwData[dates[i+1]];
+        let change = '';
+        if (rank && prevRank && rank > 0 && prevRank > 0) {
+          const diff = prevRank - rank;
+          if (diff > 0) change = `<span class="up">▲${diff}</span>`;
+          else if (diff < 0) change = `<span class="down">▼${Math.abs(diff)}</span>`;
+          else change = `<span class="same">-</span>`;
+        }
+        return `<td>${rankBadge(rank)} ${change}</td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+}
+
+function rankBadge(rank) {
+  if (rank === undefined || rank === null) return '<span class="muted">-</span>';
+  if (rank === 0) return '<span class="muted" style="font-size:11px">없음</span>';
+  const cls = rank===1?'r1':rank===2?'r2':rank===3?'r3':rank<=10?'r10':rank<=30?'r30':'rn';
+  return `<span class="badge ${cls}">${rank}위</span>`;
+}
+
+// 순위 조회 (단일 매장)
+async function checkStore() {
+  const store = stores.find(s=>s.id===curStore);
+  if (!store || store.keywords.length === 0) { alert('키워드를 먼저 등록하세요'); return; }
+
+  const todayStr = today();
+  if (!rankData[store.id]) rankData[store.id] = {};
+
+  for (const kw of store.keywords) {
+    try {
+      const res = await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
+      const data = await res.json();
+      const items = data.items || [];
+
+      let rank = 0;
+      for (let i = 0; i < items.length; i++) {
+        const link = (items[i].link || '') + (items[i].bloggername || '');
+        if (link.toLowerCase().includes(store.blog.toLowerCase())) {
+          rank = i + 1;
+          break;
+        }
+      }
+
+      if (!rankData[store.id][kw]) rankData[store.id][kw] = {};
+      rankData[store.id][kw][todayStr] = rank;
+
+      // DB 저장
+      dbCall('save_rank', {
+        post_url: 'https://blog.naver.com/' + store.blog,
+        blog_id: store.blog,
+        keyword: kw,
+        rank: rank,
+        search_volume: data.total || 0,
+        competition: null
+      });
+
+      await new Promise(r => setTimeout(r, 300));
+    } catch(e) {
+      console.error(kw, e);
+    }
+  }
+
+  rankData[store.id].lastCheck = todayStr;
+  save();
+  renderStores();
+  renderRankTable();
+  alert('순위 조회 완료!');
+}
+
+// 전체 매장 순위 조회
+async function checkAllNow() {
+  if (stores.length === 0) { alert('등록된 매장이 없습니다'); return; }
+  if (!confirm(`전체 ${stores.length}개 매장 순위를 조회할까요?`)) return;
+
+  for (const store of stores) {
+    curStore = store.id;
+    await checkStore();
+  }
+  alert('전체 조회 완료!');
+}
+
+// 초기 렌더
+renderStores();
+if (stores.length > 0) selectStore(stores[0].id);
+</script>
+</body>
+</html>
