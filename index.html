@@ -101,8 +101,8 @@ tr:hover td{background:#f8fbff}
 .page-sub{font-size:12px;color:#888;margin-left:8px}
 .rank-post{font-size:12px;color:#333;padding:2px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.5}
 .rank-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
-.rank-num.top3{background:#1a73e8;color:#fff}
-.rank-num.normal{background:#f0f0f0;color:#555}
+.rank-num.blue{background:#cce5ff;color:#004085}
+.rank-num.yellow{background:#fff3cd;color:#856404}
 .rank-kw-title{font-weight:700;font-size:13px}
 .rank-kw-vol{font-size:11px;color:#aaa;margin-top:2px}
 </style>
@@ -211,7 +211,6 @@ tr:hover td{background:#f8fbff}
     </div>
 
     <div class="main">
-      <!-- ② 키워드 등록 -->
       <div class="card">
         <div class="card-title">블로그 순위 확인할 키워드 등록하기</div>
         <div class="card-sub">키워드 별 블로그 탭 순위를 확인할 수 있습니다 (최대 30개)</div>
@@ -224,7 +223,6 @@ tr:hover td{background:#f8fbff}
         <div class="kw-tags" id="kwTags"><span class="muted">등록된 키워드가 없습니다</span></div>
       </div>
 
-      <!-- ③ 순위 추적 테이블 -->
       <div class="card">
         <div class="topbar">
           <div>
@@ -245,96 +243,96 @@ tr:hover td{background:#f8fbff}
 </div>
 
 <script>
-async function dbCall(action, data) {
-  try {
-    const res = await fetch('/api/db', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action,data}) });
+async function dbCall(action,data){
+  try{
+    const res=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,data})});
     return res.json();
-  } catch(e) { return {ok:false}; }
+  }catch(e){return{ok:false};}
 }
 
-function showPage(page) {
-  document.getElementById('page-post').style.display = page==='post' ? '' : 'none';
-  document.getElementById('page-store').style.display = page==='store' ? '' : 'none';
-  document.getElementById('menu-post').classList.toggle('active', page==='post');
-  document.getElementById('menu-store').classList.toggle('active', page==='store');
+function showPage(page){
+  document.getElementById('page-post').style.display=page==='post'?'':'none';
+  document.getElementById('page-store').style.display=page==='store'?'':'none';
+  document.getElementById('menu-post').classList.toggle('active',page==='post');
+  document.getElementById('menu-store').classList.toggle('active',page==='store');
 }
 
-function toggleDropdown() {
+function toggleDropdown(){
   document.getElementById('storeDropdownBtn').classList.toggle('open');
   document.getElementById('storeDropdown').classList.toggle('show');
 }
 
-function closeDropdown() {
+function closeDropdown(){
   document.getElementById('storeDropdownBtn').classList.remove('open');
   document.getElementById('storeDropdown').classList.remove('show');
   document.getElementById('storeAddForm').classList.remove('show');
 }
 
-function toggleAddForm() {
-  const form = document.getElementById('storeAddForm');
+function toggleAddForm(){
+  const form=document.getElementById('storeAddForm');
   form.classList.toggle('show');
-  if (form.classList.contains('show')) setTimeout(() => document.getElementById('addStoreName').focus(), 100);
+  if(form.classList.contains('show')) setTimeout(()=>document.getElementById('addStoreName').focus(),100);
 }
 
-document.addEventListener('click', function(e) {
-  const header = document.querySelector('.store-header');
-  if (header && !header.contains(e.target)) closeDropdown();
+document.addEventListener('click',function(e){
+  const header=document.querySelector('.store-header');
+  if(header&&!header.contains(e.target)) closeDropdown();
 });
 
 // ========== 포스팅 순위 ==========
-let blogs=[], cur=null, postData={}, allBlogIds=[];
+let blogs=[],cur=null,postData={},allBlogIds=[];
 
-function extractId(v) {
-  v=v.trim(); if(!v) return null;
+function extractId(v){
+  v=v.trim();if(!v)return null;
   const m=v.match(/blog\.naver\.com\/([^/?#\s]+)/);
-  if(m) return m[1];
-  if(v.startsWith('http')) return null;
+  if(m)return m[1];
+  if(v.startsWith('http'))return null;
   return v;
 }
 
-async function addBulk() {
+async function addBulk(){
   const lines=document.getElementById('bulkInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
   let added=[];
   lines.forEach(line=>{
     const id=extractId(line);
-    if(!id||allBlogIds.includes(id)) return;
-    allBlogIds.push(id); blogs.push(id);
+    if(!id||allBlogIds.includes(id))return;
+    allBlogIds.push(id);blogs.push(id);
     postData[id]={loading:true,posts:[]};
     added.push(id);
   });
   document.getElementById('bulkInput').value='';
   if(added.length===0){alert('새로 추가된 블로그가 없습니다');return;}
-  renderTabs(); if(!cur) selectBlog(blogs[0]);
+  renderTabs();if(!cur)selectBlog(blogs[0]);
   document.getElementById('mainCard').style.display='';
   updateStats();
   dbCall('save_blogs',{blogs:added.map(id=>({blog_url:'https://blog.naver.com/'+id,blog_id:id}))});
-  for(const id of added) fetchPosts(id);
+  for(const id of added)fetchPosts(id);
 }
 
-async function fetchPosts(id) {
-  try {
+async function fetchPosts(id){
+  try{
     const res=await fetch(`/api/posts?blogId=${id}`);
     const data=await res.json();
     if(data.items&&data.items.length>0){
       postData[id]={loading:false,posts:data.items.map(p=>({time:p.time,title:p.title,link:p.link,kw:'',rank:null,vol:null,comp:null,loading:false}))};
       dbCall('save_posts',{posts:postData[id].posts.map(p=>({blog_id:id,post_url:p.link,title:p.title,published_at:p.time,keyword:''}))});
-    } else {postData[id]={loading:false,posts:[]};}
-  } catch(e){postData[id]={loading:false,posts:[]};}
-  if(cur===id) renderPosts(id);
+    }else{postData[id]={loading:false,posts:[]};}
+  }catch(e){postData[id]={loading:false,posts:[]};}
+  if(cur===id)renderPosts(id);
   updateStats();
 }
 
 function clearAll(){
-  if(!confirm('모든 블로그를 삭제할까요?')) return;
+  if(!confirm('모든 블로그를 삭제할까요?'))return;
   blogs=[];allBlogIds=[];cur=null;postData={};
-  renderTabs(); document.getElementById('mainCard').style.display='none'; updateStats();
+  renderTabs();document.getElementById('mainCard').style.display='none';updateStats();
 }
 
 function removeBlog(id,e){
   e.stopPropagation();
-  blogs=blogs.filter(b=>b!==id); allBlogIds=allBlogIds.filter(b=>b!==id);
-  delete postData[id]; if(cur===id) cur=blogs[0]||null;
-  renderTabs(); if(cur) renderPosts(cur); else document.getElementById('mainCard').style.display='none';
+  blogs=blogs.filter(b=>b!==id);allBlogIds=allBlogIds.filter(b=>b!==id);
+  delete postData[id];if(cur===id)cur=blogs[0]||null;
+  renderTabs();if(cur)renderPosts(cur);else document.getElementById('mainCard').style.display='none';
   updateStats();
 }
 
@@ -384,39 +382,39 @@ function renderPosts(id){
 }
 
 function rankHtml(rank,loading){
-  if(loading) return '<span class="spinner"></span>';
-  if(rank===null) return '<span class="muted">-</span>';
-  if(rank===0) return '<span class="muted" style="font-size:11px">없음</span>';
+  if(loading)return'<span class="spinner"></span>';
+  if(rank===null)return'<span class="muted">-</span>';
+  if(rank===0)return'<span class="muted" style="font-size:11px">없음</span>';
   const cls=rank===1?'r1':rank===2?'r2':rank===3?'r3':rank<=10?'r10':'rn';
-  return `<span class="badge ${cls}">${rank}위</span>`;
+  return`<span class="badge ${cls}">${rank}위</span>`;
 }
 
 function volHtml(vol,loading){
-  if(loading) return '';
-  if(vol===null) return '<span class="muted">-</span>';
-  return `<span style="font-size:12px">${Number(vol).toLocaleString()}</span>`;
+  if(loading)return'';
+  if(vol===null)return'<span class="muted">-</span>';
+  return`<span style="font-size:12px">${Number(vol).toLocaleString()}</span>`;
 }
 
 function compHtml(comp,loading){
-  if(loading) return '';
-  if(comp===null) return '<span class="muted">-</span>';
-  const v=parseFloat(comp); if(isNaN(v)) return '<span class="muted">-</span>';
+  if(loading)return'';
+  if(comp===null)return'<span class="muted">-</span>';
+  const v=parseFloat(comp);if(isNaN(v))return'<span class="muted">-</span>';
   const cls=v<0.3?'comp-low':v<0.7?'comp-mid':'comp-high';
   const label=v<0.3?'낮음':v<0.7?'보통':'높음';
-  return `<span class="${cls}" style="font-size:12px">${v.toFixed(2)} (${label})</span>`;
+  return`<span class="${cls}" style="font-size:12px">${v.toFixed(2)} (${label})</span>`;
 }
 
 async function doSearch(blogId,idx){
   const kw=document.getElementById(`kw-${blogId}-${idx}`).value.trim();
   if(!kw){alert('키워드를 입력하세요');return;}
-  postData[blogId].posts[idx].kw=kw; postData[blogId].posts[idx].loading=true;
-  postData[blogId].posts[idx].rank=null; postData[blogId].posts[idx].vol=null; postData[blogId].posts[idx].comp=null;
+  postData[blogId].posts[idx].kw=kw;postData[blogId].posts[idx].loading=true;
+  postData[blogId].posts[idx].rank=null;postData[blogId].posts[idx].vol=null;postData[blogId].posts[idx].comp=null;
   renderPosts(blogId);
   try{
     const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
     if(!res.ok){const err=await res.json();throw new Error(err.error||'서버 오류');}
     const data=await res.json();
-    const items=data.items||[]; const total=data.total||0;
+    const items=data.items||[];const total=data.total||0;
     let rank=0;
     for(let i=0;i<items.length;i++){
       const link=(items[i].link||'')+(items[i].bloggername||'');
@@ -429,15 +427,15 @@ async function doSearch(blogId,idx){
     dbCall('save_rank',{post_url:postData[blogId].posts[idx].link,blog_id:blogId,keyword:kw,rank,search_volume:total,competition:postData[blogId].posts[idx].comp});
   }catch(e){alert('조회 오류: '+e.message);postData[blogId].posts[idx].rank=null;}
   postData[blogId].posts[idx].loading=false;
-  renderPosts(blogId); updateStats();
+  renderPosts(blogId);updateStats();
 }
 
 async function allSearch(){
-  if(!cur) return;
+  if(!cur)return;
   const posts=postData[cur]?.posts||[];
   for(let i=0;i<posts.length;i++){
     const kw=document.getElementById(`kw-${cur}-${i}`)?.value.trim();
-    if(!kw) continue;
+    if(!kw)continue;
     await doSearch(cur,i);
     await new Promise(r=>setTimeout(r,300));
   }
@@ -469,13 +467,13 @@ function saveStores(){
 
 function today(){
   const d=new Date();
-  return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  return`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function getDates(){
   const dates=[];
   for(let i=0;i<7;i++){
-    const d=new Date(); d.setDate(d.getDate()-i);
+    const d=new Date();d.setDate(d.getDate()-i);
     dates.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`);
   }
   return dates;
@@ -486,19 +484,19 @@ function addStore(){
   if(!name){alert('매장명을 입력하세요');return;}
   if(stores.find(s=>s.name===name)){alert('이미 등록된 매장명입니다');return;}
   const store={id:Date.now().toString(),name,keywords:[]};
-  stores.push(store); saveStores();
+  stores.push(store);saveStores();
   document.getElementById('addStoreName').value='';
-  closeDropdown(); renderStoreDropdown(); selectStore(store.id);
+  closeDropdown();renderStoreDropdown();selectStore(store.id);
 }
 
 function removeStore(id,e){
   e.stopPropagation();
-  if(!confirm('매장을 삭제할까요?')) return;
-  stores=stores.filter(s=>s.id!==id); delete rankData[id]; saveStores();
+  if(!confirm('매장을 삭제할까요?'))return;
+  stores=stores.filter(s=>s.id!==id);delete rankData[id];saveStores();
   if(curStore===id){
     curStore=null;
     document.getElementById('storeHeaderName').textContent='매장 선택';
-    renderKeywords(); renderRankTable();
+    renderKeywords();renderRankTable();
   }
   renderStoreDropdown();
 }
@@ -517,31 +515,33 @@ function renderStoreDropdown(){
 }
 
 function selectStore(id){
-  curStore=id; closeDropdown(); renderStoreDropdown();
+  curStore=id;closeDropdown();renderStoreDropdown();
   const store=stores.find(s=>s.id===id);
-  if(!store) return;
+  if(!store)return;
   document.getElementById('storeHeaderName').textContent=store.name;
   document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
-  renderKeywords(); renderRankTable();
+  renderKeywords();renderRankTable();
 }
 
 function addKeyword(){
-  const kw=document.getElementById('kwInput').value.trim(); if(!kw) return;
+  const kw=document.getElementById('kwInput').value.trim();if(!kw)return;
   const store=stores.find(s=>s.id===curStore);
   if(!store){alert('먼저 매장을 선택하세요');return;}
   if(store.keywords.includes(kw)){alert('이미 등록된 키워드입니다');return;}
   if(store.keywords.length>=30){alert('키워드는 최대 30개까지 등록 가능합니다');return;}
-  store.keywords.push(kw); saveStores();
+  store.keywords.push(kw);saveStores();
   document.getElementById('kwInput').value='';
   document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
-  renderKeywords(); renderRankTable();
+  renderKeywords();renderRankTable();
+  // 등록 즉시 순위 조회
+  checkSingleKeyword(store,kw);
 }
 
 function removeKeyword(kw){
-  const store=stores.find(s=>s.id===curStore); if(!store) return;
-  store.keywords=store.keywords.filter(k=>k!==kw); saveStores();
+  const store=stores.find(s=>s.id===curStore);if(!store)return;
+  store.keywords=store.keywords.filter(k=>k!==kw);saveStores();
   document.getElementById('kwCount').textContent=`${store.keywords.length}/30`;
-  renderKeywords(); renderRankTable();
+  renderKeywords();renderRankTable();
 }
 
 function renderKeywords(){
@@ -568,17 +568,17 @@ function renderRankTable(){
 
   document.getElementById('rankBody').innerHTML=store.keywords.map(kw=>{
     const kwData=data[kw]||{};
-    return `<tr>
+    return`<tr>
       <td>
         <div class="rank-kw-title">${kw}</div>
         <div class="rank-kw-vol">검색량 ${(kwData._vol||0).toLocaleString()}</div>
       </td>
       ${dates.map(d=>{
         const posts=kwData[d];
-        if(!posts||posts.length===0) return `<td><span class="muted">-</span></td>`;
-        return `<td>${posts.slice(0,10).map((p,i)=>
+        if(!posts||posts.length===0)return`<td><span class="muted">-</span></td>`;
+        return`<td>${posts.slice(0,10).map((p,i)=>
           `<div class="rank-post">
-            <span class="rank-num ${i<3?'top3':'normal'}">${i+1}</span>
+            <span class="rank-num ${i<4?'blue':'yellow'}">${i+1}</span>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;display:inline-block" title="${p}">${p}</span>
           </div>`
         ).join('')}</td>`;
@@ -587,37 +587,53 @@ function renderRankTable(){
   }).join('');
 }
 
+async function checkSingleKeyword(store,kw){
+  const todayStr=today();
+  if(!rankData[store.id])rankData[store.id]={};
+  try{
+    const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
+    const data=await res.json();
+    const items=(data.items||[]).slice(0,10);
+    const titles=items.map(p=>p.title.replace(/<[^>]+>/g,''));
+    if(!rankData[store.id][kw])rankData[store.id][kw]={};
+    rankData[store.id][kw][todayStr]=titles;
+    rankData[store.id][kw]._vol=data.total||0;
+    dbCall('save_rank',{post_url:`keyword:${kw}`,blog_id:store.id,keyword:kw,rank:null,search_volume:data.total||0,competition:null});
+  }catch(e){console.error(kw,e);}
+  saveStores();renderRankTable();
+}
+
 async function checkStore(){
   const store=stores.find(s=>s.id===curStore);
   if(!store){alert('매장을 선택하세요');return;}
   if(store.keywords.length===0){alert('키워드를 먼저 등록하세요');return;}
   const btn=document.getElementById('checkBtn');
-  btn.textContent='조회 중...'; btn.disabled=true;
+  btn.textContent='조회 중...';btn.disabled=true;
   const todayStr=today();
-  if(!rankData[store.id]) rankData[store.id]={};
+  if(!rankData[store.id])rankData[store.id]={};
   for(const kw of store.keywords){
     try{
       const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
       const data=await res.json();
       const items=(data.items||[]).slice(0,10);
       const titles=items.map(p=>p.title.replace(/<[^>]+>/g,''));
-      if(!rankData[store.id][kw]) rankData[store.id][kw]={};
+      if(!rankData[store.id][kw])rankData[store.id][kw]={};
       rankData[store.id][kw][todayStr]=titles;
       rankData[store.id][kw]._vol=data.total||0;
       dbCall('save_rank',{post_url:`keyword:${kw}`,blog_id:store.id,keyword:kw,rank:null,search_volume:data.total||0,competition:null});
       await new Promise(r=>setTimeout(r,300));
     }catch(e){console.error(kw,e);}
   }
-  saveStores(); renderRankTable();
-  btn.textContent='순위 조회'; btn.disabled=false;
+  saveStores();renderRankTable();
+  btn.textContent='순위 조회';btn.disabled=false;
   alert('순위 조회 완료!');
 }
 
-// 초기화 - 매장 등록 여부와 상관없이 항상 상세화면 표시
+// 초기화
 renderStoreDropdown();
 renderKeywords();
 renderRankTable();
-if(stores.length>0) selectStore(stores[0].id);
+if(stores.length>0)selectStore(stores[0].id);
 </script>
 </body>
 </html>
