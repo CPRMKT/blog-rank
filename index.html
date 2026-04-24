@@ -649,9 +649,9 @@ async function previewStore(){
 
 async function confirmAddStore(){
   const pending=window._pendingStore;
+  console.log('[등록] pending:', pending);
   if(!pending){alert('매장을 먼저 조회하세요');return;}
 
-  // 이미 등록된 매장인지 확인
   if(Array.isArray(stores)&&stores.find(s=>s.place_id===pending.placeId)){
     alert('이미 등록된 매장입니다');
     return;
@@ -661,7 +661,7 @@ async function confirmAddStore(){
   confirmBtn.disabled=true;confirmBtn.textContent='등록 중...';
 
   try{
-    // 1. DB에 매장 저장
+    console.log('[등록] DB 저장 시작...');
     const saveRes=await dbCall('create_store',{
       place_id:pending.placeId,
       name:pending.name,
@@ -670,18 +670,24 @@ async function confirmAddStore(){
       address:pending.roadAddress||pending.address,
       phone:pending.phone,
     });
+    console.log('[등록] DB 응답:', JSON.stringify(saveRes));
     if(!saveRes.ok){throw new Error(saveRes.error||'매장 저장 실패');}
 
-    // 2. 매장 블로그 리뷰 수집 (백그라운드)
+    // 매장 블로그 리뷰 수집 (백그라운드)
     refreshStoreBlogPosts(pending.placeId,pending.businessType);
 
-    // 3. 매장 목록 재로드 + 선택
+    // 매장 목록 재로드
+    console.log('[등록] 매장 목록 재로드...');
     await loadStores();
+    console.log('[등록] stores:', JSON.stringify(stores));
     const newStore=stores.find(s=>s.place_id===pending.placeId);
+    console.log('[등록] newStore:', newStore);
     if(newStore)selectStore(newStore.id);
 
     closeDropdown();
+    alert('매장이 등록되었습니다!');
   }catch(e){
+    console.error('[등록] 에러:', e);
     alert('매장 등록 오류: '+e.message);
     confirmBtn.disabled=false;confirmBtn.textContent='등록';
   }
