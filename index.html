@@ -568,7 +568,7 @@ function getISODates(){
 async function loadStores(){
   const res=await dbCall('list_stores',{});
   if(!res.ok){console.error('매장 목록 로드 실패');return;}
-  stores=res.result||[];
+  stores=Array.isArray(res.result)?res.result:[];
   renderStoreDropdown();
   // 선택된 매장이 없으면 첫 번째 매장 선택
   if(!curStoreId&&stores.length>0){
@@ -652,7 +652,7 @@ async function confirmAddStore(){
   if(!pending){alert('매장을 먼저 조회하세요');return;}
 
   // 이미 등록된 매장인지 확인
-  if(stores.find(s=>s.place_id===pending.placeId)){
+  if(Array.isArray(stores)&&stores.find(s=>s.place_id===pending.placeId)){
     alert('이미 등록된 매장입니다');
     return;
   }
