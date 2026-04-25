@@ -111,8 +111,9 @@ export default async function handler(req, res) {
     }
     const where = req.query.where || 'nexearch';
     const page = req.query.page || '1';
+    const engine = req.query.engine || 'naver';
     const params = new URLSearchParams({
-      engine: 'naver',
+      engine,
       query,
       where,
       page,
@@ -127,6 +128,15 @@ export default async function handler(req, res) {
 
       if (!data) {
         return res.status(200).json({ status: resp.status, contentType: ct, body: text.substring(0, 1000) });
+      }
+
+      // 에러면 raw error를 그대로 반환
+      if (data.error) {
+        return res.status(200).json({
+          status: resp.status,
+          serpApiError: data.error,
+          requestParams: { engine: 'naver', query, where, page },
+        });
       }
 
       // 응답에서 블로그 URL을 가진 항목 카운트
