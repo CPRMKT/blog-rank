@@ -311,6 +311,77 @@ function collectBlogResultsFromSerpApi(data) {
 
 
 // ============================================================
+// 방법 2.5: Apify Naver Blog & Cafe Scraper
+// ============================================================
+
+/**
+ * Apify의 huggable_quote/naver-blog-cafe-scraper를 호출해 블로그 탭 결과를 가져옴.
+ * 헤드리스 브라우저로 무한스크롤을 처리하므로 30위까지 정확한 순위를 받을 수 있음.
+ *
+ * @param {string} keyword
+ * @param {number} [count=30]
+ */
+async function searchApify(keyword, count = 30) {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) {
+    throw new Error('APIFY_TOKEN 환경변수가 설정되지 않았습니다');
+  }
+
+  // Actor ID는 URL path에서 user/actor 슬래시 대신 ~ 사용
+  const actorId = process.env.APIFY_ACTOR_ID || 'huggable_quote~naver-blog-cafe-scraper';
+  const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}&clean=true`;
+
+  const body = {
+    searchKeywords: [keyword],
+    searchType: 'blog',
+    maxResults: count,
+    sortBy: 'sim',
+    scrapeContent: false,
+    scrapeComments: false,
+  };
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Apify 요청 실패 (status=${resp.status}): ${err.substring(0, 300)}`);
+  }
+
+  const dataset = await resp.json();
+  // dataset은 결과 item 배열. 배열 순서가 곧 검색 결과 순위.
+  const arr = Array.isArray(dataset) ? dataset : (dataset.items || []);
+
+  const items = [];
+  const seenKeys = new Set();
+  for (const r of arr) {
+    if (items.length >= count) break;
+    const link = r.url || r.link || '';
+    const parsed = parseBlogUrl(link);
+    const key = parsed ? `${parsed.blogId}/${parsed.postId}` : link;
+    if (!key || seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    items.push({
+      rank: items.length + 1,
+      link,
+      title: (r.title || '').replace(/<[^>]+>/g, ''),
+      blogId: parsed?.blogId || '',
+      postId: parsed?.postId || '',
+    });
+  }
+
+  return {
+    items,
+    total: items.length,
+    method: 'apify',
+  };
+}
+
+
+// ============================================================
 // 방법 3: 기존 네이버 공식 API (폴백)
 // ============================================================
 
@@ -377,6 +448,9 @@ export async function getBlogRankings(keyword, count = 30) {
   // 명시적으로 지정된 경우 해당 방법만 사용
   if (method === 'serpapi') {
     return searchSerpApi(keyword, count);
+  }
+  if (method === 'apify') {
+    return searchApify(keyword, count);
   }
   if (method === 'direct') {
     return searchDirect(keyword, count);

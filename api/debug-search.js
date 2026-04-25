@@ -103,6 +103,73 @@ export default async function handler(req, res) {
     }
   }
 
+  // test=apify: Apify Naver Blog & Cafe Scraper raw 응답 확인 (실행 시간, 결과 수, 순위 검증용)
+  if (test === 'apify' && query) {
+    const token = process.env.APIFY_TOKEN;
+    if (!token) {
+      return res.status(200).json({ error: 'APIFY_TOKEN 환경변수 미설정' });
+    }
+    const actorId = req.query.actor || process.env.APIFY_ACTOR_ID || 'huggable_quote~naver-blog-cafe-scraper';
+    const maxResults = parseInt(req.query.max || '15', 10);
+    const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}&clean=true`;
+    const body = {
+      searchKeywords: [query],
+      searchType: 'blog',
+      maxResults,
+      sortBy: 'sim',
+      scrapeContent: false,
+      scrapeComments: false,
+    };
+    const t0 = Date.now();
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const elapsedMs = Date.now() - t0;
+      const ct = resp.headers.get('content-type');
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = null; }
+
+      if (!data) {
+        return res.status(200).json({
+          status: resp.status,
+          contentType: ct,
+          elapsedMs,
+          body: text.substring(0, 1500),
+        });
+      }
+
+      const arr = Array.isArray(data) ? data : (data.items || []);
+      const sample = arr.slice(0, 3);
+      const allItems = arr.map((r, i) => ({
+        rank: i + 1,
+        url: r.url || r.link || '',
+        title: r.title || '',
+        type: r.type,
+        author: r.author,
+        date: r.date,
+      }));
+
+      return res.status(200).json({
+        status: resp.status,
+        elapsedMs,
+        actorId,
+        itemCount: arr.length,
+        firstItemKeys: arr[0] ? Object.keys(arr[0]) : [],
+        rawSample: sample,
+        items: allItems,
+      });
+    } catch (e) {
+      return res.status(200).json({
+        elapsedMs: Date.now() - t0,
+        error: e.message,
+      });
+    }
+  }
+
   // test=serpapi: SerpApi raw 응답 확인 (키 이름, 결과 수, 페이지네이션 검증용)
   if (test === 'serpapi' && query) {
     const apiKey = process.env.SERPAPI_KEY;
