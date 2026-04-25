@@ -103,6 +103,72 @@ export default async function handler(req, res) {
     }
   }
 
+  // test=serpapi: SerpApi raw 응답 확인 (키 이름, 결과 수, 페이지네이션 검증용)
+  if (test === 'serpapi' && query) {
+    const apiKey = process.env.SERPAPI_KEY;
+    if (!apiKey) {
+      return res.status(200).json({ error: 'SERPAPI_KEY 환경변수 미설정' });
+    }
+    const where = req.query.where || 'nexearch';
+    const page = req.query.page || '1';
+    const params = new URLSearchParams({
+      engine: 'naver',
+      query,
+      where,
+      page,
+      api_key: apiKey,
+    });
+    try {
+      const resp = await fetch(`https://serpapi.com/search.json?${params}`);
+      const ct = resp.headers.get('content-type');
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = null; }
+
+      if (!data) {
+        return res.status(200).json({ status: resp.status, contentType: ct, body: text.substring(0, 1000) });
+      }
+
+      // 응답에서 블로그 URL을 가진 항목 카운트
+      const allBlogLinks = [];
+      function walk(obj, path = '') {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) {
+          obj.forEach((item, i) => walk(item, `${path}[${i}]`));
+          return;
+        }
+        for (const [k, v] of Object.entries(obj)) {
+          if (typeof v === 'string' && /(?:m\.)?blog\.naver\.com\//i.test(v)) {
+            allBlogLinks.push({ path: `${path}.${k}`, value: v });
+          } else {
+            walk(v, `${path}.${k}`);
+          }
+        }
+      }
+      walk(data);
+
+      // 응답의 top-level 키들과 각 키의 타입/길이
+      const topKeys = {};
+      for (const [k, v] of Object.entries(data)) {
+        if (Array.isArray(v)) topKeys[k] = `array[${v.length}]`;
+        else if (v && typeof v === 'object') topKeys[k] = `object{${Object.keys(v).join(',')}}`;
+        else topKeys[k] = typeof v === 'string' ? `string(${v.length})` : typeof v;
+      }
+
+      return res.status(200).json({
+        status: resp.status,
+        topKeys,
+        searchInformation: data.search_information,
+        blogLinkCount: allBlogLinks.length,
+        blogLinks: allBlogLinks.slice(0, 30),
+        firstViewResult: Array.isArray(data.view_results) ? data.view_results[0] : null,
+        firstOrganicResult: Array.isArray(data.organic_results) ? data.organic_results[0] : null,
+      });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
   // test=findnext: HTML 안에서 무한스크롤/AJAX endpoint 단서 찾기
   if (test === 'findnext' && query) {
     try {

@@ -211,42 +211,102 @@ async function searchSerpApi(keyword, count = 30) {
     throw new Error('SERPAPI_KEY 환경변수가 설정되지 않았습니다');
   }
 
-  const params = new URLSearchParams({
-    engine: 'naver',
-    query: keyword,
-    where: 'blog',
-    api_key: apiKey,
-  });
-
-  const resp = await fetch(`https://serpapi.com/search.json?${params}`);
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`SerpApi 요청 실패 (status=${resp.status}): ${err}`);
-  }
-
-  const data = await resp.json();
-  const blogResults = data.blog_results || data.organic_results || [];
-
+  // SerpApi Naver 엔진은 공식적으로 where=blog를 지원하지 않으므로
+  // where=nexearch로 통합검색 호출 후 view_results 또는 organic_results에서
+  // 블로그 포스트만 추출. count > 페이지당 결과 수면 page 파라미터로 페이지네이션.
   const items = [];
-  for (let i = 0; i < Math.min(blogResults.length, count); i++) {
-    const r = blogResults[i];
-    const link = r.link || r.url || '';
-    const parsed = parseBlogUrl(link);
+  const seenKeys = new Set();
+  let totalReported = 0;
 
-    items.push({
-      rank: i + 1,
-      link,
-      title: (r.title || '').replace(/<[^>]+>/g, ''),
-      blogId: parsed?.blogId || '',
-      postId: parsed?.postId || '',
+  for (let page = 1; page <= 3 && items.length < count; page++) {
+    const params = new URLSearchParams({
+      engine: 'naver',
+      query: keyword,
+      where: 'nexearch',
+      page: String(page),
+      api_key: apiKey,
     });
+
+    const resp = await fetch(`https://serpapi.com/search.json?${params}`);
+    if (!resp.ok) {
+      const err = await resp.text();
+      if (page === 1) {
+        throw new Error(`SerpApi 요청 실패 (status=${resp.status}): ${err}`);
+      }
+      break;
+    }
+
+    const data = await resp.json();
+    if (data.search_information?.total_results) {
+      totalReported = data.search_information.total_results;
+    }
+
+    const candidates = collectBlogResultsFromSerpApi(data);
+    let added = 0;
+    for (const r of candidates) {
+      const link = r.link || r.url || r.blog_link || '';
+      const parsed = parseBlogUrl(link);
+      const key = parsed ? `${parsed.blogId}/${parsed.postId}` : link;
+      if (!key || seenKeys.has(key)) continue;
+      seenKeys.add(key);
+
+      items.push({
+        rank: items.length + 1,
+        link,
+        title: (r.title || r.post_title || '').replace(/<[^>]+>/g, ''),
+        blogId: parsed?.blogId || '',
+        postId: parsed?.postId || '',
+      });
+      added++;
+      if (items.length >= count) break;
+    }
+
+    // 이번 페이지에서 새 결과가 0개면 더 시도해도 의미 없음
+    if (added === 0) break;
   }
 
   return {
     items,
-    total: data.search_information?.total_results || items.length,
+    total: totalReported || items.length,
     method: 'serpapi',
   };
+}
+
+/**
+ * SerpApi Naver nexearch 응답에서 블로그 포스트들을 추출.
+ * 응답 형태가 버전/검색에 따라 다양하므로 알려진 키들을 모두 시도하고,
+ * blog.naver.com URL을 가진 항목만 골라냄.
+ */
+function collectBlogResultsFromSerpApi(data) {
+  const buckets = [
+    data.blog_results,
+    data.view_results,
+    data.organic_results,
+    data.posts_results,
+  ].filter(Array.isArray);
+
+  // 일부 응답은 inline_videos / inline_news처럼 categorized
+  // view_results 안에 items 또는 contents 가 있을 수도
+  if (Array.isArray(data.view_results)) {
+    for (const v of data.view_results) {
+      if (Array.isArray(v?.items)) buckets.push(v.items);
+      if (Array.isArray(v?.contents)) buckets.push(v.contents);
+    }
+  }
+
+  const out = [];
+  const seenLinks = new Set();
+  for (const bucket of buckets) {
+    for (const r of bucket) {
+      const link = r?.link || r?.url || r?.blog_link || '';
+      if (!link || seenLinks.has(link)) continue;
+      // blog.naver.com 또는 m.blog.naver.com 만 채택
+      if (!/(?:m\.)?blog\.naver\.com\//i.test(link)) continue;
+      seenLinks.add(link);
+      out.push(r);
+    }
+  }
+  return out;
 }
 
 
