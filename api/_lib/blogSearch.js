@@ -341,6 +341,13 @@ async function searchApify(keyword, count = 30) {
     // maxConcurrency: 5 (기본값) 으로 병렬 스크랩하면 빠르게 끝나는 순서대로 dataset에
     // push 되어 검색 순위가 섞임. 1로 고정해 네이버 화면 순서를 보존.
     maxConcurrency: 1,
+    // 네이버는 한국 IP와 해외 IP에서 다른 검색 순위를 반환. 한국 residential proxy
+    // 사용해 한국 사용자가 보는 실제 화면 순서와 일치시킴.
+    proxyConfiguration: {
+      useApifyProxy: true,
+      apifyProxyGroups: ['RESIDENTIAL'],
+      apifyProxyCountry: 'KR',
+    },
   };
 
   const resp = await fetch(url, {
