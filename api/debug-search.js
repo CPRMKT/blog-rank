@@ -103,7 +103,62 @@ export default async function handler(req, res) {
     }
   }
 
-  if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2' });
+  // test=pages: start=1, 11, 21 각각이 다른 결과를 주는지 확인
+  if (test === 'pages' && query) {
+    try {
+      const pages = [];
+      for (const start of [1, 11, 21]) {
+        const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt&nso=so%3Ar%2Cp%3Aall&start=${start}`;
+        const resp = await fetch(url, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'identity',
+            'Upgrade-Insecure-Requests': '1',
+          },
+          redirect: 'follow',
+        });
+        const html = await resp.text();
+        const pattern = /href="https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
+        const seen = new Set();
+        const urls = [];
+        let m;
+        while ((m = pattern.exec(html)) !== null) {
+          const key = `${m[1]}/${m[2]}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          urls.push(key);
+        }
+        // 페이징 표시자 (다음 페이지 링크)가 있는지 확인
+        const hasNextPage = /start=(\d+)/g.test(html);
+        const startParamsInHtml = [...html.matchAll(/[?&]start=(\d+)/g)].map(m => parseInt(m[1])).filter(n => n > 1);
+        const uniqueStarts = [...new Set(startParamsInHtml)].sort((a, b) => a - b);
+        pages.push({
+          start,
+          status: resp.status,
+          htmlLength: html.length,
+          urlCount: urls.length,
+          urls,
+          hasNextPage,
+          startParamsInHtml: uniqueStarts.slice(0, 10),
+        });
+      }
+      // 페이지간 중복/신규 분석
+      const allFromPage1 = new Set(pages[0]?.urls || []);
+      const newInPage2 = (pages[1]?.urls || []).filter(u => !allFromPage1.has(u));
+      pages.forEach((p, i) => { p.uniqueVsFirst = i === 0 ? p.urls.length : (p.urls || []).filter(u => !allFromPage1.has(u)).length; });
+      return res.status(200).json({
+        query,
+        pages,
+        totalUnique: new Set(pages.flatMap(p => p.urls || [])).size,
+      });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
+  if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2|pages|apollo' });
 
   // test=apollo: HTML 내 검색결과 구조 상세 분석
   if (req.query.test === 'apollo') {
