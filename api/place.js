@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       const { total, maxItemCount, collected } = await fetchAllBlogReviews(
         placeId,
         businessType,
-        { maxPages: 2, display: 10, includeTypes: ['blog'] }
+        { maxPages: 11, display: 10, includeTypes: ['blog'] }
       );
 
       // 각 리뷰에서 blog_id, post_id 추출 (매칭 속도 향상용)
