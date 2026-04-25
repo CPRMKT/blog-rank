@@ -21,35 +21,86 @@ const USER_AGENT =
  * @returns {Promise<{items: Array<{rank, link, title, blogId, postId}>, total: number, method: string}>}
  */
 async function searchDirect(keyword, count = 30) {
-  // 네이버 블로그 탭 URL
-  const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(keyword)}&sm=tab_opt&nso=so%3Ar%2Cp%3Aall`;
+  // 네이버 블로그 탭은 페이지당 약 7~8개만 SSR 렌더링하므로
+  // start 파라미터로 페이지네이션해서 결과를 합쳐야 충분한 개수 확보 가능
+  // start=1, 11, 21로 최대 30개까지 시도
+  const pageStarts = [1, 11, 21];
+  const merged = [];
+  const seenKeys = new Set();
+  let totalReported = 0;
 
-  const resp = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding': 'identity',
-      'Connection': 'keep-alive',
-      'sec-ch-ua': '"Chromium";v="131", "Not_A Brand";v="24"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"',
-      'sec-fetch-dest': 'document',
-      'sec-fetch-mode': 'navigate',
-      'sec-fetch-site': 'none',
-      'sec-fetch-user': '?1',
-      'Upgrade-Insecure-Requests': '1',
-    },
-    redirect: 'follow',
-  });
+  for (const start of pageStarts) {
+    if (merged.length >= count) break;
 
-  if (!resp.ok) {
-    throw new Error(`네이버 검색 요청 실패 (status=${resp.status})`);
+    const url =
+      `https://search.naver.com/search.naver?where=blog` +
+      `&query=${encodeURIComponent(keyword)}` +
+      `&sm=tab_opt&nso=so%3Ar%2Cp%3Aall` +
+      `&start=${start}`;
+
+    let html;
+    try {
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Accept-Encoding': 'identity',
+          'Connection': 'keep-alive',
+          'sec-ch-ua': '"Chromium";v="131", "Not_A Brand";v="24"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"Windows"',
+          'sec-fetch-dest': 'document',
+          'sec-fetch-mode': 'navigate',
+          'sec-fetch-site': 'none',
+          'sec-fetch-user': '?1',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        redirect: 'follow',
+      });
+
+      if (!resp.ok) {
+        // 첫 페이지가 실패하면 전체 실패로 간주, 이후 페이지 실패는 무시
+        if (start === 1) {
+          throw new Error(`네이버 검색 요청 실패 (status=${resp.status})`);
+        }
+        break;
+      }
+      html = await resp.text();
+    } catch (e) {
+      if (start === 1) throw e;
+      break;
+    }
+
+    const pageResult = parseNaverBlogHTML(html, count);
+    if (pageResult.total > totalReported) totalReported = pageResult.total;
+
+    let addedThisPage = 0;
+    for (const item of pageResult.items) {
+      const key = `${item.blogId}/${item.postId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      merged.push({
+        rank: merged.length + 1,
+        link: item.link,
+        title: item.title,
+        blogId: item.blogId,
+        postId: item.postId,
+      });
+      addedThisPage++;
+      if (merged.length >= count) break;
+    }
+
+    // 이번 페이지에서 신규로 추가된 게 없으면 더 이상 시도해도 의미 없음
+    if (addedThisPage === 0) break;
   }
 
-  const html = await resp.text();
-  return parseNaverBlogHTML(html, count);
+  return {
+    items: merged,
+    total: totalReported || merged.length,
+    method: 'direct',
+  };
 }
 
 /**
