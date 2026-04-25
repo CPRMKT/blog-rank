@@ -103,6 +103,112 @@ export default async function handler(req, res) {
     }
   }
 
+  // test=findnext: HTML 안에서 무한스크롤/AJAX endpoint 단서 찾기
+  if (test === 'findnext' && query) {
+    try {
+      const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt&nso=so%3Ar%2Cp%3Aall`;
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        redirect: 'follow',
+      });
+      const html = await resp.text();
+
+      // 페이지네이션 후보 URL 패턴 모음
+      const patterns = {
+        's.search.naver.com': /https?:\/\/s\.search\.naver\.com\/[^"'\s<>]+/g,
+        'apirender': /https?:\/\/[^"'\s<>]*apirender[^"'\s<>]*/gi,
+        'csearch': /https?:\/\/[^"'\s<>]*csearch[^"'\s<>]*/gi,
+        'morePage': /"morePage"\s*:\s*"?([^",}]+)/g,
+        'next_url': /"next[A-Z_a-z]*"\s*:\s*"([^"]+)"/g,
+        'api_url': /["']([^"']*\/api\/[^"']*)["']/g,
+        'load_more': /loadMore|moreBtn|next_page/gi,
+      };
+
+      const out = {};
+      for (const [name, pat] of Object.entries(patterns)) {
+        const matches = [...html.matchAll(pat)];
+        out[name] = {
+          count: matches.length,
+          samples: [...new Set(matches.map(m => m[0]))].slice(0, 8),
+        };
+      }
+
+      // <script> 태그 내 init 데이터 후보 추출
+      const scriptMatches = [...html.matchAll(/<script[^>]*>([\s\S]{50,3000}?)<\/script>/g)];
+      const interesting = scriptMatches
+        .map(m => m[1])
+        .filter(s => /search|blog|page|start|next/i.test(s))
+        .slice(0, 5)
+        .map(s => s.substring(0, 600));
+
+      return res.status(200).json({
+        htmlLength: html.length,
+        patterns: out,
+        scriptSnippets: interesting,
+      });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
+  // test=ajax: 추측한 AJAX endpoint들을 직접 호출해보기
+  if (test === 'ajax' && query) {
+    const startParam = parseInt(req.query.start || '11', 10);
+    const candidates = [
+      // s.search.naver.com 패턴
+      `https://s.search.naver.com/p/blog/search.naver?api_type=11&query=${encodeURIComponent(query)}&start=${startParam}&where=nexearch&sm=tab_pge&nso=so:r,p:all`,
+      `https://s.search.naver.com/p/blog/search.naver?api_type=1&query=${encodeURIComponent(query)}&start=${startParam}&where=blog`,
+      // m.search.naver.com 무한스크롤
+      `https://m.search.naver.com/search.naver?where=m_blog&query=${encodeURIComponent(query)}&start=${startParam}&sm=mtb_opt`,
+      // s.search.naver.com csearch 패턴
+      `https://s.search.naver.com/p/csearch/content/nqapirender.nhn?_callback=cb&where=blog&query=${encodeURIComponent(query)}&start=${startParam}`,
+    ];
+
+    const results = [];
+    for (const u of candidates) {
+      try {
+        const resp = await fetch(u, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Accept': '*/*',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+            'Referer': `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}`,
+          },
+          redirect: 'follow',
+        });
+        const text = await resp.text();
+        const pattern = /(?:href=")?https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
+        const seen = new Set();
+        const urls = [];
+        let m;
+        while ((m = pattern.exec(text)) !== null) {
+          const k = `${m[1]}/${m[2]}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          urls.push(k);
+        }
+        results.push({
+          url: u,
+          status: resp.status,
+          contentType: resp.headers.get('content-type'),
+          length: text.length,
+          urlCount: urls.length,
+          urls: urls.slice(0, 15),
+          sample: text.substring(0, 400),
+        });
+      } catch (e) {
+        results.push({ url: u, error: e.message });
+      }
+    }
+    return res.status(200).json({ query, start: startParam, results });
+  }
+
   // test=pages: start=1, 11, 21 각각이 다른 결과를 주는지 확인
   if (test === 'pages' && query) {
     try {
