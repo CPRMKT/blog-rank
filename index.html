@@ -925,16 +925,21 @@ async function checkKeywordRank(storeId,keyword){
     return;
   }
 
-  // 2. 네이버 블로그 검색 1~30위 (새 API: blogId/postId 포함)
-  const searchRes=await fetch(`/api/search?query=${encodeURIComponent(keyword)}&count=30`);
+  // 2. 네이버 블로그 검색 1~10위 (정확한 블로그 탭 순위)
+  const searchRes=await fetch(`/api/search?query=${encodeURIComponent(keyword)}&count=10`);
   const searchData=await searchRes.json();
-  const items=searchData.items||[];
+  const items=(searchData.items||[]).slice(0,10);
 
-  // 3. 매칭 - 1~30위 중 우리 매장 블로그 리뷰 전부 찾기
+  // 3. 매칭 - 1~10위 중 우리 매장 블로그 리뷰 찾기
+  //    방법A: blog_id + post_id 정확 매칭 (플레이스 리뷰 목록 기반)
+  //    방법B: 검색결과 제목에 매장명 포함 여부 (폴백)
+  const storeName=store.name||'';
+  // 매장명에서 매칭용 키워드 추출 (예: "조개옥칼국수 수영직영점" → ["조개옥칼국수","조개옥"])
+  const nameTokens=buildNameTokens(storeName);
+
   const matches=[];
   for(let i=0;i<items.length;i++){
     const si=items[i];
-    // 새 API는 blogId/postId를 직접 제공, 없으면 link에서 파싱
     let sBlogId=si.blogId||'';
     let sPostId=si.postId||'';
     if(!sBlogId||!sPostId){
@@ -943,15 +948,27 @@ async function checkKeywordRank(storeId,keyword){
       sBlogId=parsed.blogId;sPostId=parsed.postId;
     }
 
+    let matched=false;
+
+    // 방법A: blog_id + post_id 정확 매칭
     for(const p of myPosts){
       if(p.blog_id===sBlogId&&p.post_id===sPostId){
-        matches.push({
-          rank:i+1,
-          url:si.link||'',
-          title:(si.title||p.title||'').replace(/<[^>]+>/g,''),
-        });
-        break;
+        matched=true;break;
       }
+    }
+
+    // 방법B: 제목에 매장명 포함 여부 (방법A 실패 시)
+    if(!matched&&nameTokens.length>0){
+      const title=(si.title||'').replace(/<[^>]+>/g,'');
+      matched=nameTokens.some(t=>title.includes(t));
+    }
+
+    if(matched){
+      matches.push({
+        rank:i+1,
+        url:si.link||'',
+        title:(si.title||'').replace(/<[^>]+>/g,''),
+      });
     }
   }
 
@@ -988,6 +1005,26 @@ function parseBlogUrlClient(url){
   const m2=url.match(/(?:m\.)?blog\.naver\.com\/([^/?#]+)\/(\d+)/i);
   if(m2)return{blogId:m2[1],postId:m2[2]};
   return null;
+}
+
+// 매장명에서 매칭용 키워드 토큰 추출
+// 예: "조개옥칼국수 수영직영점" → ["조개옥칼국수 수영직영점","조개옥칼국수","조개옥"]
+// 예: "빨래판포차" → ["빨래판포차"]
+function buildNameTokens(name){
+  if(!name)return[];
+  const tokens=new Set();
+  const full=name.trim();
+  tokens.add(full);
+  // 공백/지점명 분리 → 첫 토큰 (핵심 매장명)
+  const parts=full.split(/\s+/);
+  if(parts.length>1)tokens.add(parts[0]);
+  // "XX점", "XX직영점", "XX역점" 등 접미사 제거
+  const core=full.replace(/\s*(본점|직영점|[가-힣]*점|[가-힣]*역점)\s*$/,'').trim();
+  if(core&&core!==full)tokens.add(core);
+  // 더 짧은 핵심명 (칼국수, 포차 등 업종명 제거)
+  const shorter=core.replace(/(칼국수|국수|포차|식당|횟집|곱창|삼겹살|고기|치킨|피자|카페|커피)\s*$/,'').trim();
+  if(shorter&&shorter!==core&&shorter.length>=2)tokens.add(shorter);
+  return[...tokens];
 }
 
 // ---------- 매장 선택 시 자동 순위 조회 ----------
