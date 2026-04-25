@@ -925,24 +925,30 @@ async function checkKeywordRank(storeId,keyword){
     return;
   }
 
-  // 2. 네이버 블로그 검색 1~10위
-  const searchRes=await fetch(`/api/search?query=${encodeURIComponent(keyword)}`);
+  // 2. 네이버 블로그 검색 1~30위 (새 API: blogId/postId 포함)
+  const searchRes=await fetch(`/api/search?query=${encodeURIComponent(keyword)}&count=30`);
   const searchData=await searchRes.json();
-  const items=(searchData.items||[]).slice(0,10);
+  const items=searchData.items||[];
 
-  // 3. 매칭 - 1~10위 중 우리 매장 블로그 리뷰 전부 찾기
+  // 3. 매칭 - 1~30위 중 우리 매장 블로그 리뷰 전부 찾기
   const matches=[];
   for(let i=0;i<items.length;i++){
-    const searchUrl=items[i].link||'';
-    const parsedSearch=parseBlogUrlClient(searchUrl);
-    if(!parsedSearch)continue;
+    const si=items[i];
+    // 새 API는 blogId/postId를 직접 제공, 없으면 link에서 파싱
+    let sBlogId=si.blogId||'';
+    let sPostId=si.postId||'';
+    if(!sBlogId||!sPostId){
+      const parsed=parseBlogUrlClient(si.link||'');
+      if(!parsed)continue;
+      sBlogId=parsed.blogId;sPostId=parsed.postId;
+    }
 
     for(const p of myPosts){
-      if(p.blog_id===parsedSearch.blogId&&p.post_id===parsedSearch.postId){
+      if(p.blog_id===sBlogId&&p.post_id===sPostId){
         matches.push({
           rank:i+1,
-          url:searchUrl,
-          title:(items[i].title||p.title||'').replace(/<[^>]+>/g,''),
+          url:si.link||'',
+          title:(si.title||p.title||'').replace(/<[^>]+>/g,''),
         });
         break;
       }
