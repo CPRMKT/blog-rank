@@ -918,61 +918,28 @@ async function checkKeywordRank(storeId,keyword){
   const store=stores.find(s=>s.id===storeId);
   if(!store)return;
 
-  // 1. 매장 블로그 리뷰 목록 (캐시 또는 새로 수집)
-  const myPosts=await getCachedOrFreshBlogPosts(store);
-  if(myPosts.length===0){
-    console.warn('매장 블로그 리뷰가 없어 순위 조회 불가');
+  // 서버에서 검색 + 매칭을 한 번에 처리
+  const params=new URLSearchParams({
+    keyword,
+    placeId:store.place_id||'',
+    storeName:store.name||'',
+    count:'10',
+  });
+  const searchRes=await fetch(`/api/store-rank?${params}`);
+  const searchData=await searchRes.json();
+
+  if(!searchData.ok){
+    console.error('순위 조회 실패:',searchData.error);
     return;
   }
 
-  // 2. 네이버 블로그 검색 1~10위 (정확한 블로그 탭 순위)
-  const searchRes=await fetch(`/api/search?query=${encodeURIComponent(keyword)}&count=10`);
-  const searchData=await searchRes.json();
-  const items=(searchData.items||[]).slice(0,10);
+  const matches=(searchData.matches||[]).map(m=>({
+    rank:m.rank,
+    url:m.link||'',
+    title:(m.title||'').replace(/<[^>]+>/g,''),
+  }));
 
-  // 3. 매칭 - 1~10위 중 우리 매장 블로그 리뷰 찾기
-  //    방법A: blog_id + post_id 정확 매칭 (플레이스 리뷰 목록 기반)
-  //    방법B: 검색결과 제목에 매장명 포함 여부 (폴백)
-  const storeName=store.name||'';
-  // 매장명에서 매칭용 키워드 추출 (예: "조개옥칼국수 수영직영점" → ["조개옥칼국수","조개옥"])
-  const nameTokens=buildNameTokens(storeName);
-
-  const matches=[];
-  for(let i=0;i<items.length;i++){
-    const si=items[i];
-    let sBlogId=si.blogId||'';
-    let sPostId=si.postId||'';
-    if(!sBlogId||!sPostId){
-      const parsed=parseBlogUrlClient(si.link||'');
-      if(!parsed)continue;
-      sBlogId=parsed.blogId;sPostId=parsed.postId;
-    }
-
-    let matched=false;
-
-    // 방법A: blog_id + post_id 정확 매칭
-    for(const p of myPosts){
-      if(p.blog_id===sBlogId&&p.post_id===sPostId){
-        matched=true;break;
-      }
-    }
-
-    // 방법B: 제목에 매장명 포함 여부 (방법A 실패 시)
-    if(!matched&&nameTokens.length>0){
-      const title=(si.title||'').replace(/<[^>]+>/g,'');
-      matched=nameTokens.some(t=>title.includes(t));
-    }
-
-    if(matched){
-      matches.push({
-        rank:i+1,
-        url:si.link||'',
-        title:(si.title||'').replace(/<[^>]+>/g,''),
-      });
-    }
-  }
-
-  // 4. DB에 최고 순위 저장 (기존 호환)
+  // DB에 최고 순위 저장
   const best=matches.length>0?matches[0]:{rank:0,url:null,title:null};
   const todayISO=toISODate(new Date());
   await dbCall('save_store_ranking',{
@@ -985,14 +952,14 @@ async function checkKeywordRank(storeId,keyword){
     search_volume:searchData.total||null,
   });
 
-  // 5. 메모리 갱신 (전체 매칭 목록 저장) + 리렌더
+  // 메모리 갱신 + 리렌더
   if(!storeRankings[storeId])storeRankings[storeId]={};
   if(!storeRankings[storeId][keyword])storeRankings[storeId][keyword]={};
   storeRankings[storeId][keyword][today()]={
     rank:best.rank,
     matched_blog_url:best.url,
     matched_title:best.title,
-    matches:matches,  // 전체 매칭 목록
+    matches:matches,
   };
   if(curStoreId===storeId)renderRankTable();
 }
