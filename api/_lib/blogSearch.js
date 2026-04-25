@@ -338,6 +338,9 @@ async function searchApify(keyword, count = 30) {
     sortBy: 'sim',
     scrapeContent: false,
     scrapeComments: false,
+    // maxConcurrency: 5 (기본값) 으로 병렬 스크랩하면 빠르게 끝나는 순서대로 dataset에
+    // push 되어 검색 순위가 섞임. 1로 고정해 네이버 화면 순서를 보존.
+    maxConcurrency: 1,
   };
 
   const resp = await fetch(url, {
