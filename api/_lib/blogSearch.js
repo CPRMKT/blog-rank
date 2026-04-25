@@ -54,79 +54,40 @@ async function searchDirect(keyword, count = 30) {
 
 /**
  * 네이버 블로그 탭 HTML에서 검색 결과를 파싱
- * 여러 가지 HTML 구조 패턴을 시도
+ * 
+ * 전략: blog.naver.com/{blogId}/{postId} URL을 출현 순서대로 추출
+ * 네이버 검색 결과 HTML에서 블로그 포스트 URL은 고유한 패턴이므로
+ * 복잡한 DOM 구조 파싱 없이 URL 패턴으로 순위를 정확히 추출 가능
  */
 function parseNaverBlogHTML(html, count = 30) {
   const items = [];
+  const seenKeys = new Set(); // blogId+postId 중복 방지
 
-  // 패턴 1: <a class="title_link" href="...">제목</a> 구조
-  // 패턴 2: blog.naver.com URL이 포함된 링크 태그
-  // 패턴 3: data-cr-area="blg" 영역 내의 링크
+  // 1단계: 모든 blog.naver.com/{blogId}/{postId} URL을 출현 순서대로 추출
+  //   - href="..." 안에 있는 것만 추출 (본문 텍스트의 URL 혼입 방지)
+  //   - blogId는 영문/숫자/언더스코어, postId는 12자리 이상 숫자
+  const urlPattern = /href="(https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,}))[^"]*"/g;
 
-  // 블로그 URL 추출 정규식 - 다양한 HTML 구조 대응
-  const blogLinkPatterns = [
-    // class="title_link" 또는 class="api_txt_lines" 등의 제목 링크
-    /<a[^>]+class="[^"]*(?:title_link|api_txt_lines|title)[^"]*"[^>]*href="(https?:\/\/blog\.naver\.com\/[^"]+)"[^>]*>([^<]*(?:<[^/a][^>]*>[^<]*)*)<\/a>/gi,
-    // 일반적인 blog.naver.com 링크
-    /<a[^>]+href="(https?:\/\/blog\.naver\.com\/[^"]+)"[^>]*(?:class="[^"]*(?:title|link)[^"]*")?[^>]*>([\s\S]*?)<\/a>/gi,
-  ];
+  let match;
+  while ((match = urlPattern.exec(html)) !== null && items.length < count) {
+    const link = match[1];
+    const blogId = match[2];
+    const postId = match[3];
+    const key = `${blogId}/${postId}`;
 
-  const seenUrls = new Set();
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
 
-  for (const pattern of blogLinkPatterns) {
-    let match;
-    while ((match = pattern.exec(html)) !== null && items.length < count) {
-      const link = match[1];
-      const rawTitle = match[2];
+    // 제목 추출: 해당 URL 주변에서 제목 텍스트 찾기
+    const title = extractTitleNearUrl(html, match.index, link);
 
-      // 중복 URL 건너뛰기
-      if (seenUrls.has(link)) continue;
-
-      // blog_id/post_id 파싱
-      const parsed = parseBlogUrl(link);
-      if (!parsed) continue;
-
-      // 광고/유틸리티 URL 제외
-      if (/PostView|category|prologue/i.test(link) && !parsed.postId) continue;
-
-      seenUrls.add(link);
-
-      // HTML 태그 제거하여 순수 제목 추출
-      const title = rawTitle
-        .replace(/<[^>]+>/g, '')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .trim();
-
-      items.push({
-        rank: items.length + 1,
-        link,
-        title: title || '',
-        blogId: parsed.blogId,
-        postId: parsed.postId,
-      });
-    }
-  }
-
-  // 패턴 매칭 실패 시 단순 URL 추출 폴백
-  if (items.length === 0) {
-    const urlPattern = /https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
-    let match;
-    while ((match = urlPattern.exec(html)) !== null && items.length < count) {
-      const link = match[0];
-      if (seenUrls.has(link)) continue;
-      seenUrls.add(link);
-
-      items.push({
-        rank: items.length + 1,
-        link,
-        title: '',
-        blogId: match[1],
-        postId: match[2],
-      });
-    }
+    items.push({
+      rank: items.length + 1,
+      link: `https://blog.naver.com/${blogId}/${postId}`,
+      title,
+      blogId,
+      postId,
+    });
   }
 
   // 전체 검색 결과 수 추출 시도
@@ -135,6 +96,50 @@ function parseNaverBlogHTML(html, count = 30) {
   if (totalMatch) total = parseInt(totalMatch[1], 10);
 
   return { items, total, method: 'direct' };
+}
+
+/**
+ * HTML에서 URL 출현 위치 근처의 제목 텍스트를 추출
+ * 검색 결과에서 제목은 보통 URL이 포함된 <a> 태그 안에 있거나
+ * 바로 뒤에 있는 텍스트 노드에 있음
+ */
+function extractTitleNearUrl(html, urlIndex, url) {
+  // URL 앞뒤 2000자 범위에서 제목 추출 시도
+  const start = Math.max(0, urlIndex - 500);
+  const end = Math.min(html.length, urlIndex + 2000);
+  const snippet = html.substring(start, end);
+
+  // 방법1: 해당 URL을 href로 가진 <a> 태그의 내용
+  const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const aTagMatch = snippet.match(
+    new RegExp(`<a[^>]+href="${escapedUrl}[^"]*"[^>]*>([\\s\\S]*?)<\\/a>`, 'i')
+  );
+  if (aTagMatch) {
+    const cleaned = aTagMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    if (cleaned.length > 5 && cleaned.length < 200) return decodeHTMLEntities(cleaned);
+  }
+
+  // 방법2: class="title" 또는 class="title_link" 등의 요소에서 추출
+  const titleClassMatch = snippet.match(
+    /class="[^"]*title[^"]*"[^>]*>([^<]+(?:<(?!\/a)[^>]*>[^<]*)*)/i
+  );
+  if (titleClassMatch) {
+    const cleaned = titleClassMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    if (cleaned.length > 5 && cleaned.length < 200) return decodeHTMLEntities(cleaned);
+  }
+
+  return '';
+}
+
+function decodeHTMLEntities(str) {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .trim();
 }
 
 
