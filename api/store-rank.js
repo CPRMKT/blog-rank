@@ -33,24 +33,50 @@ export default async function handler(req, res) {
 
     // 3. 각 포스팅에 대해 매장 리뷰 여부 판별
     const matches = [];
-    const checkPromises = items.map(async (item) => {
-      const isMatch = await checkIfStoreReview(item, placeId, storeName);
-      return { ...item, isMatch };
-    });
+    const debugLogs = [];
+    
+    for (const item of items) {
+      const log = { rank: item.rank, blogId: item.blogId, titleMatch: false, bodyFetched: false, bodyLength: 0, placeIdFound: false, nameFound: false, matched: false, error: null };
+      
+      try {
+        // 1차: 제목 매칭
+        if (storeName && matchTitle(item.title, storeName)) {
+          log.titleMatch = true;
+          log.matched = true;
+          matches.push({ rank: item.rank, link: item.link, title: item.title, blogId: item.blogId, postId: item.postId });
+          debugLogs.push(log);
+          continue;
+        }
 
-    // 병렬로 본문 체크 (최대 동시 5개)
-    const results = await parallelLimit(checkPromises, 5);
-
-    for (const r of results) {
-      if (r.isMatch) {
-        matches.push({
-          rank: r.rank,
-          link: r.link,
-          title: r.title,
-          blogId: r.blogId,
-          postId: r.postId,
-        });
+        // 2차: 블로그 본문 체크
+        const body = await fetchBlogBody(item.blogId, item.postId);
+        if (body) {
+          log.bodyFetched = true;
+          log.bodyLength = body.length;
+          
+          if (placeId && body.includes(placeId)) {
+            log.placeIdFound = true;
+            log.matched = true;
+          }
+          
+          if (!log.matched && storeName) {
+            const tokens = buildNameTokens(storeName);
+            log.tokens = tokens;
+            if (tokens.some(t => body.includes(t))) {
+              log.nameFound = true;
+              log.matched = true;
+            }
+          }
+        }
+        
+        if (log.matched) {
+          matches.push({ rank: item.rank, link: item.link, title: item.title, blogId: item.blogId, postId: item.postId });
+        }
+      } catch (e) {
+        log.error = e.message;
       }
+      
+      debugLogs.push(log);
     }
 
     return res.status(200).json({
@@ -59,6 +85,7 @@ export default async function handler(req, res) {
       total: searchResult.total,
       method: searchResult.method,
       searchCount: items.length,
+      debug: debugLogs,
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
