@@ -105,6 +105,60 @@ export default async function handler(req, res) {
 
   if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2' });
 
+  // test=apollo: __APOLLO_STATE__에서 블로그 데이터 추출
+  if (req.query.test === 'apollo') {
+    try {
+      const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt`;
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Accept-Encoding': 'identity',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        redirect: 'follow',
+      });
+      const html = await resp.text();
+
+      // __APOLLO_STATE__ 추출
+      const apolloMatch = html.match(/window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\});/);
+      if (!apolloMatch) {
+        return res.status(200).json({ error: 'APOLLO_STATE not found', htmlLength: html.length });
+      }
+
+      let apolloState;
+      try {
+        apolloState = JSON.parse(apolloMatch[1]);
+      } catch (e) {
+        // JSON이 너무 길면 일부만
+        return res.status(200).json({ error: 'JSON parse failed', sample: apolloMatch[1].substring(0, 2000) });
+      }
+
+      // Apollo State에서 블로그 관련 키 추출
+      const keys = Object.keys(apolloState);
+      const blogKeys = keys.filter(k => /blog|post|article|search/i.test(k));
+      
+      // blog URL이 포함된 값들 찾기
+      const blogEntries = [];
+      for (const key of keys) {
+        const val = JSON.stringify(apolloState[key]);
+        if (val.includes('blog.naver.com') || val.includes('blogId') || val.includes('logNo')) {
+          blogEntries.push({ key, sample: val.substring(0, 300) });
+        }
+      }
+
+      return res.status(200).json({
+        totalKeys: keys.length,
+        blogRelatedKeys: blogKeys.length,
+        blogKeysSample: blogKeys.slice(0, 20),
+        blogEntries: blogEntries.slice(0, 15),
+      });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
   // 기본: 데스크탑 검색 결과 분석
   try {
     const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt`;
