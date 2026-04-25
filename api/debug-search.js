@@ -105,7 +105,7 @@ export default async function handler(req, res) {
 
   if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2' });
 
-  // test=apollo: __APOLLO_STATE__에서 블로그 데이터 추출
+  // test=apollo: HTML 내 JavaScript 데이터에서 블로그 정보 추출
   if (req.query.test === 'apollo') {
     try {
       const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt`;
@@ -121,38 +121,46 @@ export default async function handler(req, res) {
       });
       const html = await resp.text();
 
-      // __APOLLO_STATE__ 추출
-      const apolloMatch = html.match(/window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\});/);
-      if (!apolloMatch) {
-        return res.status(200).json({ error: 'APOLLO_STATE not found', htmlLength: html.length });
-      }
+      // window.__ 로 시작하는 전역 변수 모두 찾기
+      const globalVars = [...html.matchAll(/window\.(__[A-Z_]+)\s*=/g)].map(m => m[1]);
 
-      let apolloState;
-      try {
-        apolloState = JSON.parse(apolloMatch[1]);
-      } catch (e) {
-        // JSON이 너무 길면 일부만
-        return res.status(200).json({ error: 'JSON parse failed', sample: apolloMatch[1].substring(0, 2000) });
-      }
-
-      // Apollo State에서 블로그 관련 키 추출
-      const keys = Object.keys(apolloState);
-      const blogKeys = keys.filter(k => /blog|post|article|search/i.test(k));
-      
-      // blog URL이 포함된 값들 찾기
-      const blogEntries = [];
-      for (const key of keys) {
-        const val = JSON.stringify(apolloState[key]);
-        if (val.includes('blog.naver.com') || val.includes('blogId') || val.includes('logNo')) {
-          blogEntries.push({ key, sample: val.substring(0, 300) });
+      // script 태그 내 JSON-like 데이터 찾기
+      const scriptContents = [];
+      const scriptPattern = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+      let sm;
+      while ((sm = scriptPattern.exec(html)) !== null) {
+        const content = sm[1].trim();
+        if (content.length > 100 && (content.includes('blog') || content.includes('Blog') || content.includes('article'))) {
+          scriptContents.push({
+            length: content.length,
+            sample: content.substring(0, 300),
+          });
         }
       }
 
+      // "articleSourceJSX" 같은 SDS 컴포넌트 데이터 찾기
+      const sdsPatterns = [
+        { name: 'articleSourceJSX', count: (html.match(/articleSourceJSX/g) || []).length },
+        { name: 'data-doc-id', count: (html.match(/data-doc-id/g) || []).length },
+        { name: 'data-cr-rank', count: (html.match(/data-cr-rank/g) || []).length },
+        { name: 'data-cr-i', count: (html.match(/data-cr-i/g) || []).length },
+        { name: 'nocr=', count: (html.match(/nocr="/g) || []).length },
+        { name: 'fender-', count: (html.match(/fender-/g) || []).length },
+      ];
+
+      // data-cr-i 값들 추출 (검색결과 순서 정보일 수 있음)
+      const crIValues = [...html.matchAll(/data-cr-i="([^"]+)"/g)].map(m => m[1]);
+      
+      // data-doc-id 값들 추출
+      const docIds = [...html.matchAll(/data-doc-id="([^"]+)"/g)].map(m => m[1]);
+
       return res.status(200).json({
-        totalKeys: keys.length,
-        blogRelatedKeys: blogKeys.length,
-        blogKeysSample: blogKeys.slice(0, 20),
-        blogEntries: blogEntries.slice(0, 15),
+        htmlLength: html.length,
+        globalVars: [...new Set(globalVars)],
+        scriptWithBlog: scriptContents.slice(0, 5),
+        sdsPatterns,
+        crIValues: crIValues.slice(0, 15),
+        docIds: docIds.slice(0, 15),
       });
     } catch (e) {
       return res.status(200).json({ error: e.message });
