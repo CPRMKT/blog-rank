@@ -105,7 +105,7 @@ export default async function handler(req, res) {
 
   if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2' });
 
-  // test=apollo: HTML 내 JavaScript 데이터에서 블로그 정보 추출
+  // test=apollo: HTML 내 검색결과 구조 상세 분석
   if (req.query.test === 'apollo') {
     try {
       const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt`;
@@ -121,46 +121,56 @@ export default async function handler(req, res) {
       });
       const html = await resp.text();
 
-      // window.__ 로 시작하는 전역 변수 모두 찾기
-      const globalVars = [...html.matchAll(/window\.(__[A-Z_]+)\s*=/g)].map(m => m[1]);
-
-      // script 태그 내 JSON-like 데이터 찾기
-      const scriptContents = [];
-      const scriptPattern = /<script[^>]*>([\s\S]*?)<\/script>/gi;
-      let sm;
-      while ((sm = scriptPattern.exec(html)) !== null) {
-        const content = sm[1].trim();
-        if (content.length > 100 && (content.includes('blog') || content.includes('Blog') || content.includes('article'))) {
-          scriptContents.push({
-            length: content.length,
-            sample: content.substring(0, 300),
-          });
-        }
-      }
-
-      // "articleSourceJSX" 같은 SDS 컴포넌트 데이터 찾기
-      const sdsPatterns = [
-        { name: 'articleSourceJSX', count: (html.match(/articleSourceJSX/g) || []).length },
-        { name: 'data-doc-id', count: (html.match(/data-doc-id/g) || []).length },
-        { name: 'data-cr-rank', count: (html.match(/data-cr-rank/g) || []).length },
-        { name: 'data-cr-i', count: (html.match(/data-cr-i/g) || []).length },
-        { name: 'nocr=', count: (html.match(/nocr="/g) || []).length },
-        { name: 'fender-', count: (html.match(/fender-/g) || []).length },
+      // 모든 blog URL 패턴 찾기 (blog.naver.com 뿐 아니라 m.blog도)
+      const allBlogPatterns = [
+        { name: 'blog.naver.com', pattern: /https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{10,})/g },
+        { name: 'm.blog.naver.com', pattern: /https?:\/\/m\.blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{10,})/g },
+        { name: 'PostView', pattern: /https?:\/\/(?:m\.)?blog\.naver\.com\/PostView[^"'\s]*/g },
+        { name: 'blogId in JSON', pattern: /"blogId"\s*:\s*"([^"]+)"/g },
+        { name: 'logNo in JSON', pattern: /"logNo"\s*:\s*"?(\d+)"?/g },
       ];
 
-      // data-cr-i 값들 추출 (검색결과 순서 정보일 수 있음)
-      const crIValues = [...html.matchAll(/data-cr-i="([^"]+)"/g)].map(m => m[1]);
-      
-      // data-doc-id 값들 추출
-      const docIds = [...html.matchAll(/data-doc-id="([^"]+)"/g)].map(m => m[1]);
+      const urlResults = {};
+      for (const p of allBlogPatterns) {
+        const matches = [...html.matchAll(p.pattern)];
+        urlResults[p.name] = { count: matches.length, samples: matches.slice(0, 5).map(m => m[0]) };
+      }
+
+      // articleSourceJSX 주변 각각의 블록에서 URL 추출
+      const articles = [];
+      let searchIdx = 0;
+      for (let i = 0; i < 15; i++) {
+        const idx = html.indexOf('articleSourceJSX', searchIdx);
+        if (idx === -1) break;
+        // 앞쪽으로 가서 해당 검색결과 블록의 시작점 찾기
+        const blockStart = Math.max(0, idx - 3000);
+        const blockEnd = Math.min(html.length, idx + 1000);
+        const block = html.substring(blockStart, blockEnd);
+        
+        // 이 블록에서 모든 URL 추출
+        const blogUrls = [...block.matchAll(/href="(https?:\/\/(?:m\.)?blog\.naver\.com\/[^"]+)"/g)].map(m => m[1]);
+        const naverUrls = [...block.matchAll(/href="(https?:\/\/[^"]*naver[^"]+)"/g)].map(m => m[1]);
+        
+        // 제목 추출 시도
+        const titleMatch = block.match(/sds-comps-text-title[^>]*>([^<]+)/);
+        const title = titleMatch ? titleMatch[1].trim() : '';
+
+        articles.push({
+          index: i + 1,
+          position: idx,
+          blogUrls,
+          naverUrlCount: naverUrls.length,
+          title: title || '(제목 못 찾음)',
+        });
+
+        searchIdx = idx + 1;
+      }
 
       return res.status(200).json({
         htmlLength: html.length,
-        globalVars: [...new Set(globalVars)],
-        scriptWithBlog: scriptContents.slice(0, 5),
-        sdsPatterns,
-        crIValues: crIValues.slice(0, 15),
-        docIds: docIds.slice(0, 15),
+        urlResults,
+        articleCount: articles.length,
+        articles,
       });
     } catch (e) {
       return res.status(200).json({ error: e.message });
