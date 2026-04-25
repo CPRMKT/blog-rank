@@ -271,7 +271,7 @@ tr:hover td{background:#f8fbff}
             <div class="card-title">블로그 탭 순위 추적</div>
             <div class="card-sub">키워드 별 블로그 탭 검색 순위를 한 눈에. 우리 매장 블로그 리뷰가 1~10위 내에 있으면 표시됩니다.</div>
           </div>
-          <button class="btn sm" id="refreshBtn" onclick="refreshAllRankings()" style="display:none">전체 조회</button>
+          <button class="btn sm" id="refreshBtn" onclick="refreshAllRankings()" style="display:none"></button>
         </div>
         <div class="tbl-wrap">
           <table>
@@ -742,8 +742,10 @@ async function selectStore(id){
   }
   renderRankTable();
 
-  // 전체 조회 버튼 표시
-  document.getElementById('refreshBtn').style.display=storeKeywords[id].length>0?'':'none';
+  // 키워드가 있으면 오늘 순위 자동 조회
+  if(storeKeywords[id].length>0){
+    autoCheckAllKeywords(id);
+  }
 }
 
 function renderStoreMeta(store){
@@ -780,7 +782,6 @@ async function addKeyword(){
   storeKeywords[curStoreId]=keywords;
   document.getElementById('kwInput').value='';
   document.getElementById('kwCount').textContent=`${keywords.length}/${MAX_KEYWORDS}`;
-  document.getElementById('refreshBtn').style.display='';
   renderKeywords();renderRankTable();
 
   // 등록 즉시 순위 조회 (비동기)
@@ -793,7 +794,6 @@ async function removeKeyword(kw){
   storeKeywords[curStoreId]=(storeKeywords[curStoreId]||[]).filter(k=>k!==kw);
   if(storeRankings[curStoreId]){delete storeRankings[curStoreId][kw];}
   document.getElementById('kwCount').textContent=`${storeKeywords[curStoreId].length}/${MAX_KEYWORDS}`;
-  if(storeKeywords[curStoreId].length===0)document.getElementById('refreshBtn').style.display='none';
   renderKeywords();renderRankTable();
 }
 
@@ -984,7 +984,24 @@ function parseBlogUrlClient(url){
   return null;
 }
 
-// ---------- 전체 키워드 순위 갱신 ----------
+// ---------- 매장 선택 시 자동 순위 조회 ----------
+async function autoCheckAllKeywords(storeId){
+  const keywords=storeKeywords[storeId]||[];
+  if(keywords.length===0)return;
+
+  // 오늘 이미 조회한 키워드는 건너뛰기
+  const todayStr=today();
+  const rankings=storeRankings[storeId]||{};
+  const needCheck=keywords.filter(kw=>!rankings[kw]||!rankings[kw][todayStr]);
+  if(needCheck.length===0)return;
+
+  for(const kw of needCheck){
+    await checkKeywordRank(storeId,kw);
+    await new Promise(r=>setTimeout(r,300));
+  }
+}
+
+// ---------- 전체 키워드 순위 갱신 (수동 호출용) ----------
 async function refreshAllRankings(){
   if(!curStoreId){alert('매장을 선택하세요');return;}
   const keywords=storeKeywords[curStoreId]||[];
