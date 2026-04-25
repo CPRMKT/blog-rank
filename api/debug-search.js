@@ -1,6 +1,5 @@
 // api/debug-search.js
 // 디버깅 전용 — 문제 해결 후 삭제
-// 네이버 블로그 탭 HTML 파싱 과정과 본문 fetch 결과를 상세히 반환
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
@@ -14,7 +13,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { query, test } = req.query;
 
-  // test=blog 이면 블로그 본문 fetch 테스트
+  // test=blog: 블로그 본문 fetch 테스트
   if (test === 'blog') {
     const { blogId, postId } = req.query;
     try {
@@ -26,11 +25,14 @@ export default async function handler(req, res) {
       const html = await resp.text();
       const hasPlaceLink = html.includes('place.naver.com') || html.includes('map.naver.com');
       const placeIds = [...html.matchAll(/(?:place|restaurant|hairshop)\/(\d{6,12})/g)].map(m => m[1]);
+      // 매장명 검색
+      const has조개옥 = html.includes('조개옥');
       return res.status(200).json({
         status: resp.status,
         htmlLength: html.length,
         hasPlaceLink,
         placeIds: [...new Set(placeIds)],
+        has조개옥,
         sample: html.substring(0, 500),
       });
     } catch (e) {
@@ -38,10 +40,73 @@ export default async function handler(req, res) {
     }
   }
 
-  if (!query) return res.status(400).json({ error: 'query required' });
+  // test=mobile: 모바일 검색 결과 시도
+  if (test === 'mobile' && query) {
+    try {
+      const url = `https://m.search.naver.com/search.naver?where=m_blog&query=${encodeURIComponent(query)}&sm=mtb_opt`;
+      const resp = await fetch(url, {
+        headers: {
+          'User-Agent': BLOG_UA,
+          'Accept': 'text/html',
+          'Accept-Language': 'ko-KR,ko;q=0.9',
+        },
+        redirect: 'follow',
+      });
+      const html = await resp.text();
 
+      // blog URL 추출
+      const allPattern = /https?:\/\/(?:m\.)?blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
+      const matches = [];
+      const seen = new Set();
+      let m;
+      while ((m = allPattern.exec(html)) !== null) {
+        const key = `${m[1]}/${m[2]}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        matches.push({ blogId: m[1], postId: m[2] });
+      }
+
+      return res.status(200).json({
+        fetchStatus: resp.status,
+        htmlLength: html.length,
+        blogUrls: matches.length,
+        results: matches.slice(0, 15),
+        sample: html.substring(0, 1000),
+      });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
+  // test=api2: 네이버 공식 API로 비교 (display=30, sort=sim)
+  if (test === 'api2' && query) {
+    const clientId = process.env.NAVER_CLIENT_ID;
+    const clientSecret = process.env.NAVER_CLIENT_SECRET;
+    try {
+      const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=30&start=1&sort=sim`;
+      const resp = await fetch(url, {
+        headers: { 'X-Naver-Client-Id': clientId, 'X-Naver-Client-Secret': clientSecret },
+      });
+      const data = await resp.json();
+      const items = (data.items || []).map((item, i) => {
+        const pm = (item.link || '').match(/blog\.naver\.com\/([^/?#]+)\/(\d+)/);
+        return {
+          rank: i + 1,
+          blogId: pm ? pm[1] : '',
+          postId: pm ? pm[2] : '',
+          title: (item.title || '').replace(/<[^>]+>/g, ''),
+        };
+      });
+      return res.status(200).json({ total: data.total, count: items.length, items: items.slice(0, 15) });
+    } catch (e) {
+      return res.status(200).json({ error: e.message });
+    }
+  }
+
+  if (!query) return res.status(400).json({ error: 'query required. use test=blog|mobile|api2' });
+
+  // 기본: 데스크탑 검색 결과 분석
   try {
-    // 1. 네이버 블로그 탭 HTML fetch
     const url = `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&sm=tab_opt`;
     const resp = await fetch(url, {
       headers: {
@@ -62,53 +127,36 @@ export default async function handler(req, res) {
 
     const html = await resp.text();
 
-    // 2. href 안의 blog URL 추출 (현재 파싱 방식)
-    const hrefPattern = /href="(https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,}))[^"]*"/g;
-    const hrefMatches = [];
-    const seenKeys = new Set();
-    let m;
-    while ((m = hrefPattern.exec(html)) !== null) {
-      const key = `${m[2]}/${m[3]}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      hrefMatches.push({ url: m[1], blogId: m[2], postId: m[3] });
-    }
-
-    // 3. 모든 blog URL 추출 (href 밖 포함)
+    // blog URL 추출
     const allPattern = /https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
     const allMatches = [];
     const seenAll = new Set();
+    let m;
     while ((m = allPattern.exec(html)) !== null) {
       const key = `${m[1]}/${m[2]}`;
       if (seenAll.has(key)) continue;
       seenAll.add(key);
-      allMatches.push({ url: m[0], blogId: m[1], postId: m[2] });
+      allMatches.push({ blogId: m[1], postId: m[2] });
     }
 
-    // 4. HTML 구조 분석 - 검색 결과 영역 찾기
-    const areaPatterns = [
-      { name: 'sp_blog', count: (html.match(/sp_blog/g) || []).length },
-      { name: 'blog_item', count: (html.match(/blog_item/g) || []).length },
-      { name: 'api_txt_lines', count: (html.match(/api_txt_lines/g) || []).length },
-      { name: 'title_link', count: (html.match(/title_link/g) || []).length },
-      { name: 'total_wrap', count: (html.match(/total_wrap/g) || []).length },
-      { name: 'data-cr-area', count: (html.match(/data-cr-area/g) || []).length },
+    // JSON 데이터 내 블로그 정보 검색 (SSR 데이터에 있을 수 있음)
+    const jsonDataPatterns = [
+      { name: '__NEXT_DATA__', found: html.includes('__NEXT_DATA__') },
+      { name: '__APOLLO_STATE__', found: html.includes('__APOLLO_STATE__') },
+      { name: 'window.__initialData', found: html.includes('__initialData') },
+      { name: 'window.__PRELOADED', found: html.includes('__PRELOADED') },
+      { name: '"blogId"', count: (html.match(/"blogId"/g) || []).length },
+      { name: '"postId"', count: (html.match(/"postId"/g) || []).length },
+      { name: '"logNo"', count: (html.match(/"logNo"/g) || []).length },
+      { name: '"url":', count: (html.match(/"url"\s*:/g) || []).length },
     ];
 
     return res.status(200).json({
       fetchStatus: resp.status,
       htmlLength: html.length,
-      hrefBlogUrls: hrefMatches.length,
-      hrefResults: hrefMatches.slice(0, 15),
-      allBlogUrls: allMatches.length,
-      allResults: allMatches.slice(0, 15),
-      htmlStructure: areaPatterns,
-      // HTML 샘플 (첫 blog URL 주변)
-      firstUrlIndex: html.indexOf('blog.naver.com'),
-      htmlSample: html.substring(
-        Math.max(0, html.indexOf('blog.naver.com') - 200),
-        html.indexOf('blog.naver.com') + 300
-      ),
+      blogUrls: allMatches.length,
+      results: allMatches.slice(0, 15),
+      jsonDataPatterns,
     });
   } catch (e) {
     return res.status(500).json({ error: e.message });
