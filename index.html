@@ -842,19 +842,26 @@ function renderRankCell(data){
   if(data.rank===0){
     return`<td style="text-align:center"><span class="rank-cell-miss" title="1~10위 내 없음">없음</span></td>`;
   }
-  const cls=data.rank===1?'r1':data.rank===2?'r2':data.rank===3?'r3':data.rank<=10?'r10':'rn';
-  const title=data.matched_title?escapeHtml(data.matched_title):'';
-  if(data.matched_blog_url){
-    return`<td style="text-align:center">
-      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
-        <a href="${data.matched_blog_url}" target="_blank" style="text-decoration:none">
-          <span class="badge ${cls}">${data.rank}위</span>
-        </a>
+
+  // 다중 매칭이 있으면 전부 표시
+  const matches=data.matches||[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}];
+
+  const html=matches.map(m=>{
+    const cls=m.rank<=4?'blue':'yellow';
+    const badgeCls=m.rank===1?'r1':m.rank===2?'r2':m.rank===3?'r3':m.rank<=10?'r10':'rn';
+    const title=m.title?escapeHtml(m.title):'';
+    const link=m.url?`<a href="${m.url}" target="_blank" style="text-decoration:none">`:'';
+    const linkEnd=m.url?'</a>':'';
+    return`<div class="rank-post">
+      <span class="rank-num ${cls}">${m.rank}</span>
+      <div style="overflow:hidden">
+        ${link}<span class="badge ${badgeCls}" style="font-size:11px;padding:2px 8px">${m.rank}위</span>${linkEnd}
         ${title?`<div style="font-size:10px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>`:''}
       </div>
-    </td>`;
-  }
-  return`<td style="text-align:center"><span class="badge ${cls}">${data.rank}위</span></td>`;
+    </div>`;
+  }).join('');
+
+  return`<td>${html}</td>`;
 }
 
 // ---------- 매장 블로그 리뷰 갱신 (플레이스 API) ----------
@@ -923,11 +930,8 @@ async function checkKeywordRank(storeId,keyword){
   const searchData=await searchRes.json();
   const items=(searchData.items||[]).slice(0,10);
 
-  // 3. 매칭 - 1~10위 중 우리 매장 블로그 리뷰와 일치하는 것
-  let matchedRank=0;
-  let matchedUrl=null;
-  let matchedTitle=null;
-
+  // 3. 매칭 - 1~10위 중 우리 매장 블로그 리뷰 전부 찾기
+  const matches=[];
   for(let i=0;i<items.length;i++){
     const searchUrl=items[i].link||'';
     const parsedSearch=parseBlogUrlClient(searchUrl);
@@ -935,34 +939,37 @@ async function checkKeywordRank(storeId,keyword){
 
     for(const p of myPosts){
       if(p.blog_id===parsedSearch.blogId&&p.post_id===parsedSearch.postId){
-        matchedRank=i+1;
-        matchedUrl=searchUrl;
-        matchedTitle=(items[i].title||p.title||'').replace(/<[^>]+>/g,'');
+        matches.push({
+          rank:i+1,
+          url:searchUrl,
+          title:(items[i].title||p.title||'').replace(/<[^>]+>/g,''),
+        });
         break;
       }
     }
-    if(matchedRank>0)break;
   }
 
-  // 4. DB에 저장
+  // 4. DB에 최고 순위 저장 (기존 호환)
+  const best=matches.length>0?matches[0]:{rank:0,url:null,title:null};
   const todayISO=toISODate(new Date());
   await dbCall('save_store_ranking',{
     store_id:storeId,
     keyword,
     checked_date:todayISO,
-    rank:matchedRank,
-    matched_blog_url:matchedUrl,
-    matched_title:matchedTitle,
+    rank:best.rank,
+    matched_blog_url:best.url,
+    matched_title:best.title,
     search_volume:searchData.total||null,
   });
 
-  // 5. 메모리 갱신 + 리렌더
+  // 5. 메모리 갱신 (전체 매칭 목록 저장) + 리렌더
   if(!storeRankings[storeId])storeRankings[storeId]={};
   if(!storeRankings[storeId][keyword])storeRankings[storeId][keyword]={};
   storeRankings[storeId][keyword][today()]={
-    rank:matchedRank,
-    matched_blog_url:matchedUrl,
-    matched_title:matchedTitle,
+    rank:best.rank,
+    matched_blog_url:best.url,
+    matched_title:best.title,
+    matches:matches,  // 전체 매칭 목록
   };
   if(curStoreId===storeId)renderRankTable();
 }
