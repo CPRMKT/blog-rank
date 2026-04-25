@@ -161,13 +161,17 @@ export default async function handler(req, res) {
   if (test === 'ajax' && query) {
     const startParam = parseInt(req.query.start || '11', 10);
     const candidates = [
-      // s.search.naver.com 패턴
-      `https://s.search.naver.com/p/blog/search.naver?api_type=11&query=${encodeURIComponent(query)}&start=${startParam}&where=nexearch&sm=tab_pge&nso=so:r,p:all`,
-      `https://s.search.naver.com/p/blog/search.naver?api_type=1&query=${encodeURIComponent(query)}&start=${startParam}&where=blog`,
-      // m.search.naver.com 무한스크롤
+      // 모바일 검색 변형들
       `https://m.search.naver.com/search.naver?where=m_blog&query=${encodeURIComponent(query)}&start=${startParam}&sm=mtb_opt`,
-      // s.search.naver.com csearch 패턴
-      `https://s.search.naver.com/p/csearch/content/nqapirender.nhn?_callback=cb&where=blog&query=${encodeURIComponent(query)}&start=${startParam}`,
+      `https://m.search.naver.com/search.naver?where=m_blog&query=${encodeURIComponent(query)}&start=${startParam}`,
+      `https://m.search.naver.com/p/csa/ondemand/blog/list?query=${encodeURIComponent(query)}&start=${startParam}`,
+      // PC start= 변형 (display 추가)
+      `https://search.naver.com/search.naver?where=blog&query=${encodeURIComponent(query)}&start=${startParam}&display=30`,
+      // 통합검색 nexearch + blog ssc
+      `https://search.naver.com/search.naver?where=nexearch&ssc=tab.blog.all&query=${encodeURIComponent(query)}&start=${startParam}`,
+      // 정확히 review 패턴 모방 (p/blog/50)
+      `https://s.search.naver.com/p/blog/50/search.naver?api_type=5&query=${encodeURIComponent(query)}&start=${startParam}&page=2&where=blog&sm=tab_opt&ssc=tab.blog.all&nso=so:r,p:all`,
+      `https://s.search.naver.com/p/review/50/search.naver?api_type=5&query=${encodeURIComponent(query)}&start=${startParam}&page=2&where=blog&sm=tab_opt&ssc=tab.blog.all&nso=so:r,p:all`,
     ];
 
     const results = [];
@@ -183,7 +187,8 @@ export default async function handler(req, res) {
           redirect: 'follow',
         });
         const text = await resp.text();
-        const pattern = /(?:href=")?https?:\/\/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{12,})/g;
+        // 모바일은 m.blog.naver.com을 쓰므로 m. 옵션
+        const pattern = /https?:\/\/(?:m\.)?blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{10,})/g;
         const seen = new Set();
         const urls = [];
         let m;
