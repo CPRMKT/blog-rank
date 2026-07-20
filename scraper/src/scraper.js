@@ -28,13 +28,17 @@ export async function closeBrowser() {
 
 export async function scrapeBlogTab(keyword, count = 15) {
   const b = await initBrowser();
+  // 모바일 컨텍스트로 접속한다. 데스크톱 검색 페이지는 이 서버 환경에서
+  // 최신순 조직 결과 대신 "인기글"(인기순) 모듈만 렌더되는 경우가 있어
+  // 순위가 어긋난다. 모바일 블로그탭은 최신순 목록을 안정적으로 내려준다.
   const context = await b.newContext({
     userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-      '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
+      'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
     locale: 'ko-KR',
     timezoneId: 'Asia/Seoul',
-    viewport: { width: 1366, height: 900 },
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
   });
 
   // 리소스 차단: 이미지/미디어/폰트/CSS + 트래킹 요청을 막아 로딩 시간과
@@ -56,10 +60,11 @@ export async function scrapeBlogTab(keyword, count = 15) {
   const page = await context.newPage();
 
   try {
+    // 모바일 블로그탭 최신순(sort=date). 데스크톱 URL은 이 서버에서 인기글
+    // 모듈만 렌더되는 문제가 있어 조직 최신순 순위를 못 얻는다.
     const url =
-      `https://search.naver.com/search.naver?where=blog` +
-      `&query=${encodeURIComponent(keyword)}` +
-      `&sm=tab_opt&nso=so:r,p:all`;
+      `https://m.search.naver.com/search.naver?ssc=tab.m_blog.all` +
+      `&query=${encodeURIComponent(keyword)}&sort=date`;
 
     // waitUntil:'commit'은 최초 응답 직후 반환되므로, 무거운 페이지 전체
     // 파싱을 기다리다 나는 타임아웃을 피한다. 결과는 아래 selector 대기로 확인.
