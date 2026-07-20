@@ -923,7 +923,7 @@ async function checkKeywordRank(storeId,keyword){
     keyword,
     placeId:store.place_id||'',
     storeName:store.name||'',
-    count:'10',
+    count:'30',
   });
   const searchRes=await fetch(`/api/store-rank?${params}`);
   const searchData=await searchRes.json();
