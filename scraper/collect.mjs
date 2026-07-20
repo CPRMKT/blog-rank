@@ -84,7 +84,7 @@ async function main() {
             keyword,
             placeId: store.place_id || '',
             storeName: store.name || '',
-            count: '10',
+            count: '30',
           });
           const data = await api(`/api/store-rank?${params.toString()}`, {}, STORE_RANK_TIMEOUT_MS);
 
