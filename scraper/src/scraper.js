@@ -36,6 +36,23 @@ export async function scrapeBlogTab(keyword, count = 15) {
     timezoneId: 'Asia/Seoul',
     viewport: { width: 1366, height: 900 },
   });
+
+  // 리소스 차단: 이미지/미디어/폰트/CSS + 트래킹 요청을 막아 로딩 시간과
+  // 메모리 사용을 크게 줄인다(1GB 서버에서 domcontentloaded 60초 타임아웃 방지).
+  // 순위 추출에 필요한 건 HTML/DOM 뿐이라 렌더 리소스는 불필요.
+  // stylesheet는 남긴다(무한스크롤이 레이아웃 높이에 의존할 수 있으므로).
+  await context.route('**/*', (route) => {
+    const type = route.request().resourceType();
+    if (type === 'image' || type === 'media' || type === 'font') {
+      return route.abort();
+    }
+    const u = route.request().url();
+    if (/(nlog\.naver|wcs\.naver|ad\.naver|adcr\.naver|siadge|googletagmanager|google-analytics|doubleclick)/.test(u)) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+
   const page = await context.newPage();
 
   try {
@@ -44,10 +61,12 @@ export async function scrapeBlogTab(keyword, count = 15) {
       `&query=${encodeURIComponent(keyword)}` +
       `&sm=tab_opt&nso=so:r,p:all`;
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // 첫 결과들이 SSR 또는 initial fetch로 로딩되기까지 대기
+    // waitUntil:'commit'은 최초 응답 직후 반환되므로, 무거운 페이지 전체
+    // 파싱을 기다리다 나는 타임아웃을 피한다. 결과는 아래 selector 대기로 확인.
+    await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
+    // 결과 앵커가 렌더될 때까지 대기(commit 이후 ~15초 내 로딩되는 것을 실측 확인).
     await page
-      .waitForSelector('a[href*="blog.naver.com/"]', { timeout: 10000 })
+      .waitForSelector('a[href*="blog.naver.com/"]', { timeout: 30000 })
       .catch(() => {});
 
     // 무한스크롤로 추가 결과 로딩.
@@ -77,16 +96,50 @@ export async function scrapeBlogTab(keyword, count = 15) {
 
     // DOM에서 결과를 출현 순서로 추출 (네이버 화면 그대로의 순위)
     const items = await page.evaluate((maxCount) => {
+      // 조직(최신순) 결과 링크만 후보로 수집.
+      const matched = Array.from(
+        document.querySelectorAll('a[href*="blog.naver.com/"]')
+      ).filter((a) => /blog\.naver\.com\/[a-zA-Z0-9_]+\/\d{10,}/.test(a.href || ''));
+      const total = matched.length;
+
+      // 네이버는 결과 상단/중간에 "○○ 인기글", 인플루언서, 파워링크(광고) 같은
+      // 비조직 모듈을 끼워 넣는다. 이 모듈의 게시물 링크가 조직 결과보다 먼저
+      // 잡히면 실제 1위가 2위로 밀린다(rank 밀림 버그). 해당 모듈 영역의 링크는 제외.
+      // 섹션 헤더(h2/h3)만 검사해 게시물 제목 오탐을 피한다.
+      const NON_ORGANIC = /(인기글|인플루언서|파워링크|비즈사이트|광고|스폰서|추천)/;
+      const badRoots = [];
+      document.querySelectorAll('h2, h3').forEach((h) => {
+        const t = (h.textContent || '').replace(/\s+/g, ' ').trim();
+        if (t.length > 30 || !NON_ORGANIC.test(t)) return;
+        // 헤더에서 위로 올라가며 모듈 카드 컨테이너를 찾는다(최대 4단계).
+        let root = h;
+        for (let i = 0; i < 4 && root.parentElement; i++) {
+          root = root.parentElement;
+          if (
+            /api_subject_bx|sds-comps-vertical-layout|sc_new|_svp_/i.test(
+              (root.className || '').toString()
+            )
+          )
+            break;
+        }
+        // 안전밸브: root가 전체 링크의 절반 이상을 포함하면 조직 목록까지
+        // 삼킨 것이므로 무시한다(조직 결과 유실 방지).
+        const covered = matched.filter((a) => root.contains(a)).length;
+        if (root !== document.body && covered > 0 && covered <= total / 2) {
+          badRoots.push(root);
+        }
+      });
+      const inNonOrganic = (a) => badRoots.some((r) => r.contains(a));
+
       const seen = new Set();
       const out = [];
-      const anchors = Array.from(
-        document.querySelectorAll('a[href*="blog.naver.com/"]')
-      );
+      const anchors = matched;
 
       for (const a of anchors) {
         const href = a.href || '';
         const m = href.match(/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{10,})/);
         if (!m) continue;
+        if (inNonOrganic(a)) continue; // 광고/인기글 등 비조직 모듈 링크 스킵
         const blogId = m[1];
         const postId = m[2];
         const key = `${blogId}/${postId}`;

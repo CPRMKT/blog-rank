@@ -18,3 +18,7 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# backups
+*.bak
+*.bak.*
