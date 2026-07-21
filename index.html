@@ -127,6 +127,9 @@ tr:hover td{background:#f8fbff}
 .rank-cell-match .mtitle{font-weight:700;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .rank-cell-match .mauthor{color:#666;font-size:11px;margin-top:2px}
 .rank-cell-miss{color:#aaa;font-size:12px}
+/* 매장 순위 탭: 키워드 월 검색량 */
+.kw-vol{color:#1a73e8;font-size:10px;font-weight:700;margin-left:2px}
+.rank-kw-vol{font-size:10px;color:#1a73e8;font-weight:700;margin-top:3px}
 /* ===== 키워드 제안 (다크) ===== */
 #page-suggest{margin:-24px;padding:24px;background:#0a0a0a;color:#e5e5e5;min-height:calc(100vh - 0px)}
 #page-suggest .sg-head{margin-bottom:4px}
@@ -605,6 +608,7 @@ function exportCSV(){
 let stores=[];                  // DB에서 로드한 매장 목록
 let curStoreId=null;             // 현재 선택된 매장 ID
 let storeKeywords={};            // storeId -> [keyword, ...]
+let storeKwVolumes={};           // keyword -> 월 검색량(PC+모바일 합계)
 let storeRankings={};            // storeId -> {keyword: {date: {rank, matched_blog_url, matched_title}}}
 
 const MAX_KEYWORDS=30;
@@ -802,6 +806,7 @@ async function selectStore(id){
   storeKeywords[id]=(kwRes.result||[]).map(r=>r.keyword);
   document.getElementById('kwCount').textContent=`${storeKeywords[id].length}/${MAX_KEYWORDS}`;
   renderKeywords();
+  loadKeywordVolumes(id,storeKeywords[id]); // 월 검색량 비동기 로드
 
   // 최근 7일 순위 로드
   const rankRes=await dbCall('get_store_rankings',{store_id:id,days:7});
@@ -861,8 +866,9 @@ async function addKeyword(){
   document.getElementById('kwCount').textContent=`${keywords.length}/${MAX_KEYWORDS}`;
   renderKeywords();renderRankTable();
 
-  // 등록 즉시 순위 조회 (비동기)
+  // 등록 즉시 순위 조회 + 월 검색량 로드 (비동기)
   checkKeywordRank(curStoreId,kw);
+  loadKeywordVolumes(curStoreId,[kw]);
 }
 
 async function removeKeyword(kw){
@@ -874,11 +880,28 @@ async function removeKeyword(kw){
   renderKeywords();renderRankTable();
 }
 
+function kwVolLabel(kw){
+  const v=storeKwVolumes[kw];
+  return (v!=null)?` <span class="kw-vol">월 ${v.toLocaleString()}</span>`:'';
+}
+
 function renderKeywords(){
   const keywords=curStoreId?(storeKeywords[curStoreId]||[]):[];
   document.getElementById('kwTags').innerHTML=keywords.length===0
     ?'<span class="muted">등록된 키워드가 없습니다</span>'
-    :keywords.map(kw=>`<span class="kw-tag">${escapeHtml(kw)} <span class="del" onclick="removeKeyword('${kw.replace(/'/g,"\\'")}')">✕</span></span>`).join('');
+    :keywords.map(kw=>`<span class="kw-tag">${escapeHtml(kw)}${kwVolLabel(kw)} <span class="del" onclick="removeKeyword('${kw.replace(/'/g,"\\'")}')">✕</span></span>`).join('');
+}
+
+// 매장 키워드들의 월 검색량 로드(검색광고 API)
+async function loadKeywordVolumes(storeId,keywords){
+  if(!keywords||!keywords.length)return;
+  try{
+    const res=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords})});
+    const data=await res.json();
+    if(!data||!data.ok)return;
+    for(const [kw,v] of Object.entries(data.volumes||{})) storeKwVolumes[kw]=v?v.total:null;
+    if(curStoreId===storeId){renderKeywords();renderRankTable();}
+  }catch(e){}
 }
 
 // ---------- 순위 테이블 렌더 ----------
@@ -906,6 +929,7 @@ function renderRankTable(){
     return`<tr>
       <td>
         <div class="rank-kw-title">${escapeHtml(kw)}</div>
+        ${storeKwVolumes[kw]!=null?`<div class="rank-kw-vol">월 ${storeKwVolumes[kw].toLocaleString()}회</div>`:''}
       </td>
       ${dates.map(d=>renderRankCell(kwRanks[d])).join('')}
     </tr>`;
