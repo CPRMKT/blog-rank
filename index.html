@@ -127,6 +127,32 @@ tr:hover td{background:#f8fbff}
 .rank-cell-match .mtitle{font-weight:700;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .rank-cell-match .mauthor{color:#666;font-size:11px;margin-top:2px}
 .rank-cell-miss{color:#aaa;font-size:12px}
+/* ===== 키워드 제안 (다크) ===== */
+#page-suggest{margin:-24px;padding:24px;background:#0a0a0a;color:#e5e5e5;min-height:calc(100vh - 0px)}
+#page-suggest .sg-head{margin-bottom:4px}
+#page-suggest .sg-title{font-size:20px;font-weight:800;color:#fff}
+#page-suggest .sg-sub{font-size:12px;color:#8a8a8a;margin-top:4px}
+#page-suggest .sg-card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;padding:18px;margin-top:16px}
+#page-suggest input[type=text]{background:#0f0f0f;border:1px solid #333;color:#eee;border-radius:8px;padding:11px 12px;font-size:13px;width:100%;outline:none}
+#page-suggest input[type=text]:focus{border-color:#4f7cff}
+#page-suggest .sg-btn{background:#4f7cff;color:#fff;border:none;border-radius:8px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:13px;white-space:nowrap}
+#page-suggest .sg-btn:disabled{opacity:.5;cursor:default}
+#page-suggest .sg-store-name{font-size:18px;font-weight:800;color:#fff}
+#page-suggest .sg-store-meta{font-size:12px;color:#9a9a9a;margin-top:6px;line-height:1.5}
+#page-suggest .sg-metrics{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+#page-suggest .sg-metric{flex:1;min-width:120px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:16px}
+#page-suggest .sg-metric .v{font-size:24px;font-weight:800;color:#fff}
+#page-suggest .sg-metric .l{font-size:11px;color:#888;margin-top:6px}
+#page-suggest .sg-gauge{display:flex;align-items:center;gap:20px}
+#page-suggest table{width:100%;border-collapse:collapse;font-size:12px;color:#ddd;min-width:640px}
+#page-suggest thead th{background:#141414;color:#8a8a8a;text-align:left;padding:9px 8px;font-weight:600;border-bottom:1px solid #2a2a2a}
+#page-suggest tbody td{padding:9px 8px;border-top:1px solid #202020}
+#page-suggest tbody tr:hover td{background:#161616}
+#page-suggest .badge-o{color:#4ade80;font-weight:800}
+#page-suggest .badge-x{color:#555}
+#page-suggest .chip{display:inline-block;background:#232a3a;color:#9db4ff;border-radius:6px;padding:2px 8px;font-size:11px}
+#page-suggest .trend-bar{height:6px;background:#2a2a2a;border-radius:3px;overflow:hidden;flex:0 0 56px}
+#page-suggest .trend-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4f7cff,#7c5cff)}
 </style>
 </head>
 <body>
@@ -142,6 +168,9 @@ tr:hover td{background:#f8fbff}
     </div>
     <div class="menu-item" id="menu-store" onclick="showPage('store')">
       <span class="icon">🏪</span> 매장 블로그 순위
+    </div>
+    <div class="menu-item" id="menu-suggest" onclick="showPage('suggest')">
+      <span class="icon">💡</span> 키워드 제안
     </div>
   </div>
 </div>
@@ -288,6 +317,54 @@ tr:hover td{background:#f8fbff}
     </div>
   </div>
 
+  <!-- ============================================= -->
+  <!-- 키워드 제안 (플레이스 분석 → Claude → 조합) -->
+  <!-- ============================================= -->
+  <div id="page-suggest" style="display:none">
+    <div class="sg-head">
+      <div class="sg-title">💡 키워드 제안</div>
+      <div class="sg-sub">네이버 플레이스 URL을 입력하면 지역·메뉴·상황을 분석해 추적할 키워드를 제안합니다</div>
+    </div>
+
+    <div class="sg-card">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="text" id="sgUrl" placeholder="예: https://m.place.naver.com/place/2005368682" onkeydown="if(event.key==='Enter')analyzeSuggest()">
+        <button class="sg-btn" id="sgBtn" onclick="analyzeSuggest()">분석</button>
+      </div>
+      <div id="sgErr" style="display:none;color:#ff6b6b;font-size:12px;margin-top:8px"></div>
+    </div>
+
+    <div id="sgResult" style="display:none">
+      <div class="sg-card sg-gauge">
+        <div id="sgGauge"></div>
+        <div style="flex:1">
+          <div class="sg-store-name" id="sgStoreName"></div>
+          <div class="sg-store-meta" id="sgStoreMeta"></div>
+        </div>
+      </div>
+
+      <div class="sg-metrics" id="sgMetrics"></div>
+
+      <div class="sg-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="font-weight:700;color:#fff">추천 키워드 <span id="sgCount" style="color:#888;font-weight:400"></span></div>
+          <button class="sg-btn" id="sgAddBtn" onclick="addSuggestToTracking()">선택 항목 순위 추적에 추가</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th style="width:32px"><input type="checkbox" id="sgAll" onchange="sgToggleAll(this)"></th>
+              <th>키워드</th><th style="text-align:center">주소노출</th><th>위치</th>
+              <th style="text-align:center">업종노출</th><th>메뉴</th><th>상황</th><th>트렌드</th>
+            </tr></thead>
+            <tbody id="sgBody"></tbody>
+          </table>
+        </div>
+        <div style="font-size:11px;color:#777;margin-top:10px">※ 트렌드 = 네이버 월간 검색량(PC+모바일). 기본으로 검색량 상위 10개가 선택돼 있습니다.</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -299,10 +376,10 @@ async function dbCall(action,data){
 }
 
 function showPage(page){
-  document.getElementById('page-post').style.display=page==='post'?'':'none';
-  document.getElementById('page-store').style.display=page==='store'?'':'none';
-  document.getElementById('menu-post').classList.toggle('active',page==='post');
-  document.getElementById('menu-store').classList.toggle('active',page==='store');
+  ['post','store','suggest'].forEach(p=>{
+    const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
+    const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
+  });
   if(page==='store') loadStores();
 }
 
@@ -1034,6 +1111,107 @@ async function refreshAllRankings(){
 // ---------- 초기화 ----------
 // showPage 호출 시 자동으로 loadStores() 트리거됨
 // 페이지 로드 직후에 매장 페이지가 기본이 아니므로 여기선 아무것도 안 함
+// ===== 키워드 제안 =====
+let sgData=null;
+function sgEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+
+async function analyzeSuggest(){
+  const url=document.getElementById('sgUrl').value.trim();
+  const err=document.getElementById('sgErr'); err.style.display='none';
+  if(!url){err.textContent='플레이스 URL을 입력하세요';err.style.display='block';return;}
+  const btn=document.getElementById('sgBtn'); btn.disabled=true; btn.textContent='분석 중...';
+  try{
+    const res=await fetch(`/api/suggest-keywords?url=${encodeURIComponent(url)}`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'분석 실패');
+    sgData=data; renderSuggest(data);
+  }catch(e){ err.textContent='오류: '+e.message; err.style.display='block'; }
+  finally{ btn.disabled=false; btn.textContent='분석'; }
+}
+
+function sgGaugeSvg(score){
+  const r=42,c=2*Math.PI*r,off=c*(1-score/100);
+  const col=score>=70?'#4ade80':score>=40?'#fbbf24':'#f87171';
+  return `<svg width="108" height="108" viewBox="0 0 110 110">
+    <circle cx="55" cy="55" r="${r}" fill="none" stroke="#2a2a2a" stroke-width="10"/>
+    <circle cx="55" cy="55" r="${r}" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 55 55)"/>
+    <text x="55" y="52" text-anchor="middle" fill="#fff" font-size="26" font-weight="800">${score}</text>
+    <text x="55" y="71" text-anchor="middle" fill="#888" font-size="10">기회점수</text>
+  </svg>`;
+}
+
+function renderSuggest(data){
+  document.getElementById('sgResult').style.display='';
+  document.getElementById('sgStoreName').textContent=data.place.name||'-';
+  document.getElementById('sgStoreMeta').textContent=
+    `${data.place.category||''} · ${data.place.address||''} · 블로그리뷰 ${data.place.reviewCount||0}개`;
+  const kws=data.keywords||[];
+  const withVol=kws.filter(k=>k.trend!=null);
+  const maxTrend=Math.max(1,...kws.map(k=>k.trend||0));
+  const avg=withVol.length?Math.round(withVol.reduce((s,k)=>s+k.trend,0)/withVol.length):0;
+  const gold=kws.filter(k=>k.addrMatch&&(k.trend||0)>=300).length;
+  let score;
+  if(data.hasVolume){
+    score=Math.min(100,Math.round((withVol.filter(k=>k.trend>=100).length/Math.max(1,kws.length))*100)+Math.min(30,gold*3));
+  }else{ score=Math.min(100,kws.length); }
+  document.getElementById('sgGauge').innerHTML=sgGaugeSvg(score);
+  document.getElementById('sgCount').textContent=`${kws.length}개`;
+  document.getElementById('sgMetrics').innerHTML=[
+    ['총 키워드',kws.length],
+    ['주소노출 키워드',kws.filter(k=>k.addrMatch).length],
+    ['최고 검색량',data.hasVolume?maxTrend.toLocaleString():'-'],
+    ['평균 검색량',data.hasVolume?avg.toLocaleString():'-'],
+  ].map(([l,v])=>`<div class="sg-metric"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('sgAll').checked=false;
+  document.getElementById('sgBody').innerHTML=kws.map((k,i)=>{
+    const t=k.trend, w=t!=null?Math.round((t/maxTrend)*100):0;
+    return `<tr>
+      <td><input type="checkbox" class="sgChk" data-i="${i}" ${i<10?'checked':''}></td>
+      <td style="color:#fff;font-weight:600">${sgEsc(k.keyword)}</td>
+      <td style="text-align:center" class="${k.addrMatch?'badge-o':'badge-x'}">${k.addrMatch?'O':'X'}</td>
+      <td>${k.region?`<span class="chip">${sgEsc(k.region)}</span>`:'-'}</td>
+      <td style="text-align:center" class="${k.catMatch?'badge-o':'badge-x'}">${k.catMatch?'O':'X'}</td>
+      <td>${sgEsc(k.menu)||'-'}</td>
+      <td>${sgEsc(k.situation)||'-'}</td>
+      <td>${t!=null?`<div style="display:flex;align-items:center;gap:8px"><div class="trend-bar"><i style="width:${w}%"></i></div><span>${t.toLocaleString()}</span></div>`:'<span style="color:#555">-</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sgToggleAll(el){document.querySelectorAll('.sgChk').forEach(c=>c.checked=el.checked);}
+
+async function addSuggestToTracking(){
+  if(!sgData){return;}
+  const chosen=[...document.querySelectorAll('.sgChk:checked')].map(c=>sgData.keywords[+c.dataset.i].keyword);
+  if(!chosen.length){alert('추가할 키워드를 선택하세요');return;}
+  if(chosen.length>30 && !confirm(`${chosen.length}개를 추가하면 매일 순위 수집 부하가 커집니다. 계속할까요?`)) return;
+  const btn=document.getElementById('sgAddBtn'); btn.disabled=true; btn.textContent='추가 중...';
+  try{
+    const list=await dbCall('list_stores',{});
+    let store=(list.result||[]).find(s=>s.place_id===sgData.place.placeId);
+    if(!store){
+      const cr=await dbCall('create_store',{
+        place_id:sgData.place.placeId, name:sgData.place.name,
+        place_url:`https://map.naver.com/p/entry/place/${sgData.place.placeId}`,
+        category:sgData.place.category, address:sgData.place.address, phone:null,
+      });
+      if(!cr.ok) throw new Error(cr.error||'매장 생성 실패');
+      const list2=await dbCall('list_stores',{});
+      store=(list2.result||[]).find(s=>s.place_id===sgData.place.placeId);
+    }
+    if(!store) throw new Error('매장을 찾을 수 없습니다');
+    const kwRes=await dbCall('list_store_keywords',{store_id:store.id});
+    const existing=new Set((kwRes.result||[]).map(k=>k.keyword));
+    let added=0, skipped=0;
+    for(const kw of chosen){
+      if(existing.has(kw)){skipped++;continue;}
+      const r=await dbCall('add_store_keyword',{store_id:store.id,keyword:kw});
+      if(r&&r.ok)added++;
+    }
+    alert(`"${store.name}"에 키워드 ${added}개 추가${skipped?` (중복 ${skipped}개 제외)`:''} 완료.\n'매장 블로그 순위' 탭에서 확인하세요.`);
+  }catch(e){ alert('추가 오류: '+e.message); }
+  finally{ btn.disabled=false; btn.textContent='선택 항목 순위 추적에 추가'; }
+}
 </script>
 </body>
 </html>

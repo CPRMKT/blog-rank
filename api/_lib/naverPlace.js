@@ -491,3 +491,92 @@ export async function fetchAllBlogReviews(placeId, businessType, options = {}) {
 
   return { total, maxItemCount, collected };
 }
+
+// ============================================================
+// 키워드 제안용: 매장 정보 + 메뉴/편의/연관키워드까지 확장 추출
+// ============================================================
+
+function cleanMenuName(s) {
+  return String(s || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}️]/gu, '').trim();
+}
+
+/**
+ * 키워드 제안에 필요한 매장 정보를 한 번에 크롤한다.
+ * fetchPlaceDetail 보다 많은 필드(메뉴, 편의시설, 연관키워드, 한줄리뷰)를 반환.
+ *
+ * @param {string} placeId
+ * @param {string} [businessType]
+ * @returns {Promise<{placeId,name,category,roadAddress,address,phone,visitorReviewsTotal,conveniences:string[],microReviews:string[],keywordList:string[],menus:Array<{name,price,recommend}>}>}
+ */
+export async function fetchPlaceForKeywords(placeId, businessType = null) {
+  const type = businessType || 'place';
+  const url = `https://m.place.naver.com/${type}/${placeId}/home`;
+
+  const resp = await fetch(url, {
+    method: 'GET',
+    redirect: 'follow',
+    headers: {
+      'User-Agent': PLACE_USER_AGENT,
+      'Accept': 'text/html',
+      'Accept-Language': 'ko-KR,ko;q=0.9',
+      'Referer': 'https://map.naver.com/',
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`플레이스 페이지 요청 실패 (status=${resp.status})`);
+  }
+
+  const html = await resp.text();
+  const match = html.match(/window\.__APOLLO_STATE__\s*=\s*(\{[\s\S]*?\});/);
+  if (!match) {
+    throw new Error('플레이스 페이지에서 매장 정보를 찾을 수 없습니다');
+  }
+
+  let st;
+  try {
+    st = JSON.parse(match[1]);
+  } catch (e) {
+    throw new Error(`매장 정보 파싱 실패: ${e.message}`);
+  }
+
+  const base = st[`PlaceDetailBase:${placeId}`];
+  if (!base) {
+    throw new Error('해당 Place ID의 매장을 찾을 수 없습니다');
+  }
+
+  // 메뉴 수집 (Menu:{placeId}_* 키)
+  const menus = [];
+  for (const k of Object.keys(st)) {
+    if (k.startsWith(`Menu:${placeId}_`)) {
+      const mn = st[k];
+      const name = cleanMenuName(mn && mn.name);
+      if (name) menus.push({ name, price: mn.price || null, recommend: !!mn.recommend });
+    }
+  }
+
+  // 연관키워드: PlaceDetailBase에 없으면 전체 상태에서 탐색
+  let keywordList = Array.isArray(base.keywordList) ? base.keywordList : [];
+  if (keywordList.length === 0) {
+    for (const k of Object.keys(st)) {
+      const v = st[k];
+      if (v && Array.isArray(v.keywordList) && v.keywordList.length) {
+        keywordList = v.keywordList;
+        break;
+      }
+    }
+  }
+
+  return {
+    placeId,
+    name: base.name || null,
+    category: base.category || null,
+    roadAddress: base.roadAddress || null,
+    address: base.address || null,
+    phone: base.virtualPhone || base.phone || null,
+    visitorReviewsTotal: base.visitorReviewsTotal || 0,
+    conveniences: Array.isArray(base.conveniences) ? base.conveniences : [],
+    microReviews: Array.isArray(base.microReviews) ? base.microReviews : [],
+    keywordList,
+    menus,
+  };
+}
