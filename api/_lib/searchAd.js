@@ -26,11 +26,13 @@ function sign(timestamp, method, path, secret) {
  * @returns {Promise<Map<string, {pc:number, mobile:number, total:number}>>}
  *          키는 원본 키워드(공백 포함). 조회 실패/없음이면 해당 키 없음.
  */
-export async function fetchSearchVolumes(keywords) {
+export async function fetchSearchVolumes(keywords, debug) {
+  const push = (m) => { if (debug) debug.push(m); };
   const apiKey = process.env.NAVER_AD_LICENSE;
   const secret = process.env.NAVER_AD_SECRET;
   const customerId = process.env.NAVER_AD_CUSTOMER_ID;
   const result = new Map();
+  push(`creds: LICENSE=${!!apiKey} SECRET=${!!secret} CUSTOMER=${!!customerId}`);
   if (!apiKey || !secret || !customerId) {
     // 자격증명이 없으면 검색량 없이 진행(트렌드 컬럼은 null)
     return result;
@@ -60,13 +62,18 @@ export async function fetchSearchVolumes(keywords) {
           'X-Signature': sign(ts, 'GET', path, secret),
         },
       });
-      if (!resp.ok) continue;
+      if (!resp.ok) {
+        push(`HTTP ${resp.status} @batch${i}: ${(await resp.text()).slice(0, 160)}`);
+        continue;
+      }
       json = await resp.json();
-    } catch {
+    } catch (e) {
+      push(`fetch err @batch${i}: ${e.message}`);
       continue;
     }
 
     const list = json?.keywordList || [];
+    if (i === 0) push(`batch0 hint="${hint}" listLen=${list.length} sample=${JSON.stringify((list[0]||{}).relKeyword||null)}`);
     // 네이버 응답의 relKeyword(공백 없는 대문자)를 batch 원본과 매칭
     for (const kw of batch) {
       const target = norm(kw).toUpperCase();

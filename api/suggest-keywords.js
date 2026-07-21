@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     if (!placeId) {
       return res.status(400).json({ ok: false, error: 'url 또는 placeId가 필요합니다' });
     }
-    const result = await runSuggest(placeId);
+    const result = await runSuggest(placeId, { debug: q.debug === '1' });
     return res.status(200).json(result);
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
@@ -39,7 +39,8 @@ export default async function handler(req, res) {
  * 키워드 제안 핵심 파이프라인(테스트에서 직접 호출 가능).
  * placeId → 매장 크롤 → Claude 추출 → 조합 → 월 검색량.
  */
-export async function runSuggest(placeId) {
+export async function runSuggest(placeId, opts = {}) {
+  const debug = opts.debug ? [] : null;
   // 1) 매장 정보 크롤
   const place = await fetchPlaceForKeywords(placeId);
   // 2) Claude로 지역/메뉴/상황 요소 추출
@@ -47,7 +48,7 @@ export async function runSuggest(placeId) {
   // 3) 키워드 조합 생성 + 태깅
   const rows = buildKeywords(place, elements);
   // 4) 월 검색량 부여 (PC/모바일/합계)
-  const volumes = await fetchSearchVolumes(rows.map((r) => r.keyword));
+  const volumes = await fetchSearchVolumes(rows.map((r) => r.keyword), debug);
   for (const r of rows) {
     const v = volumes.get(r.keyword);
     r.monthlyVolume = v ? v.total : null; // PC+모바일 월 검색량
@@ -68,6 +69,7 @@ export async function runSuggest(placeId) {
     elements,
     hasVolume: volumes.size > 0,
     keywords: rows,
+    ...(debug ? { volumeDebug: debug } : {}),
   };
 }
 
