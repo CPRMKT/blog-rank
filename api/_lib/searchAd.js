@@ -1,8 +1,8 @@
 // api/_lib/searchAd.js
 // 네이버 검색광고 API(keywordstool)로 키워드 월간 검색량을 조회한다.
 // 필요한 환경변수(Vercel):
-//   NAVER_AD_API_KEY      - 액세스 라이선스
-//   NAVER_AD_SECRET_KEY   - 비밀키
+//   NAVER_AD_LICENSE      - 액세스 라이선스(X-API-KEY)
+//   NAVER_AD_SECRET       - 비밀키(시그니처 서명용)
 //   NAVER_AD_CUSTOMER_ID  - 고객 ID
 //
 // 시그니처: HMAC-SHA256( `${timestamp}.${method}.${path}` , SECRET )  → base64
@@ -27,8 +27,8 @@ function sign(timestamp, method, path, secret) {
  *          키는 원본 키워드(공백 포함). 조회 실패/없음이면 해당 키 없음.
  */
 export async function fetchSearchVolumes(keywords) {
-  const apiKey = process.env.NAVER_AD_API_KEY;
-  const secret = process.env.NAVER_AD_SECRET_KEY;
+  const apiKey = process.env.NAVER_AD_LICENSE;
+  const secret = process.env.NAVER_AD_SECRET;
   const customerId = process.env.NAVER_AD_CUSTOMER_ID;
   const result = new Map();
   if (!apiKey || !secret || !customerId) {

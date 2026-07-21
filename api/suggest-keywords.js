@@ -38,13 +38,15 @@ export default async function handler(req, res) {
     // 3) 키워드 조합 생성 + 태깅
     const rows = buildKeywords(place, elements);
 
-    // 4) 검색량 부여(트렌드)
+    // 4) 월 검색량 부여 (PC/모바일/합계)
     const volumes = await fetchSearchVolumes(rows.map((r) => r.keyword));
     for (const r of rows) {
       const v = volumes.get(r.keyword);
-      r.trend = v ? v.total : null;
+      r.monthlyVolume = v ? v.total : null; // PC+모바일 월 검색량
+      r.monthlyPc = v ? v.pc : null;
+      r.monthlyMobile = v ? v.mobile : null;
     }
-    rows.sort((a, b) => (b.trend ?? -1) - (a.trend ?? -1));
+    rows.sort((a, b) => (b.monthlyVolume ?? -1) - (a.monthlyVolume ?? -1));
 
     return res.status(200).json({
       ok: true,

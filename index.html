@@ -355,12 +355,12 @@ tr:hover td{background:#f8fbff}
             <thead><tr>
               <th style="width:32px"><input type="checkbox" id="sgAll" onchange="sgToggleAll(this)"></th>
               <th>키워드</th><th style="text-align:center">주소노출</th><th>위치</th>
-              <th style="text-align:center">업종노출</th><th>메뉴</th><th>상황</th><th>트렌드</th>
+              <th style="text-align:center">업종노출</th><th>메뉴</th><th>상황</th><th>월 검색량</th>
             </tr></thead>
             <tbody id="sgBody"></tbody>
           </table>
         </div>
-        <div style="font-size:11px;color:#777;margin-top:10px">※ 트렌드 = 네이버 월간 검색량(PC+모바일). 기본으로 검색량 상위 10개가 선택돼 있습니다.</div>
+        <div style="font-size:11px;color:#777;margin-top:10px">※ 월 검색량 = 네이버 검색광고 기준 PC+모바일 월간 검색수. 기본으로 검색량 상위 10개가 선택돼 있습니다.</div>
       </div>
     </div>
   </div>
@@ -1146,25 +1146,32 @@ function renderSuggest(data){
   document.getElementById('sgStoreMeta').textContent=
     `${data.place.category||''} · ${data.place.address||''} · 블로그리뷰 ${data.place.reviewCount||0}개`;
   const kws=data.keywords||[];
-  const withVol=kws.filter(k=>k.trend!=null);
-  const maxTrend=Math.max(1,...kws.map(k=>k.trend||0));
-  const avg=withVol.length?Math.round(withVol.reduce((s,k)=>s+k.trend,0)/withVol.length):0;
-  const gold=kws.filter(k=>k.addrMatch&&(k.trend||0)>=300).length;
+  const withVol=kws.filter(k=>k.monthlyVolume!=null);
+  const maxVol=Math.max(1,...kws.map(k=>k.monthlyVolume||0));
+  const avg=withVol.length?Math.round(withVol.reduce((s,k)=>s+k.monthlyVolume,0)/withVol.length):0;
+  const gold=kws.filter(k=>k.addrMatch&&(k.monthlyVolume||0)>=300).length;
   let score;
   if(data.hasVolume){
-    score=Math.min(100,Math.round((withVol.filter(k=>k.trend>=100).length/Math.max(1,kws.length))*100)+Math.min(30,gold*3));
+    score=Math.min(100,Math.round((withVol.filter(k=>k.monthlyVolume>=100).length/Math.max(1,kws.length))*100)+Math.min(30,gold*3));
   }else{ score=Math.min(100,kws.length); }
   document.getElementById('sgGauge').innerHTML=sgGaugeSvg(score);
   document.getElementById('sgCount').textContent=`${kws.length}개`;
   document.getElementById('sgMetrics').innerHTML=[
     ['총 키워드',kws.length],
     ['주소노출 키워드',kws.filter(k=>k.addrMatch).length],
-    ['최고 검색량',data.hasVolume?maxTrend.toLocaleString():'-'],
-    ['평균 검색량',data.hasVolume?avg.toLocaleString():'-'],
+    ['최고 월검색량',data.hasVolume?maxVol.toLocaleString():'-'],
+    ['평균 월검색량',data.hasVolume?avg.toLocaleString():'-'],
   ].map(([l,v])=>`<div class="sg-metric"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
   document.getElementById('sgAll').checked=false;
   document.getElementById('sgBody').innerHTML=kws.map((k,i)=>{
-    const t=k.trend, w=t!=null?Math.round((t/maxTrend)*100):0;
+    const vol=k.monthlyVolume, w=vol!=null?Math.round((vol/maxVol)*100):0;
+    const volCell = vol!=null
+      ? `<div style="display:flex;align-items:center;gap:8px">
+           <div class="trend-bar"><i style="width:${w}%"></i></div>
+           <div><div style="color:#fff;font-weight:700">${vol.toLocaleString()}</div>
+           <div style="font-size:10px;color:#777">PC ${(k.monthlyPc||0).toLocaleString()} · 모바일 ${(k.monthlyMobile||0).toLocaleString()}</div></div>
+         </div>`
+      : '<span style="color:#555">-</span>';
     return `<tr>
       <td><input type="checkbox" class="sgChk" data-i="${i}" ${i<10?'checked':''}></td>
       <td style="color:#fff;font-weight:600">${sgEsc(k.keyword)}</td>
@@ -1173,7 +1180,7 @@ function renderSuggest(data){
       <td style="text-align:center" class="${k.catMatch?'badge-o':'badge-x'}">${k.catMatch?'O':'X'}</td>
       <td>${sgEsc(k.menu)||'-'}</td>
       <td>${sgEsc(k.situation)||'-'}</td>
-      <td>${t!=null?`<div style="display:flex;align-items:center;gap:8px"><div class="trend-bar"><i style="width:${w}%"></i></div><span>${t.toLocaleString()}</span></div>`:'<span style="color:#555">-</span>'}</td>
+      <td>${volCell}</td>
     </tr>`;
   }).join('');
 }
