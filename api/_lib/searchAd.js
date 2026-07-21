@@ -28,11 +28,11 @@ function sign(timestamp, method, path, secret) {
  */
 export async function fetchSearchVolumes(keywords, debug) {
   const push = (m) => { if (debug) debug.push(m); };
-  const apiKey = process.env.NAVER_AD_LICENSE;
-  const secret = process.env.NAVER_AD_SECRET;
-  const customerId = process.env.NAVER_AD_CUSTOMER_ID;
+  const apiKey = (process.env.NAVER_AD_LICENSE || '').trim();
+  const secret = (process.env.NAVER_AD_SECRET || '').trim();
+  const customerId = (process.env.NAVER_AD_CUSTOMER_ID || '').trim();
   const result = new Map();
-  push(`creds: LICENSE=${!!apiKey} SECRET=${!!secret} CUSTOMER=${!!customerId}`);
+  push(`creds len: LICENSE=${apiKey.length} SECRET=${secret.length} CUSTOMER=${customerId.length}(${customerId})`);
   if (!apiKey || !secret || !customerId) {
     // 자격증명이 없으면 검색량 없이 진행(트렌드 컬럼은 null)
     return result;
