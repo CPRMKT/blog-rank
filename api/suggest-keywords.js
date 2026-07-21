@@ -12,8 +12,7 @@ import { parsePlaceUrl, fetchPlaceForKeywords } from './_lib/naverPlace.js';
 import { fetchSearchVolumes, normalizeKeyword as norm } from './_lib/searchAd.js';
 
 const CLAUDE_MODEL = process.env.SUGGEST_MODEL || 'claude-haiku-4-5-20251001';
-const MAX_LOGICAL = 45; // 논리 키워드(조합) 상한 → 띄어/붙여 2형태로 확장
-const TARGET_MAX = 80; // 최종 행 상한
+const TARGET_MAX = 80; // 최종 키워드 상한
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -201,28 +200,26 @@ function buildCandidates(place, el) {
   return cands;
 }
 
-// ── 선택(핵심 보존) + 띄어/붙여 두 형태 + 검색량순 정렬 ──────────────────
+// ── 선택(핵심 보존) + 붙여쓰기 한 형태 + 검색량순 정렬 ────────────────────
+// 띄어쓰기/붙여쓰기는 검색량이 같은 동일 키워드이므로 붙여쓰기 하나만 남긴다.
 function selectRows(cands) {
   const byVol = (a, b) => (b.volume ?? -1) - (a.volume ?? -1);
 
-  // 핵심은 전부, 나머지는 검색량 상위로 논리 상한까지 선택
-  const core = cands.filter((c) => c.core).sort(byVol);
-  const rest = cands.filter((c) => !c.core).sort(byVol);
-  const selected = [...core];
-  for (const c of rest) {
-    if (selected.length >= MAX_LOGICAL) break;
-    selected.push(c);
-  }
+  // 핵심 먼저, 그다음 검색량 상위 순으로 순회하며 상한까지 채움
+  const ordered = [
+    ...cands.filter((c) => c.core).sort(byVol),
+    ...cands.filter((c) => !c.core).sort(byVol),
+  ];
 
-  // 각 논리 키워드를 띄어쓰기 + 붙여쓰기 두 행으로 확장
   const seenKw = new Set();
-  let rows = [];
-  const emit = (keyword, c, form) => {
-    if (!keyword || seenKw.has(keyword)) return;
+  const rows = [];
+  for (const c of ordered) {
+    if (rows.length >= TARGET_MAX) break;
+    const keyword = c.parts.join(''); // 붙여쓰기 한 형태
+    if (!keyword || seenKw.has(keyword)) continue;
     seenKw.add(keyword);
     rows.push({
       keyword,
-      form, // 'spaced' | 'joined'
       region: c.region,
       menu: c.menu,
       situation: c.situation,
@@ -233,29 +230,13 @@ function selectRows(cands) {
       monthlyPc: c.pc,
       monthlyMobile: c.mobile,
     });
-  };
-  for (const c of selected) {
-    const spaced = c.spaced;
-    const joined = c.parts.join('');
-    emit(spaced, c, 'spaced');
-    if (joined !== spaced) emit(joined, c, 'joined');
   }
 
-  const finalSort = (a, b) => {
+  // 최종 검색량순 정렬(핵심 저검색량도 목록엔 포함, 정렬만 하위로)
+  rows.sort((a, b) => {
     const d = (b.monthlyVolume ?? -1) - (a.monthlyVolume ?? -1);
     if (d !== 0) return d;
-    const n = norm(a.keyword).localeCompare(norm(b.keyword));
-    if (n !== 0) return n;
-    return a.keyword.length - b.keyword.length; // 붙여쓰기(짧음) 먼저
-  };
-  rows.sort(finalSort);
-
-  // 상한 초과 시 비핵심부터 제거(핵심 키워드는 검색량 낮아도 보존)
-  if (rows.length > TARGET_MAX) {
-    const coreRows = rows.filter((r) => r.core);
-    const nonCore = rows.filter((r) => !r.core);
-    const keepNon = nonCore.slice(0, Math.max(0, TARGET_MAX - coreRows.length));
-    rows = [...coreRows, ...keepNon].sort(finalSort);
-  }
+    return a.keyword.localeCompare(b.keyword);
+  });
   return rows;
 }
