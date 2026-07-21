@@ -1,6 +1,12 @@
 // api/suggest-keywords.js
 // 플레이스 URL → 매장 정보 크롤 → Claude로 키워드 요소 추출 → 조합 생성
-// → 네이버 검색광고 API로 월 검색량 부여 → 검색량순 정렬(핵심 보존).
+// → 네이버 검색광고 API로 월 검색량 부여 → 검색량순 TOP 80.
+//
+// 조합 공식(모두 붙여쓰기):
+//   1열(지역) × 2열(메뉴/상황) × 3열(맛집) / 4열(추천) 고정
+//   - 1×2        : 지역+메뉴/상황            (울산솥밥, 삼산한정식)
+//   - 1×3 / 1×4  : 지역+맛집 / 지역+추천       (울산맛집, 삼산추천)
+//   - 1×2×3/1×2×4: 지역+메뉴/상황+맛집/추천    (울산솥밥맛집, 삼산한정식추천)
 //
 // GET/POST /api/suggest-keywords?url=<네이버 플레이스/지도 URL>  (또는 placeId=)
 //
@@ -12,7 +18,7 @@ import { parsePlaceUrl, fetchPlaceForKeywords } from './_lib/naverPlace.js';
 import { fetchSearchVolumes, normalizeKeyword as norm } from './_lib/searchAd.js';
 
 const CLAUDE_MODEL = process.env.SUGGEST_MODEL || 'claude-haiku-4-5-20251001';
-const TARGET_MAX = 80; // 최종 키워드 상한
+const TARGET_MAX = 80; // 최종 키워드 상한(검색량 상위)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -39,18 +45,18 @@ export async function runSuggest(placeId) {
   const place = await fetchPlaceForKeywords(placeId);
   const elements = await extractElements(place);
 
-  // 1) 후보(논리 조합) 생성
+  // 1) 조합(붙여쓰기) 후보 생성
   const candidates = buildCandidates(place, elements);
-  // 2) 검색량 부여(정규화 키로 조회 → 띄어/붙여 공통)
-  const volumes = await fetchSearchVolumes(candidates.map((c) => c.spaced));
+  // 2) 월 검색량 부여
+  const volumes = await fetchSearchVolumes(candidates.map((c) => c.keyword));
   for (const c of candidates) {
-    const v = volumes.get(norm(c.spaced));
+    const v = volumes.get(norm(c.keyword));
     c.volume = v ? v.total : null;
     c.pc = v ? v.pc : null;
     c.mobile = v ? v.mobile : null;
   }
-  // 3) 선택(핵심 보존) + 띄어/붙여 두 형태로 행 생성 + 검색량순 정렬
-  const keywords = selectRows(candidates);
+  // 3) 검색량순 TOP 80
+  const keywords = selectTop(candidates);
 
   return {
     ok: true,
@@ -93,13 +99,16 @@ async function extractElements(place) {
     '매장 정보를 보고 블로그 검색에 실제로 쓰일 법한 키워드 요소를 추출한다. ' +
     '반드시 아래 JSON 스키마로만 답하라(설명·마크다운 금지):\n' +
     '{"regions":[문자열],"menus":[문자열],"situations":[문자열]}\n' +
-    'regions: 검색량이 높을 법한 순서로, 지역을 폭넓게 세분화한다. 다음을 모두 포함하라 — ' +
-    '① 시/도(예: 울산), ② 구/군(예: 남구, 울산남구), ③ 동(예: 삼산동), ' +
-    '④ 지하철역·랜드마크(예: 삼산, 공업탑), ⑤ 시+구/시+동을 붙인 복합 지역명(예: 울산삼산). ' +
-    '주소의 행정구역을 반드시 활용. 최대 8개.\n' +
-    'menus: 대표 메뉴명과 업종 일반명을 폭넓게(예: 한정식, 솥밥, 갈비, 떡갈비, 대통밥). 최대 7개.\n' +
-    'situations: 방문 상황/목적(예: 점심, 저녁, 가족식사, 단체모임, 회식, 데이트, 모임). ' +
-    '편의(단체 이용 가능 등)·메뉴·업종에서 유추. 최대 5개.\n' +
+    'regions: 검색량 높을 순서로, 지역을 최대한 다양하게 생성한다. 다음 형태를 모두 포함:\n' +
+    ' ① 시/도 (예: 울산)\n' +
+    ' ② 구/군 (예: 남구) 및 시+구 (예: 울산남구)\n' +
+    ' ③ 동 (예: 삼산동) 및 시+동 (예: 울산삼산동)\n' +
+    ' ④ 동네·번화가·랜드마크명 (예: 삼산) 및 시+랜드마크 (예: 울산삼산)\n' +
+    ' ⑤ 구청·대학·터미널 등 주요 시설명 (예: 울산남구청)\n' +
+    ' ⑥ 매장 인근에 지하철역이 있으면 역명 (예: 삼산역)\n' +
+    ' 주소의 행정구역과 연관키워드를 반드시 활용. 최대 10개.\n' +
+    'menus: 대표 메뉴명과 업종 일반명을 폭넓게 (예: 한정식, 솥밥, 갈비, 떡갈비, 대통밥). 최대 6개.\n' +
+    'situations: 방문 상황/목적 (예: 점심, 저녁, 가족식사, 단체모임, 회식, 데이트). 최대 4개.\n' +
     '모든 값은 한국어 명사, 공백 없는 단일 토큰(복합 지역명 제외) 위주.';
 
   const body = {
@@ -152,91 +161,68 @@ function cleanArr(a) {
   return [...new Set(a.map((s) => String(s).trim()).filter(Boolean))];
 }
 
-// ── 후보(논리 조합) 생성 ────────────────────────────────────────────────
+// ── 조합 후보 생성 (붙여쓰기) ────────────────────────────────────────────
+// 1열(지역) × 2열(메뉴+상황) × 3열(맛집)/4열(추천)
 function buildCandidates(place, el) {
-  const regions = el.regions.slice(0, 6);
-  const menus = el.menus.slice(0, 6);
-  const situations = el.situations.slice(0, 4);
-  const addr = `${place.roadAddress || ''} ${place.address || ''}`;
+  const regions = el.regions.slice(0, 8);
+  const menus = el.menus.slice(0, 5);
+  const situations = el.situations.slice(0, 3);
+  // 2열 = 메뉴 + 상황
+  const col2 = [
+    ...menus.map((v) => ({ v, type: 'menu' })),
+    ...situations.map((v) => ({ v, type: 'situation' })),
+  ];
+
+  const addrNorm = norm(`${place.roadAddress || ''} ${place.address || ''}`);
   const catTokens = (place.category || '').split(/[,\s]+/).filter(Boolean);
 
   const seen = new Set();
   const cands = [];
   const add = (parts, meta) => {
-    const clean = parts.filter(Boolean);
-    const spaced = clean.join(' ').replace(/\s+/g, ' ').trim();
-    if (!spaced || seen.has(spaced)) return;
-    seen.add(spaced);
+    const keyword = parts.join('').replace(/\s+/g, '');
+    if (!keyword || seen.has(keyword)) return;
+    seen.add(keyword);
     const region = meta.region || '';
     cands.push({
-      spaced,
-      parts: clean,
+      keyword,
       region,
       menu: meta.menu || '',
       situation: meta.situation || '',
-      core: !!meta.core,
-      addrMatch: region ? addr.includes(region) : false,
-      catMatch: !!meta.menu || catTokens.some((t) => spaced.includes(t)),
+      addrMatch: region ? addrNorm.includes(norm(region)) : false,
+      catMatch: !!meta.menu || catTokens.some((t) => keyword.includes(t)),
     });
   };
 
-  regions.forEach((r, ri) => {
-    // 지역 × 맛집 / 추천 (상위 지역은 핵심)
-    add([r, '맛집'], { region: r, core: ri < 4 });
-    add([r, '추천'], { region: r, core: ri < 3 });
-    // 지역 × 메뉴 (+ 맛집/추천) — 대표메뉴(0번)·상위지역은 핵심
-    menus.forEach((m, mi) => {
-      add([r, m], { region: r, menu: m, core: mi === 0 && ri < 3 });
-      add([r, m, '맛집'], { region: r, menu: m, core: mi === 0 && ri < 2 });
-      add([r, m, '추천'], { region: r, menu: m });
-    });
-    // 지역 × 상황 (+ 맛집)
-    situations.forEach((s) => {
-      add([r, s], { region: r, situation: s });
-      add([r, s, '맛집'], { region: r, situation: s });
-    });
-  });
-
+  for (const r of regions) {
+    add([r, '맛집'], { region: r }); // 1×3
+    add([r, '추천'], { region: r }); // 1×4
+    for (const c of col2) {
+      const meta = { region: r, [c.type]: c.v };
+      add([r, c.v], meta); // 1×2
+      add([r, c.v, '맛집'], meta); // 1×2×3
+      add([r, c.v, '추천'], meta); // 1×2×4
+    }
+  }
   return cands;
 }
 
-// ── 선택(핵심 보존) + 붙여쓰기 한 형태 + 검색량순 정렬 ────────────────────
-// 띄어쓰기/붙여쓰기는 검색량이 같은 동일 키워드이므로 붙여쓰기 하나만 남긴다.
-function selectRows(cands) {
-  const byVol = (a, b) => (b.volume ?? -1) - (a.volume ?? -1);
-
-  // 핵심 먼저, 그다음 검색량 상위 순으로 순회하며 상한까지 채움
-  const ordered = [
-    ...cands.filter((c) => c.core).sort(byVol),
-    ...cands.filter((c) => !c.core).sort(byVol),
-  ];
-
-  const seenKw = new Set();
-  const rows = [];
-  for (const c of ordered) {
-    if (rows.length >= TARGET_MAX) break;
-    const keyword = c.parts.join(''); // 붙여쓰기 한 형태
-    if (!keyword || seenKw.has(keyword)) continue;
-    seenKw.add(keyword);
-    rows.push({
-      keyword,
-      region: c.region,
-      menu: c.menu,
-      situation: c.situation,
-      core: c.core,
-      addrMatch: c.addrMatch,
-      catMatch: c.catMatch,
-      monthlyVolume: c.volume,
-      monthlyPc: c.pc,
-      monthlyMobile: c.mobile,
-    });
-  }
-
-  // 최종 검색량순 정렬(핵심 저검색량도 목록엔 포함, 정렬만 하위로)
+// ── 검색량순 TOP N ──────────────────────────────────────────────────────
+function selectTop(cands) {
+  const rows = cands.map((c) => ({
+    keyword: c.keyword,
+    region: c.region,
+    menu: c.menu,
+    situation: c.situation,
+    addrMatch: c.addrMatch,
+    catMatch: c.catMatch,
+    monthlyVolume: c.volume,
+    monthlyPc: c.pc,
+    monthlyMobile: c.mobile,
+  }));
   rows.sort((a, b) => {
     const d = (b.monthlyVolume ?? -1) - (a.monthlyVolume ?? -1);
     if (d !== 0) return d;
     return a.keyword.localeCompare(b.keyword);
   });
-  return rows;
+  return rows.slice(0, TARGET_MAX);
 }
