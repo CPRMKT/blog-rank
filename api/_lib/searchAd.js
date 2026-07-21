@@ -26,43 +26,17 @@ function sign(timestamp, method, path, secret) {
  * @returns {Promise<Map<string, {pc:number, mobile:number, total:number}>>}
  *          키는 원본 키워드(공백 포함). 조회 실패/없음이면 해당 키 없음.
  */
-export async function fetchSearchVolumes(keywords, debug) {
-  const push = (m) => { if (debug) debug.push(m); };
+export async function fetchSearchVolumes(keywords) {
   const apiKey = (process.env.NAVER_AD_LICENSE || '').trim();
   const secret = (process.env.NAVER_AD_SECRET || '').trim();
   const customerId = (process.env.NAVER_AD_CUSTOMER_ID || '').trim();
   const result = new Map();
-  push(`creds len: LICENSE=${apiKey.length} SECRET=${secret.length} CUSTOMER=${customerId.length}(${customerId})`);
   if (!apiKey || !secret || !customerId) {
-    // 자격증명이 없으면 검색량 없이 진행(트렌드 컬럼은 null)
+    // 자격증명이 없으면 검색량 없이 진행(월 검색량 컬럼은 null)
     return result;
   }
 
   const path = '/keywordstool';
-
-  // 진단 프로브: 정상 / 스왑(라이선스↔비밀) 조합의 HTTP 상태를 비교
-  if (debug) {
-    for (const [label, key, sec] of [
-      ['normal', apiKey, secret],
-      ['swapped', secret, apiKey],
-    ]) {
-      const ts = String(Date.now());
-      try {
-        const r = await fetch(`${BASE}${path}?hintKeywords=${encodeURIComponent('맛집')}&showDetail=1`, {
-          headers: {
-            'X-Timestamp': ts,
-            'X-API-KEY': key,
-            'X-Customer': customerId,
-            'X-Signature': sign(ts, 'GET', path, sec),
-          },
-        });
-        push(`probe ${label}: HTTP ${r.status}`);
-      } catch (e) {
-        push(`probe ${label} err: ${e.message}`);
-      }
-    }
-  }
-
   const uniq = [...new Set(keywords)];
 
   // 공백 제거한 조회어 → 원본 키워드들 매핑(네이버는 공백 없는 형태로 매칭)
@@ -86,18 +60,13 @@ export async function fetchSearchVolumes(keywords, debug) {
           'X-Signature': sign(ts, 'GET', path, secret),
         },
       });
-      if (!resp.ok) {
-        push(`HTTP ${resp.status} @batch${i}: ${(await resp.text()).slice(0, 160)}`);
-        continue;
-      }
+      if (!resp.ok) continue;
       json = await resp.json();
-    } catch (e) {
-      push(`fetch err @batch${i}: ${e.message}`);
+    } catch {
       continue;
     }
 
     const list = json?.keywordList || [];
-    if (i === 0) push(`batch0 hint="${hint}" listLen=${list.length} sample=${JSON.stringify((list[0]||{}).relKeyword||null)}`);
     // 네이버 응답의 relKeyword(공백 없는 대문자)를 batch 원본과 매칭
     for (const kw of batch) {
       const target = norm(kw).toUpperCase();
