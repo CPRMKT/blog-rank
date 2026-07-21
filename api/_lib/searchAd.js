@@ -39,6 +39,30 @@ export async function fetchSearchVolumes(keywords, debug) {
   }
 
   const path = '/keywordstool';
+
+  // 진단 프로브: 정상 / 스왑(라이선스↔비밀) 조합의 HTTP 상태를 비교
+  if (debug) {
+    for (const [label, key, sec] of [
+      ['normal', apiKey, secret],
+      ['swapped', secret, apiKey],
+    ]) {
+      const ts = String(Date.now());
+      try {
+        const r = await fetch(`${BASE}${path}?hintKeywords=${encodeURIComponent('맛집')}&showDetail=1`, {
+          headers: {
+            'X-Timestamp': ts,
+            'X-API-KEY': key,
+            'X-Customer': customerId,
+            'X-Signature': sign(ts, 'GET', path, sec),
+          },
+        });
+        push(`probe ${label}: HTTP ${r.status}`);
+      } catch (e) {
+        push(`probe ${label} err: ${e.message}`);
+      }
+    }
+  }
+
   const uniq = [...new Set(keywords)];
 
   // 공백 제거한 조회어 → 원본 키워드들 매핑(네이버는 공백 없는 형태로 매칭)
