@@ -1,6 +1,7 @@
-// Express 진입점. 인증 + /scrape 라우트.
+// Express 진입점. 인증 + /scrape + /place-search 라우트.
 import express from 'express';
 import { scrapeBlogTab, initBrowser, closeBrowser } from './scraper.js';
+import { scrapePlaceSearch } from './placeSearch.js';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const API_KEY = process.env.SCRAPER_API_KEY;
@@ -50,6 +51,35 @@ app.get('/scrape', async (req, res) => {
     console.error('[scrape error]', e);
     res.status(500).json({
       error: e.message || 'scrape failed',
+      elapsedMs: Date.now() - t0,
+    });
+  }
+});
+
+// 플레이스 키워드 검색 순위(1~50위)
+app.get('/place-search', async (req, res) => {
+  const keyword = (req.query.keyword || '').toString().trim();
+  const count = parseInt(req.query.count || '50', 10);
+
+  if (!keyword) return res.status(400).json({ error: 'keyword required' });
+  if (!Number.isFinite(count) || count < 1 || count > 100) {
+    return res.status(400).json({ error: 'count must be 1~100' });
+  }
+
+  const t0 = Date.now();
+  try {
+    const items = await scrapePlaceSearch(keyword, count);
+    res.json({
+      items,
+      total: items.length,
+      method: 'playwright',
+      elapsedMs: Date.now() - t0,
+      scrapedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error('[place-search error]', e);
+    res.status(500).json({
+      error: e.message || 'place-search failed',
       elapsedMs: Date.now() - t0,
     });
   }
