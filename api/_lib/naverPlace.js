@@ -566,6 +566,42 @@ export async function fetchPlaceForKeywords(placeId, businessType = null) {
     }
   }
 
+  // 지하철역: PlaceDetailBase.station 참조 + 상태 내 모든 SubwayStationInfo
+  const subwaySeen = new Set();
+  const subwayStations = [];
+  const addStation = (obj) => {
+    if (!obj) return;
+    const displayName = obj.displayName || (obj.name ? obj.name + '역' : null);
+    if (!displayName || subwaySeen.has(displayName)) return;
+    subwaySeen.add(displayName);
+    subwayStations.push({
+      name: obj.name || displayName.replace(/역$/, ''),
+      displayName,
+      walkingDistance: obj.walkingDistance || null,
+    });
+  };
+  if (base.station && base.station.__ref) addStation(st[base.station.__ref]);
+  for (const k of Object.keys(st)) {
+    if (k.startsWith('SubwayStationInfo:')) addStation(st[k]);
+  }
+
+  // 영업시간: Apollo state에 WorkingHoursInfo로 중첩되어 최상위 엔티티가 아니므로
+  // HTML 문자열에서 직접 정규식으로 추출한다.
+  const businessHours = [];
+  const bhSeen = new Set();
+  const bhRe = /"WorkingHoursInfo","day":"([^"]+)","businessHours":\{"__typename":"StartEndTime","start":"([^"]+)","end":"([^"]+)"/g;
+  let bhm;
+  while ((bhm = bhRe.exec(html)) !== null) {
+    const key = bhm[1] + bhm[2] + bhm[3];
+    if (bhSeen.has(key)) continue;
+    bhSeen.add(key);
+    businessHours.push({ day: bhm[1], start: bhm[2], end: bhm[3] });
+    if (businessHours.length >= 10) break;
+  }
+
+  // 오시는 길(랜드마크 추출용 텍스트)
+  const directions = (base.road || '').toString().replace(/\s+/g, ' ').trim().slice(0, 400);
+
   return {
     placeId,
     name: base.name || null,
@@ -578,5 +614,8 @@ export async function fetchPlaceForKeywords(placeId, businessType = null) {
     microReviews: Array.isArray(base.microReviews) ? base.microReviews : [],
     keywordList,
     menus,
+    subwayStations,
+    businessHours,
+    directions,
   };
 }
