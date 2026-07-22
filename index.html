@@ -156,6 +156,12 @@ tr:hover td{background:#f8fbff}
 #page-suggest .chip{display:inline-block;background:#232a3a;color:#9db4ff;border-radius:6px;padding:2px 8px;font-size:11px}
 #page-suggest .trend-bar{height:6px;background:#2a2a2a;border-radius:3px;overflow:hidden;flex:0 0 56px}
 #page-suggest .trend-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4f7cff,#7c5cff)}
+/* 매장 순위 셀: 날짜 대비 변동 */
+.chg-new{color:#e67e22;font-weight:800;font-size:10px}
+.chg-up{color:#16a34a;font-weight:800;font-size:11px}
+.chg-down{color:#dc2626;font-weight:800;font-size:11px}
+.chg-flat{color:#c0c0c0;font-size:11px}
+.chg-out{color:#dc2626;font-size:10px;margin-top:3px;opacity:.85}
 /* ===== 플레이스 키워드 분석 (다크) ===== */
 #page-placerank{margin:-24px;padding:24px;background:#0a0a0a;color:#e5e5e5;min-height:calc(100vh - 0px)}
 #page-placerank .pr-title{font-size:20px;font-weight:800;color:#fff}
@@ -711,7 +717,7 @@ function toISODate(d){
 
 function getDates(){
   const dates=[];
-  for(let i=0;i<7;i++){
+  for(let i=0;i<14;i++){
     const d=new Date();d.setDate(d.getDate()-i);
     dates.push(toDateKey(d));
   }
@@ -890,18 +896,21 @@ async function selectStore(id){
   renderKeywords();
   loadKeywordVolumes(id,storeKeywords[id]); // 월 검색량 비동기 로드
 
-  // 최근 7일 순위 로드
-  const rankRes=await dbCall('get_store_rankings',{store_id:id,days:7});
+  // 최근 31일 순위 로드 (Supabase 영구 저장분)
+  const rankRes=await dbCall('get_store_rankings',{store_id:id,days:31});
   storeRankings[id]={};
   for(const r of (rankRes.result||[])){
     if(!storeRankings[id][r.keyword])storeRankings[id][r.keyword]={};
-    // checked_date를 MM/DD 형식으로 변환
-    const dateKey=new Date(r.checked_date);
-    const mmdd=toDateKey(dateKey);
+    const mmdd=toDateKey(new Date(r.checked_date));
+    // matches 컬럼(전체 블로그) 우선, 없으면 스칼라(best)로 하위호환
+    const matches=Array.isArray(r.matches)&&r.matches.length
+      ? r.matches
+      : (r.rank>0?[{rank:r.rank,url:r.matched_blog_url,title:r.matched_title}]:[]);
     storeRankings[id][r.keyword][mmdd]={
       rank:r.rank,
       matched_blog_url:r.matched_blog_url,
       matched_title:r.matched_title,
+      matches:matches,
     };
   }
   renderRankTable();
@@ -1013,38 +1022,63 @@ function renderRankTable(){
         <div class="rank-kw-title">${escapeHtml(kw)}</div>
         ${storeKwVolumes[kw]!=null?`<div class="rank-kw-vol">월 ${storeKwVolumes[kw].toLocaleString()}회</div>`:''}
       </td>
-      ${dates.map(d=>renderRankCell(kwRanks[d])).join('')}
+      ${dates.map((d,i)=>{
+        // 이 날짜보다 오래된, 데이터가 있는 가장 가까운 날짜(변동 비교용)
+        let prior=null;
+        for(let j=i+1;j<dates.length;j++){ if(kwRanks[dates[j]]){ prior=kwRanks[dates[j]]; break; } }
+        return renderRankCell(kwRanks[d],prior);
+      }).join('')}
     </tr>`;
   }).join('');
 }
 
-function renderRankCell(data){
+// 블로그 식별키(같은 포스트 판별): blogId/postId
+function blogKey(url){
+  const s=String(url||'');
+  let m=s.match(/blog\.naver\.com\/([a-zA-Z0-9_-]+)\/(\d+)/);
+  if(m)return m[1]+'/'+m[2];
+  m=s.match(/blogId=([^&]+).*?logNo=(\d+)/);
+  if(m)return m[1]+'/'+m[2];
+  return s;
+}
+
+function renderRankCell(data,prior){
+  // 데이터가 없는 날
   if(!data||data.rank===null||data.rank===undefined){
     return`<td style="text-align:center"><span class="rank-cell-miss">-</span></td>`;
   }
-  if(data.rank===0){
-    return`<td style="text-align:center"><span class="rank-cell-miss" title="1~10위 내 없음">없음</span></td>`;
+  const curMatches=Array.isArray(data.matches)?data.matches
+    :(data.rank>0?[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}]:[]);
+  const priorMatches=(prior&&Array.isArray(prior.matches))?prior.matches:[];
+  const priorRank={}; priorMatches.forEach(m=>{priorRank[blogKey(m.url)]=m.rank;});
+  const curKeys=new Set(curMatches.map(m=>blogKey(m.url)));
+  const dropped=priorMatches.filter(m=>!curKeys.has(blogKey(m.url)));
+  const dropHtml=dropped.length?`<div class="chg-out">이탈 ${dropped.map(d=>d.rank+'위').join(', ')}</div>`:'';
+
+  if(curMatches.length===0){
+    return`<td style="text-align:center"><span class="rank-cell-miss" title="30위 내 없음">없음</span>${dropHtml}</td>`;
   }
 
-  // 다중 매칭이 있으면 전부 표시
-  const matches=data.matches||[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}];
-
-  const html=matches.map(m=>{
-    const cls=m.rank<=4?'blue':'yellow';
+  const html=curMatches.slice().sort((a,b)=>a.rank-b.rank).map(m=>{
     const badgeCls=m.rank===1?'r1':m.rank===2?'r2':m.rank===3?'r3':m.rank<=10?'r10':'rn';
     const title=m.title?escapeHtml(m.title):'';
     const link=m.url?`<a href="${m.url}" target="_blank" style="text-decoration:none">`:'';
     const linkEnd=m.url?'</a>':'';
+    const pr=priorRank[blogKey(m.url)];
+    let chg='';
+    if(prior){
+      if(pr===undefined)chg='<span class="chg-new">NEW</span>';
+      else{const diff=pr-m.rank; chg=diff>0?`<span class="chg-up">▲${diff}</span>`:diff<0?`<span class="chg-down">▼${-diff}</span>`:'<span class="chg-flat">-</span>';}
+    }
     return`<div class="rank-post">
-      <span class="rank-num ${cls}">${m.rank}</span>
-      <div style="overflow:hidden">
-        ${link}<span class="badge ${badgeCls}" style="font-size:11px;padding:2px 8px">${m.rank}위</span>${linkEnd}
-        ${title?`<div style="font-size:10px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>`:''}
+      <div style="display:flex;align-items:center;gap:5px">
+        ${link}<span class="badge ${badgeCls}" style="font-size:11px;padding:2px 8px">${m.rank}위</span>${linkEnd}${chg}
       </div>
+      ${title?`<div style="font-size:10px;color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${title}">${title}</div>`:''}
     </div>`;
   }).join('');
 
-  return`<td>${html}</td>`;
+  return`<td>${html}${dropHtml}</td>`;
 }
 
 // ---------- 매장 블로그 리뷰 갱신 (플레이스 API) ----------
@@ -1122,7 +1156,7 @@ async function checkKeywordRank(storeId,keyword){
     title:(m.title||'').replace(/<[^>]+>/g,''),
   }));
 
-  // DB에 최고 순위 저장
+  // DB에 매칭된 블로그 전부 저장(best는 하위호환용 스칼라, matches에 전체 배열)
   const best=matches.length>0?matches[0]:{rank:0,url:null,title:null};
   const todayISO=toISODate(new Date());
   await dbCall('save_store_ranking',{
@@ -1133,6 +1167,7 @@ async function checkKeywordRank(storeId,keyword){
     matched_blog_url:best.url,
     matched_title:best.title,
     search_volume:searchData.total||null,
+    matches:matches,
   });
 
   // 메모리 갱신 + 리렌더

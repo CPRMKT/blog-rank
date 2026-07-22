@@ -108,6 +108,12 @@ async function main() {
               matched_blog_url: best.link || null,
               matched_title: (best.title || '').replace(/<[^>]+>/g, '') || null,
               search_volume: data.total || null,
+              // 매칭된 블로그 전부 저장 (다중 블로그 추적)
+              matches: matches.map((m) => ({
+                rank: m.rank,
+                url: m.link || m.url || '',
+                title: (m.title || '').replace(/<[^>]+>/g, ''),
+              })),
             });
             summary.saved++;
           }

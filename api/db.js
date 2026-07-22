@@ -113,13 +113,14 @@ export default async function handler(req, res) {
 
     // 매장 순위
     if (action === 'save_store_ranking') {
-      const payload = { store_id: data.store_id, keyword: data.keyword, checked_date: data.checked_date || new Date().toISOString().slice(0, 10), rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null };
+      // matches: 이 키워드에 걸린 우리 매장 블로그 전부 [{rank,url,title}, ...]
+      const payload = { store_id: data.store_id, keyword: data.keyword, checked_date: data.checked_date || new Date().toISOString().slice(0, 10), rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null, matches: Array.isArray(data.matches) ? data.matches : null };
       try { await supaFetch(`/store_rankings?store_id=eq.${payload.store_id}&keyword=eq.${encodeURIComponent(payload.keyword)}&checked_date=eq.${payload.checked_date}`, { method: 'DELETE' }); } catch {}
       const result = await supaFetch('/store_rankings', { method: 'POST', body: JSON.stringify(payload) });
       return res.status(200).json({ ok: true, result });
     }
     if (action === 'get_store_rankings') {
-      const days = data.days || 7;
+      const days = data.days || 31;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
       const result = await supaFetch(`/store_rankings?store_id=eq.${data.store_id}&checked_date=gte.${since}&order=checked_date.desc`);
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
