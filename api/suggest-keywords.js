@@ -20,8 +20,9 @@ import { fetchSearchVolumes, normalizeKeyword as norm } from './_lib/searchAd.js
 const CLAUDE_MODEL = process.env.SUGGEST_MODEL || 'claude-haiku-4-5-20251001';
 const TARGET_MAX = 80; // 최종 키워드 상한(검색량 상위)
 
-// 업종별 연관 키워드 사전 — 매장 유형 파악 시 관련 키워드 자동 확장에 사용
-const CATEGORY_DICT = `[한식/밥집] 핵심: 한식,밥집,한정식,정식,가정식,집밥,백반 | 연관: 솥밥,고기집,육류,구이,보쌈,족발,순대국
+// 업종별 연관 키워드 사전 — 업종을 food/beauty/health/retail/etc로 분류하고 관련 키워드 확장
+const CATEGORY_DICT = `# food (식음료 — 맛집/추천/회식/데이트 등 식음료 키워드 사용)
+[한식/밥집] 핵심: 한식,밥집,한정식,정식,가정식,집밥,백반 | 연관: 솥밥,고기집,육류,구이,보쌈,족발,순대국
 [고기/구이] 핵심: 고기집,삼겹살,구이,숯불,참숯 | 연관: 돼지갈비,소갈비,갈비집,막창,곱창,대창,오돌뼈 | 상황: 회식,단체,고기맛집
 [해산물/횟집] 핵심: 횟집,회,해산물,수산 | 연관: 활어,모둠회,광어,우럭,해물,조개,굴,낙지,꼴뚜기 | 상황: 회포장,회식
 [술집/포차] 핵심: 술집,포차,이자카야,선술집,호프 | 연관: 안주,맥주,소주,막걸리,와인바,칵테일 | 특이(야간): 심야,새벽,24시,늦게까지,야식 | 주의: 낮장사 안하면 점심/런치 제외
@@ -32,11 +33,54 @@ const CATEGORY_DICT = `[한식/밥집] 핵심: 한식,밥집,한정식,정식,�
 [양식] 핵심: 양식,파스타,피자,스테이크 | 연관: 리조또,샐러드,브런치,버거,샌드위치
 [치킨/배달] 핵심: 치킨,닭강정,순살,양념치킨 | 연관: 반반,후라이드,닭발,닭볶음탕
 [찜/탕/국물] 핵심: 찜,탕,국밥,해장국,설렁탕 | 연관: 갈비찜,아구찜,꽃게찜,순대국,뼈해장국,감자탕
-[냉면/국수] 핵심: 냉면,국수,막국수,칼국수 | 연관: 물냉면,비빔냉면,수육,편육`;
+[냉면/국수] 핵심: 냉면,국수,막국수,칼국수 | 연관: 물냉면,비빔냉면,수육,편육
 
-const SITUATION_COMMON =
-  '식사시간: 점심,런치,저녁,디너,야식,심야,새벽 | 모임: 회식,단체,가족모임,돌잔치,생일,기념일,상견례 | ' +
-  '관계: 데이트,부모님,친구,직장동료 | 특성: 혼밥,혼술,가성비,웨이팅,줄서는,예약필수 | 포장: 포장,테이크아웃,배달';
+# beauty (미용/뷰티 — 맛집/회식/데이트 금지. 추천/잘하는곳/가격/후기/예약/시술 사용)
+[미용/헤어샵] 핵심: 미용실,헤어샵,헤어살롱,헤어,미용 | 연관: 커트,염색,펌,매직,탈색,클리닉,두피케어 | 상황: 여성커트,남성커트,웨딩헤어,가격,예약,후기,잘하는곳,시술
+[네일/뷰티] 핵심: 네일,네일샵,속눈썹,왁싱,피부관리,에스테틱,반영구 | 상황: 예약,가격,후기,잘하는곳
+
+# health (병원/헬스 — 맛집 금지. 추천/잘하는곳/후기/비용 사용)
+[병원/의원] 핵심: 병원,의원,클리닉,한의원,치과,피부과,정형외과,이비인후과 | 상황: 잘하는곳,추천,후기,비용,예약
+[헬스/운동] 핵심: 헬스장,피트니스,요가,필라테스,PT,크로스핏,복싱 | 상황: 가격,등록,후기,추천
+
+# retail (판매/쇼핑 — 맛집 금지. 추천/매장 사용)
+[판매/쇼핑] 핵심: 매장,샵,스토어,판매점,편집샵 | 상황: 추천,가격,후기
+
+# etc (위에 없는 기타 업종 — 맛집 금지. 추천 사용)`;
+
+// 식음료(food) 상황 키워드
+const SITUATION_FOOD =
+  '식사시간: 점심,런치,저녁,디너,야식,심야 | 모임: 회식,단체,가족모임,생일,기념일,상견례 | ' +
+  '관계: 데이트,부모님,친구,직장동료 | 특성: 혼밥,혼술,가성비,웨이팅,예약필수 | 포장: 포장,테이크아웃,배달';
+// 서비스 업종(beauty/health/retail/etc) 상황 키워드
+const SITUATION_SERVICE = '예약,가격,비용,후기,잘하는곳,추천,전문,유명한곳,시술,상담';
+
+// 업종별 고정 접미어(3열/4열). food만 맛집 사용, 나머지는 맛집 금지.
+const TYPE_SUFFIX = {
+  food: ['맛집', '추천'],
+  beauty: ['추천', '잘하는곳'],
+  health: ['추천', '잘하는곳'],
+  retail: ['추천', '매장'],
+  etc: ['추천'],
+};
+const VALID_TYPES = Object.keys(TYPE_SUFFIX);
+
+// food 전용(비food에서 배제할) 상황/수식 토큰 — Claude가 실수로 넣어도 걸러냄
+const FOOD_ONLY = new Set([
+  '맛집', '회식', '데이트', '데이트맛집', '야식', '점심', '런치', '디너', '저녁',
+  '심야', '혼밥', '혼술', '브런치', '가족모임', '상견례', '고기맛집', '회포장',
+  '공부카페', '데이트카페', '감성카페', '단체', '포장', '테이크아웃', '배달',
+]);
+
+// businessType 미지정/오류 시 업종 문자열로 추정
+function inferBusinessType(category) {
+  const c = String(category || '');
+  if (/미용|헤어|네일|뷰티|피부관리|왁싱|속눈썹|에스테틱|반영구|메이크업/.test(c)) return 'beauty';
+  if (/병원|의원|한의원|치과|약국|피부과|정형|이비인후|안과|헬스|피트니스|요가|필라테스|PT|크로스핏/.test(c)) return 'health';
+  if (/마트|매장|샵|스토어|판매|편의점|쇼핑|의류|잡화/.test(c)) return 'retail';
+  if (/음식|식당|맛집|한식|중식|일식|양식|카페|커피|고기|구이|횟집|회|술집|포차|치킨|분식|국수|냉면|찜|탕|피자|파스타|베이커리|디저트|밥집|칼국수|만두|갈비|족발|보쌈|국밥/.test(c)) return 'food';
+  return 'etc';
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -113,26 +157,27 @@ async function extractElements(place) {
   };
 
   const system =
-    '너는 네이버 플레이스/블로그 검색 키워드 전략가다. 아래 [업종 키워드 사전]과 [상황 공통]을 ' +
-    '활용해, 매장 정보로 업종(매장 유형)을 파악하고 그 업종의 관련 키워드를 자동 확장한다.\n\n' +
+    '너는 네이버 플레이스/블로그 검색 키워드 전략가다. 아래 [업종 키워드 사전]을 활용해 ' +
+    '매장 유형을 분류하고, 그 업종에 맞는 키워드만 확장한다.\n\n' +
     '[업종 키워드 사전]\n' + CATEGORY_DICT + '\n\n' +
-    '[상황 공통]\n' + SITUATION_COMMON + '\n\n' +
+    '[food 상황]\n' + SITUATION_FOOD + '\n' +
+    '[서비스업 상황(beauty/health/retail/etc)]\n' + SITUATION_SERVICE + '\n\n' +
     '작업:\n' +
-    '1) 업종(업종 필드·메뉴·이름·리뷰)으로 매장 유형을 파악한다. 사전에 여러 유형이 걸치면 모두 반영.\n' +
-    '2) menus = 해당 업종 사전의 핵심·연관 키워드 + 이 매장의 실제 대표메뉴/업종 일반명. ' +
-    '이 매장에 실제로 맞는 것만 넣는다.\n' +
-    '3) situations = 업종별 상황 + [상황 공통] 중 이 매장에 맞는 것.\n' +
+    '1) businessType 분류: 매장(업종 필드·메뉴·이름·리뷰)을 food/beauty/health/retail/etc 중 하나로 정확히 판정.\n' +
+    '   - 식음료(식당/카페/술집 등)=food, 미용실/네일/피부 등=beauty, 병원/헬스=health, 판매/쇼핑=retail, 그 외=etc.\n' +
+    '2) menus = 해당 업종 사전의 핵심·연관 키워드 + 이 매장 실제 서비스/메뉴. 이 매장에 맞는 것만.\n' +
+    '   (beauty/health/retail은 "메뉴"가 아니라 서비스명. 예: 미용실→커트,염색,펌)\n' +
+    '3) situations = 업종에 맞는 상황만.\n' +
+    '   - food면 [food 상황]에서, 그 외면 [서비스업 상황]과 사전의 업종별 상황에서 고른다.\n' +
     '4) 배제 규칙(반드시 지킴):\n' +
-    '   - 낮장사 안 하는 업종(포차·이자카야·술집·호프·바 등)은 점심·런치·브런치 등 낮 시간 키워드 제외, ' +
-    '심야·야식 등 야간 키워드 우선.\n' +
-    '   - 매장 특성에 안 맞는 키워드 제외(예: 횟집에 삼겹살, 카페에 회식, 한식집에 파스타).\n' +
-    '   - 사전에 없는 업종이면 메뉴·업종에서 상식적으로 확장.\n' +
-    '5) regions = 검색량 높을 순서로 지역을 다양하게 생성. 다음 형태 모두 포함:\n' +
-    '   ① 시/도(울산) ② 구/군(남구)·시+구(울산남구) ③ 동(삼산동)·시+동(울산삼산동) ' +
-    '④ 동네·랜드마크(삼산)·시+랜드마크(울산삼산) ⑤ 구청·대학·터미널 등 시설(울산남구청) ' +
-    '⑥ 인근 지하철역명(삼산역). 주소·연관키워드를 반드시 활용.\n\n' +
+    '   ★ businessType이 food가 아니면 맛집·회식·데이트·야식·점심·런치 등 식음료 상황 키워드를 절대 넣지 마라.\n' +
+    '   - 낮장사 안 하는 food(포차·이자카야·바)는 점심·런치·브런치 제외, 심야·야식 우선.\n' +
+    '   - 매장 특성에 안 맞는 키워드 제외(횟집에 삼겹살, 카페에 회식, 미용실에 맛집 등).\n' +
+    '5) regions = 검색량 높을 순서로 지역을 다양하게: ① 시/도(울산) ② 구/군(남구)·시+구(울산남구) ' +
+    '③ 동(삼산동)·시+동(울산삼산동) ④ 동네·랜드마크(삼산)·시+랜드마크(울산삼산) ' +
+    '⑤ 구청·대학·터미널 시설(울산남구청) ⑥ 인근 지하철역명(삼산역). 주소·연관키워드 활용.\n\n' +
     '반드시 아래 JSON만 출력(설명·마크다운 금지):\n' +
-    '{"regions":[...],"menus":[...],"situations":[...]}\n' +
+    '{"businessType":"food|beauty|health|retail|etc","regions":[...],"menus":[...],"situations":[...]}\n' +
     'regions 최대 10, menus 최대 12, situations 최대 8. ' +
     '모든 값은 한국어 명사, 공백 없는 단일 토큰(복합 지역명 제외).';
 
@@ -161,7 +206,10 @@ async function extractElements(place) {
   const data = await resp.json();
   const text = (data.content || []).map((b) => b.text || '').join('').trim();
   const parsed = parseJson(text);
+  let businessType = String(parsed.businessType || '').trim().toLowerCase();
+  if (!VALID_TYPES.includes(businessType)) businessType = inferBusinessType(place.category);
   return {
+    businessType,
     regions: cleanArr(parsed.regions),
     menus: cleanArr(parsed.menus),
     situations: cleanArr(parsed.situations),
@@ -189,10 +237,19 @@ function cleanArr(a) {
 // ── 조합 후보 생성 (붙여쓰기) ────────────────────────────────────────────
 // 1열(지역) × 2열(메뉴+상황) × 3열(맛집)/4열(추천)
 function buildCandidates(place, el) {
+  const type = VALID_TYPES.includes(el.businessType) ? el.businessType : 'etc';
+  const suffixes = TYPE_SUFFIX[type]; // food만 '맛집' 포함
+  const isFood = type === 'food';
+
   const regions = el.regions.slice(0, 8);
-  const menus = el.menus.slice(0, 6);
-  const situations = el.situations.slice(0, 4);
-  // 2열 = 메뉴 + 상황
+  let menus = el.menus.slice(0, 6);
+  let situations = el.situations.slice(0, 4);
+  // 비food 업종이면 식음료 전용 토큰을 col2에서 제거(안전망)
+  if (!isFood) {
+    menus = menus.filter((v) => !FOOD_ONLY.has(v));
+    situations = situations.filter((v) => !FOOD_ONLY.has(v));
+  }
+  // 2열 = 메뉴/서비스 + 상황
   const col2 = [
     ...menus.map((v) => ({ v, type: 'menu' })),
     ...situations.map((v) => ({ v, type: 'situation' })),
@@ -219,13 +276,11 @@ function buildCandidates(place, el) {
   };
 
   for (const r of regions) {
-    add([r, '맛집'], { region: r }); // 1×3
-    add([r, '추천'], { region: r }); // 1×4
+    for (const suf of suffixes) add([r, suf], { region: r }); // 1×3, 1×4
     for (const c of col2) {
       const meta = { region: r, [c.type]: c.v };
       add([r, c.v], meta); // 1×2
-      add([r, c.v, '맛집'], meta); // 1×2×3
-      add([r, c.v, '추천'], meta); // 1×2×4
+      for (const suf of suffixes) add([r, c.v, suf], meta); // 1×2×3, 1×2×4
     }
   }
   return cands;
