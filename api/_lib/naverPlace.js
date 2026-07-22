@@ -349,6 +349,7 @@ export async function fetchPlaceDetail(placeId, businessType = null) {
     address: detail.address || null,
     phone: detail.virtualPhone || detail.phone || null,
     visitorReviewsTotal: detail.visitorReviewsTotal || 0,
+    cafeBlogReviewsTotal: detail.cafeBlogReviewsTotal || 0,
   };
 }
 

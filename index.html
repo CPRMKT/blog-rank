@@ -739,20 +739,16 @@ async function loadStores(){
   if(!res.ok){console.error('매장 목록 로드 실패');return;}
   stores=Array.isArray(res.result)?res.result:[];
   renderStoreDropdown();
-  // 선택된 매장이 없으면 첫 번째 매장 선택
-  if(!curStoreId&&stores.length>0){
-    selectStore(stores[0].id);
-  }else if(curStoreId){
-    // 현재 선택된 매장이 여전히 존재하면 다시 렌더
-    const exists=stores.find(s=>s.id===curStoreId);
-    if(exists){
-      renderStoreMeta(exists);
-    }else{
-      curStoreId=null;
-      document.getElementById('storeHeaderName').textContent='매장 선택';
-      document.getElementById('storeMeta').style.display='none';
-      renderKeywords();renderRankTable();
-    }
+  // 자동 선택하지 않음 — 사용자가 드롭다운에서 직접 매장을 선택해야 함.
+  const exists=curStoreId?stores.find(s=>s.id===curStoreId):null;
+  if(exists){
+    renderStoreMeta(exists);
+  }else{
+    // 미선택(또는 선택했던 매장이 삭제됨) → 플레이스홀더 상태
+    curStoreId=null;
+    document.getElementById('storeHeaderName').textContent='매장 선택';
+    document.getElementById('storeMeta').style.display='none';
+    renderKeywords();renderRankTable();
   }
 }
 
@@ -927,17 +923,23 @@ function renderStoreMeta(store){
   metaEl.style.display='';
   document.getElementById('metaAddress').textContent=store.address||'-';
   document.getElementById('metaCategory').textContent=store.category||'-';
-  // 블로그 리뷰 개수는 별도 조회 (async)
-  dbCall('get_store_blog_posts',{store_id:store.id}).then(res=>{
-    const count=res.posts?.length||0;
-    const fetchedAt=res.fetch_meta?.fetched_at;
-    let txt=`블로그 리뷰 ${count}개`;
-    if(fetchedAt){
-      const hoursAgo=Math.floor((Date.now()-new Date(fetchedAt).getTime())/3600000);
-      txt+=` · ${hoursAgo<1?'방금':(hoursAgo+'시간 전')} 갱신`;
-    }
-    document.getElementById('metaReviews').textContent=txt;
-  });
+  // 방문자리뷰/블로그리뷰 수를 네이버 플레이스에서 실시간 조회해 정확히 표시
+  const metaEls=document.getElementById('metaReviews');
+  metaEls.textContent='리뷰 조회 중...';
+  const sid=store.id;
+  fetch(`/api/place?placeId=${encodeURIComponent(store.place_id)}&action=detail`)
+    .then(r=>r.json())
+    .then(res=>{
+      if(curStoreId!==sid)return; // 그 사이 다른 매장 선택됐으면 무시
+      if(res.ok&&res.detail){
+        const v=Number(res.detail.visitorReviewsTotal)||0;
+        const b=Number(res.detail.cafeBlogReviewsTotal)||0;
+        metaEls.textContent=`방문자리뷰 ${v.toLocaleString()} · 블로그리뷰 ${b.toLocaleString()}`;
+      }else{
+        metaEls.textContent='리뷰 조회 실패';
+      }
+    })
+    .catch(()=>{ if(curStoreId===sid) metaEls.textContent='리뷰 조회 실패'; });
 }
 
 // ---------- 키워드 관리 ----------
