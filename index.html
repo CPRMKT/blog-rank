@@ -156,6 +156,34 @@ tr:hover td{background:#f8fbff}
 #page-suggest .chip{display:inline-block;background:#232a3a;color:#9db4ff;border-radius:6px;padding:2px 8px;font-size:11px}
 #page-suggest .trend-bar{height:6px;background:#2a2a2a;border-radius:3px;overflow:hidden;flex:0 0 56px}
 #page-suggest .trend-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4f7cff,#7c5cff)}
+/* ===== 플레이스 키워드 분석 (다크) ===== */
+#page-placerank{margin:-24px;padding:24px;background:#0a0a0a;color:#e5e5e5;min-height:calc(100vh - 0px)}
+#page-placerank .pr-title{font-size:20px;font-weight:800;color:#fff}
+#page-placerank .pr-sub{font-size:12px;color:#8a8a8a;margin-top:4px}
+#page-placerank .pr-tabs{display:flex;gap:8px;margin:18px 0 4px}
+#page-placerank .pr-tab{padding:8px 18px;border-radius:20px;border:1px solid #2a2a2a;background:#141414;color:#999;font-size:13px;font-weight:700;cursor:pointer}
+#page-placerank .pr-tab.active{background:#4f7cff;border-color:#4f7cff;color:#fff}
+#page-placerank .pr-card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;padding:18px;margin-top:16px}
+#page-placerank input[type=text],#page-placerank select{background:#0f0f0f;border:1px solid #333;color:#eee;border-radius:8px;padding:10px 12px;font-size:13px;outline:none}
+#page-placerank input[type=text]:focus{border-color:#4f7cff}
+#page-placerank .pr-btn{background:#4f7cff;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:13px;white-space:nowrap}
+#page-placerank .pr-btn.ghost{background:#2a2a2a;color:#ccc}
+#page-placerank .pr-btn:disabled{opacity:.5;cursor:default}
+#page-placerank .pr-dates{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+#page-placerank .pr-date{padding:6px 12px;border-radius:16px;border:1px solid #2a2a2a;background:#141414;color:#999;font-size:12px;cursor:pointer}
+#page-placerank .pr-date.active{background:#232a3a;border-color:#4f7cff;color:#9db4ff;font-weight:700}
+#page-placerank table{width:100%;border-collapse:collapse;font-size:12px;color:#ddd;min-width:640px}
+#page-placerank thead th{background:#141414;color:#8a8a8a;text-align:left;padding:9px 8px;font-weight:600;border-bottom:1px solid #2a2a2a}
+#page-placerank tbody td{padding:9px 8px;border-top:1px solid #202020}
+#page-placerank tbody tr.mine td{background:#182a1a}
+#page-placerank tbody tr.mine td:nth-child(2){color:#7ee787;font-weight:800}
+#page-placerank .pr-rank{font-weight:800;color:#fff}
+#page-placerank .up{color:#4ade80;font-weight:800}
+#page-placerank .down{color:#f87171;font-weight:800}
+#page-placerank .flat{color:#666}
+#page-placerank .pr-new{color:#fbbf24;font-weight:700}
+#page-placerank a.pr-link{color:#6b9bff;text-decoration:none}
+#page-placerank .pr-empty{color:#777;text-align:center;padding:28px}
 </style>
 </head>
 <body>
@@ -174,6 +202,9 @@ tr:hover td{background:#f8fbff}
     </div>
     <div class="menu-item" id="menu-suggest" onclick="showPage('suggest')">
       <span class="icon">💡</span> 키워드 제안
+    </div>
+    <div class="menu-item" id="menu-placerank" onclick="showPage('placerank')">
+      <span class="icon">🔎</span> 플레이스 키워드 분석
     </div>
   </div>
 </div>
@@ -368,6 +399,56 @@ tr:hover td{background:#f8fbff}
     </div>
   </div>
 
+  <!-- ============================================= -->
+  <!-- 플레이스 키워드 분석 -->
+  <!-- ============================================= -->
+  <div id="page-placerank" style="display:none">
+    <div class="pr-title">🔎 플레이스 키워드 분석</div>
+    <div class="pr-sub">네이버 플레이스 검색 순위(1~50위)를 확인하고, 날짜별 변동을 추적합니다</div>
+    <div class="pr-tabs">
+      <div class="pr-tab active" id="prTabLive" onclick="prSwitch('live')">실시간 랭킹</div>
+      <div class="pr-tab" id="prTabCompare" onclick="prSwitch('compare')">비교 분석</div>
+    </div>
+
+    <div id="prLive">
+      <div class="pr-card">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="prKw" placeholder="키워드 입력 (예: 강남 맛집)" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')prLiveSearch()">
+          <button class="pr-btn" id="prSearchBtn" onclick="prLiveSearch()">검색</button>
+          <button class="pr-btn ghost" id="prAddBtn" onclick="prAddKeyword()">＋ 추적에 추가</button>
+        </div>
+        <div id="prErr" style="display:none;color:#ff6b6b;font-size:12px;margin-top:8px"></div>
+      </div>
+      <div class="pr-card" id="prLiveResult" style="display:none">
+        <div style="font-size:13px;color:#aaa;margin-bottom:10px" id="prLiveInfo"></div>
+        <div style="overflow-x:auto">
+          <table><thead><tr>
+            <th style="width:48px">순위</th><th>매장명</th><th>업종</th>
+            <th style="text-align:right">방문자리뷰</th><th style="text-align:right">블로그</th><th style="width:56px">링크</th>
+          </tr></thead><tbody id="prLiveBody"></tbody></table>
+        </div>
+        <div style="font-size:11px;color:#777;margin-top:10px">※ 초록 하이라이트 = 등록된 우리 매장</div>
+      </div>
+    </div>
+
+    <div id="prCompare" style="display:none">
+      <div class="pr-card">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="prCmpKw" onchange="prLoadCompare()" style="min-width:200px"></select>
+          <span style="font-size:12px;color:#888">추적 키워드 선택 → 오늘 vs 과거 순위 비교</span>
+        </div>
+        <div class="pr-dates" id="prDateTabs"></div>
+      </div>
+      <div class="pr-card">
+        <div class="pr-empty" id="prCmpEmpty">추적 키워드를 선택하세요. (매일 새벽 6시 자동 수집 데이터가 쌓이면 비교됩니다)</div>
+        <div style="overflow-x:auto"><table id="prCmpTable" style="display:none"><thead><tr>
+          <th style="width:48px">순위</th><th>매장명</th><th>업종</th>
+          <th style="text-align:right">방문자리뷰</th><th style="text-align:right">블로그</th><th style="width:70px">변동</th>
+        </tr></thead><tbody id="prCmpBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -379,11 +460,12 @@ async function dbCall(action,data){
 }
 
 function showPage(page){
-  ['post','store','suggest'].forEach(p=>{
+  ['post','store','suggest','placerank'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
   if(page==='store') loadStores();
+  if(page==='placerank') initPlaceRank();
 }
 
 function toggleDropdown(){
@@ -1242,6 +1324,97 @@ async function addSuggestToTracking(){
     alert(`"${store.name}"에 키워드 ${added}개 추가${skipped?` (중복 ${skipped}개 제외)`:''} 완료.\n'매장 블로그 순위' 탭에서 확인하세요.`);
   }catch(e){ alert('추가 오류: '+e.message); }
   finally{ btn.disabled=false; btn.textContent='선택 항목 순위 추적에 추가'; }
+}
+// ===== 플레이스 키워드 분석 =====
+let prKeywords=[]; let prCmpData={dates:[],byDate:{}}; let prSelectedBaseline=5; let prPlaceInit=false;
+function prEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function prFmt(n){return (Number(n)||0).toLocaleString();}
+function prMyPlaceIds(){return new Set((stores||[]).map(s=>String(s.place_id)));}
+
+async function initPlaceRank(){
+  if(!Array.isArray(stores)||stores.length===0){ try{const r=await dbCall('list_stores',{}); if(r&&r.result)stores=r.result;}catch(e){} }
+  await loadPlaceKeywords();
+}
+async function loadPlaceKeywords(){
+  const r=await dbCall('list_place_keywords',{});
+  prKeywords=(r&&r.result?r.result:[]).map(k=>k.keyword);
+  const sel=document.getElementById('prCmpKw');
+  sel.innerHTML=prKeywords.length?prKeywords.map(k=>`<option value="${prEsc(k)}">${prEsc(k)}</option>`).join(''):'<option value="">추적 키워드 없음</option>';
+}
+function prSwitch(tab){
+  document.getElementById('prTabLive').classList.toggle('active',tab==='live');
+  document.getElementById('prTabCompare').classList.toggle('active',tab==='compare');
+  document.getElementById('prLive').style.display=tab==='live'?'':'none';
+  document.getElementById('prCompare').style.display=tab==='compare'?'':'none';
+  if(tab==='compare'&&prKeywords.length) prLoadCompare();
+}
+async function prLiveSearch(){
+  const kw=document.getElementById('prKw').value.trim();
+  const err=document.getElementById('prErr'); err.style.display='none';
+  if(!kw){err.textContent='키워드를 입력하세요';err.style.display='block';return;}
+  const btn=document.getElementById('prSearchBtn'); btn.disabled=true; btn.textContent='검색 중...';
+  try{
+    const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=50`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'검색 실패');
+    prRenderLive(kw,data.items||[]);
+  }catch(e){ err.textContent='오류: '+e.message; err.style.display='block'; }
+  finally{ btn.disabled=false; btn.textContent='검색'; }
+}
+function prRenderLive(kw,items){
+  document.getElementById('prLiveResult').style.display='';
+  const mine=prMyPlaceIds();
+  const hit=items.filter(it=>mine.has(String(it.placeId)));
+  document.getElementById('prLiveInfo').textContent=`"${kw}" 검색 결과 ${items.length}곳`+(hit.length?` · 우리 매장 ${hit.map(h=>h.rank+'위').join(', ')}`:' · 우리 매장 없음');
+  document.getElementById('prLiveBody').innerHTML=items.map(it=>`
+    <tr class="${mine.has(String(it.placeId))?'mine':''}">
+      <td class="pr-rank">${it.rank}</td><td>${prEsc(it.name)}</td><td>${prEsc(it.category)||'-'}</td>
+      <td style="text-align:right">${prFmt(it.visitorReviews)}</td><td style="text-align:right">${prFmt(it.blogReviews)}</td>
+      <td><a class="pr-link" href="${it.placeUrl}" target="_blank">↗</a></td>
+    </tr>`).join('');
+}
+async function prAddKeyword(){
+  const kw=document.getElementById('prKw').value.trim();
+  if(!kw){alert('키워드를 입력하세요');return;}
+  const r=await dbCall('add_place_keyword',{keyword:kw});
+  if(r&&r.ok){ await loadPlaceKeywords(); alert(`"${kw}"를 추적에 추가했습니다.\n매일 새벽 6시에 자동 수집됩니다.`); }
+  else alert('추가 실패: '+((r&&r.error)||''));
+}
+async function prLoadCompare(){
+  const kw=document.getElementById('prCmpKw').value;
+  const empty=document.getElementById('prCmpEmpty'); const table=document.getElementById('prCmpTable');
+  if(!kw){ empty.style.display=''; table.style.display='none'; empty.textContent='추적 키워드가 없습니다. 실시간 랭킹에서 "추적에 추가"하세요.'; document.getElementById('prDateTabs').innerHTML=''; return; }
+  const r=await dbCall('get_place_rankings',{keyword:kw,days:31});
+  const rows=r&&r.result?r.result:[];
+  const byDate={}; for(const row of rows){ (byDate[row.checked_date]=byDate[row.checked_date]||[]).push(row); }
+  prCmpData={kw,byDate,dates:Object.keys(byDate).sort().reverse()};
+  renderPrDateTabs();
+  if(prCmpData.dates.length===0){ empty.style.display=''; table.style.display='none'; empty.textContent='아직 수집된 데이터가 없습니다. 내일 새벽 6시 이후 다시 확인하세요.'; return; }
+  prRenderCompare(prSelectedBaseline);
+}
+function renderPrDateTabs(){
+  document.getElementById('prDateTabs').innerHTML=[1,5,10,20,30].map(d=>`<div class="pr-date ${d===prSelectedBaseline?'active':''}" onclick="prSelectedBaseline=${d};renderPrDateTabs();prRenderCompare(${d})">${d}일전</div>`).join('');
+}
+function prFindBaselineDate(daysAgo){
+  const target=new Date(Date.now()-daysAgo*86400000).toISOString().slice(0,10);
+  for(const d of prCmpData.dates){ if(d<=target) return d; }
+  return prCmpData.dates[prCmpData.dates.length-1]; // 없으면 가장 오래된 것
+}
+function prRenderCompare(daysAgo){
+  const empty=document.getElementById('prCmpEmpty'); const table=document.getElementById('prCmpTable');
+  const today=prCmpData.dates[0];
+  const todayList=(prCmpData.byDate[today]||[]).slice().sort((a,b)=>a.rank-b.rank);
+  const baseDate=prFindBaselineDate(daysAgo);
+  const baseRank={}; if(baseDate&&baseDate!==today){ for(const r of prCmpData.byDate[baseDate]) baseRank[String(r.place_id)]=r.rank; }
+  empty.style.display='none'; table.style.display='';
+  const mine=prMyPlaceIds();
+  document.getElementById('prCmpBody').innerHTML=todayList.map(r=>{
+    const pid=String(r.place_id); const prev=baseRank[pid]; let chg;
+    if(!baseDate||baseDate===today) chg='<span class="flat">-</span>';
+    else if(prev===undefined) chg='<span class="pr-new">NEW</span>';
+    else{ const diff=prev-r.rank; chg=diff>0?`<span class="up">▲${diff}</span>`:diff<0?`<span class="down">▼${-diff}</span>`:'<span class="flat">-</span>'; }
+    return `<tr class="${mine.has(pid)?'mine':''}"><td class="pr-rank">${r.rank}</td><td>${prEsc(r.name)}</td><td>${prEsc(r.category)||'-'}</td><td style="text-align:right">${prFmt(r.visitor_reviews)}</td><td style="text-align:right">${prFmt(r.blog_reviews)}</td><td>${chg}</td></tr>`;
+  }).join('');
 }
 </script>
 </body>
