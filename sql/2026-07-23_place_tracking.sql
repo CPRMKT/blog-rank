@@ -24,7 +24,8 @@ drop policy if exists "spk auth all" on store_place_keywords;
 create policy "spk auth all" on store_place_keywords
   for all to authenticated using (true) with check (true);
 
-grant all on store_place_keywords to anon, authenticated;
+-- service_role 포함(앱 서버가 사용하는 SUPABASE_SECRET_KEY 역할). 셋 다 부여해야 안전.
+grant all on table store_place_keywords to anon, authenticated, service_role;
 
 -- 2) 플레이스 순위 스냅샷(place_rankings)에 저장수(북마크) 컬럼 추가
 --    네이버 표기 기준(100·1,000 단위 반올림) 정수. 미수집이면 null.
