@@ -42,9 +42,15 @@ async function main() {
   const summary = { keywords: 0, saved: 0, errors: 0 };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
-    const kwRes = await dbCall('list_place_keywords');
-    const keywords = ((kwRes && kwRes.result) || []).map((k) => k.keyword);
-    log(`추적 키워드 ${keywords.length}개`);
+    // 전역 추적 키워드(place_keywords) + 매장별 추적 키워드(store_place_keywords) 합집합
+    const [globalRes, storeRes] = await Promise.all([
+      dbCall('list_place_keywords').catch(() => null),
+      dbCall('list_all_store_place_keywords').catch(() => null),
+    ]);
+    const globalKws = ((globalRes && globalRes.result) || []).map((k) => k.keyword);
+    const storeKws = (storeRes && storeRes.result) || []; // 이미 distinct keyword 문자열 배열
+    const keywords = [...new Set([...globalKws, ...storeKws].map((s) => String(s || '').trim()).filter(Boolean))];
+    log(`추적 키워드 ${keywords.length}개 (전역 ${globalKws.length} + 매장 ${storeKws.length})`);
 
     for (const keyword of keywords) {
       summary.keywords++;

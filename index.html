@@ -233,6 +233,34 @@ tr:hover td{background:var(--surface-3)}
 #page-placerank a.pr-link{color:var(--brand);text-decoration:none}
 #page-placerank .pr-empty{color:var(--muted);text-align:center;padding:28px}
 
+/* ============ 플레이스 순위 추적 (매장 중심) ============ */
+#page-placetrack select{min-width:220px}
+.pt-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.pt-tag{display:inline-flex;align-items:center;gap:7px;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--r-chip);padding:6px 10px;font-size:12.5px;color:var(--ink);font-weight:600}
+.pt-tag .del{cursor:pointer;color:var(--faint);font-weight:700}
+.pt-tag .del:hover{color:var(--bad)}
+.pt-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);font-weight:600;cursor:pointer;user-select:none}
+.pt-toggle input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+.pt-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px;color:var(--muted);font-weight:600}
+.pt-legend .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.pt-tblwrap{overflow-x:auto}
+#page-placetrack table.pt{border-collapse:collapse;width:100%;font-size:12.5px;color:var(--text)}
+#page-placetrack table.pt th,#page-placetrack table.pt td{border-top:1px solid var(--line-2);padding:9px 12px;text-align:center;white-space:nowrap}
+#page-placetrack table.pt thead th{background:var(--surface-2);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-top:none;border-bottom:1px solid var(--line);position:sticky;top:0}
+#page-placetrack table.pt th.kw,#page-placetrack table.pt td.kw{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;color:var(--ink);z-index:1;min-width:150px;box-shadow:1px 0 0 var(--line-2)}
+#page-placetrack table.pt thead th.kw{background:var(--surface-2);z-index:2}
+.pt-rank{font-weight:800;font-variant-numeric:tabular-nums}
+.pt-rank.t1{color:#b5790f}.pt-rank.t2{color:var(--brand-ink)}.pt-rank.t3{color:var(--text)}.pt-rank.t4{color:var(--muted)}.pt-rank.none{color:var(--faint);font-weight:600}
+.pt-chg{font-size:10.5px;font-weight:700;margin-left:3px;vertical-align:middle}
+.pt-chg.up{color:var(--ok)}.pt-chg.down{color:var(--bad)}.pt-chg.flat{color:var(--faint)}.pt-chg.new{color:var(--warn)}
+.pt-cell{display:flex;flex-direction:column;gap:2px;align-items:center;line-height:1.35}
+.pt-cell .m{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px}
+.pt-cell .m.rank{color:var(--ink);font-weight:800}
+.pt-cell .m.save{color:var(--bad)}
+.pt-cell .m.vr{color:var(--brand)}
+.pt-cell .m.br{color:var(--ok)}
+.pt-empty{text-align:center;color:var(--muted);padding:28px;font-size:13px}
+
 /* ============ 홈 (랜딩) ============ */
 #page-home{padding:var(--sp-3)}
 .home-hero{display:grid;grid-template-columns:1.05fr .95fr;gap:var(--sp-3);align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-3);box-shadow:var(--sh)}
@@ -296,6 +324,9 @@ tr:hover td{background:var(--surface-3)}
     </div>
     <div class="menu-item" id="menu-store" onclick="showPage('store')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 5.2 5h13.6L20 9.5"/><path d="M4.6 9.5a2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0"/><path d="M5.5 11v8h13v-8"/><path d="M10 19v-4.5h4V19"/></svg> 매장 블로그 순위
+    </div>
+    <div class="menu-item" id="menu-placetrack" onclick="showPage('placetrack')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/><path d="M4 20.5h16"/></svg> 플레이스 순위 추적
     </div>
     <div class="menu-item" id="menu-suggest" onclick="showPage('suggest')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4c.7 3.6 2.7 5.6 6.2 6.2-3.5.7-5.5 2.7-6.2 6.2-.7-3.5-2.7-5.5-6.2-6.2C9.3 9.6 11.3 7.6 12 4Z"/></svg> 키워드 제안
@@ -578,6 +609,64 @@ tr:hover td{background:var(--surface-3)}
   </div>
 
   <!-- ============================================= -->
+  <!-- 플레이스 순위 추적 (매장 중심) -->
+  <!-- ============================================= -->
+  <div id="page-placetrack" style="display:none">
+    <div class="main">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
+        <div>
+          <div class="h-lg">📍 플레이스 순위 추적</div>
+          <div class="card-sub" style="margin:5px 0 0">매장별로 키워드를 등록하고, 네이버 플레이스 검색 순위·저장·리뷰를 날짜별로 추적합니다.</div>
+        </div>
+        <select id="ptStoreSel" onchange="ptSelectStore(this.value)"></select>
+      </div>
+
+      <div id="ptNoStore" class="card" style="display:none">
+        <div class="pt-empty">등록된 매장이 없습니다. <b>매장 블로그 순위</b> 탭에서 먼저 매장을 추가하세요.</div>
+      </div>
+
+      <div id="ptBody" style="display:none">
+        <div class="card">
+          <div class="card-title">플레이스 순위 확인할 키워드 등록</div>
+          <div class="card-sub">키워드별 네이버 플레이스 검색 순위를 매일 추적합니다 (최대 20개)</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="ptKwInput" placeholder="키워드 입력 (지역+업종 / 예: 강남 맛집, 수영역 칼국수)" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')ptAddKeyword()">
+            <button class="btn primary" id="ptAddBtn" onclick="ptAddKeyword()">등록</button>
+            <span id="ptKwCount" style="font-size:12px;color:var(--muted);white-space:nowrap">0/20</span>
+          </div>
+          <div class="pt-tags" id="ptKwTags"><span style="color:var(--faint);font-size:12.5px">등록된 키워드가 없습니다</span></div>
+          <div id="ptKwErr" style="display:none;color:var(--bad);font-size:12px;margin-top:8px"></div>
+        </div>
+
+        <div class="card">
+          <div class="topbar" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+            <div>
+              <div class="card-title">날짜별 순위 추적</div>
+              <div class="card-sub" style="margin:2px 0 0">키워드별 우리 매장 순위 변화. 상세 보기를 켜면 저장·방문자리뷰·블로그 지표도 함께 봅니다.</div>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <label class="pt-toggle"><input type="checkbox" id="ptDetail" onchange="ptRenderTable()"><span>지표 상세</span></label>
+              <button class="btn sm" id="ptRefreshBtn" onclick="ptCollectNow()">지금 수집</button>
+            </div>
+          </div>
+          <div id="ptLegend" class="pt-legend" style="display:none">
+            <span><i class="dot" style="background:var(--ink)"></i>순위</span>
+            <span><i class="dot" style="background:var(--bad)"></i>저장</span>
+            <span><i class="dot" style="background:var(--brand)"></i>방문자리뷰</span>
+            <span><i class="dot" style="background:var(--ok)"></i>블로그</span>
+          </div>
+          <div id="ptTableWrap" class="pt-tblwrap"><div class="pt-empty">키워드를 등록하면 순위 추적이 시작됩니다.</div></div>
+        </div>
+
+        <div class="notice" style="font-size:12px;color:var(--muted);line-height:1.7;padding:14px 16px;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--r-card)">
+          플레이스 순위는 매일 새벽·저녁에 자동 수집됩니다. <b>지금 수집</b>을 누르면 오늘 순위를 즉시 반영합니다.<br>
+          우리 매장이 검색 50위 밖이면 해당 날짜는 <b>미노출(-)</b>로 표시됩니다. 저장수는 네이버 표기 기준(100·1,000 단위 반올림)입니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
   <!-- 플레이스 키워드 분석 -->
   <!-- ============================================= -->
   <div id="page-placerank" style="display:none">
@@ -638,11 +727,12 @@ async function dbCall(action,data){
 }
 
 function showPage(page){
-  ['home','post','store','suggest','placerank'].forEach(p=>{
+  ['home','post','store','suggest','placetrack','placerank'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
   if(page==='store') loadStores();
+  if(page==='placetrack') initPlaceTrack();
   if(page==='placerank') initPlaceRank();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
 }
@@ -1636,6 +1726,139 @@ function prRenderCompare(daysAgo){
     return `<tr class="${mine.has(pid)?'mine':''}"><td class="pr-rank">${r.rank}</td><td>${prEsc(r.name)}</td><td>${prEsc(r.category)||'-'}</td><td style="text-align:right">${prFmt(r.visitor_reviews)}</td><td style="text-align:right">${prFmt(r.blog_reviews)}</td><td>${chg}</td></tr>`;
   }).join('');
 }
+
+// ============================================================
+// 플레이스 순위 추적 (매장 중심)
+// ============================================================
+const PT_MAX_KW=20; const PT_MAX_COLS=14;
+let ptStoreId=null; let ptKeywords=[]; let ptRows=[];
+function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
+
+async function initPlaceTrack(){
+  if(!Array.isArray(stores)||stores.length===0){
+    const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result;
+  }
+  const sel=document.getElementById('ptStoreSel');
+  if(!stores||stores.length===0){
+    document.getElementById('ptNoStore').style.display='';
+    document.getElementById('ptBody').style.display='none';
+    sel.innerHTML='<option value="">매장 없음</option>';
+    return;
+  }
+  document.getElementById('ptNoStore').style.display='none';
+  document.getElementById('ptBody').style.display='';
+  // 이전 선택 유지, 없으면 첫 매장
+  if(!ptStore()) ptStoreId=stores[0].id;
+  sel.innerHTML=stores.map(s=>`<option value="${s.id}"${String(s.id)===String(ptStoreId)?' selected':''}>${escapeHtml(s.name)}</option>`).join('');
+  await ptLoad();
+}
+
+async function ptSelectStore(id){ ptStoreId=id; await ptLoad(); }
+
+async function ptLoad(){
+  // 키워드 목록
+  const kr=await dbCall('list_store_place_keywords',{store_id:ptStoreId});
+  ptKeywords=(kr&&kr.result?kr.result:[]).map(k=>k.keyword);
+  ptRenderTags();
+  // 순위 이력(우리 매장 행만)
+  const st=ptStore();
+  if(st && ptKeywords.length){
+    const rr=await dbCall('get_store_place_rankings',{place_id:st.place_id,keywords:ptKeywords,days:31});
+    ptRows=(rr&&rr.result)?rr.result:[];
+  }else{ ptRows=[]; }
+  ptRenderTable();
+}
+
+function ptRenderTags(){
+  const wrap=document.getElementById('ptKwTags');
+  document.getElementById('ptKwCount').textContent=`${ptKeywords.length}/${PT_MAX_KW}`;
+  if(ptKeywords.length===0){ wrap.innerHTML='<span style="color:var(--faint);font-size:12.5px">등록된 키워드가 없습니다</span>'; return; }
+  wrap.innerHTML=ptKeywords.map(k=>`<span class="pt-tag">${escapeHtml(k)}<span class="del" onclick="ptRemoveKeyword('${k.replace(/'/g,"\\'")}')">✕</span></span>`).join('');
+}
+
+function ptErr(msg){ const e=document.getElementById('ptKwErr'); if(!msg){e.style.display='none';return;} e.textContent=msg; e.style.display='block'; }
+
+async function ptAddKeyword(){
+  ptErr('');
+  const inp=document.getElementById('ptKwInput'); const kw=inp.value.trim();
+  if(!kw) return;
+  if(ptKeywords.length>=PT_MAX_KW){ ptErr(`키워드는 최대 ${PT_MAX_KW}개까지 등록할 수 있습니다.`); return; }
+  if(ptKeywords.includes(kw)){ ptErr('이미 등록된 키워드입니다.'); inp.value=''; return; }
+  const btn=document.getElementById('ptAddBtn'); btn.disabled=true; btn.textContent='등록 중...';
+  const r=await dbCall('add_store_place_keyword',{store_id:ptStoreId,keyword:kw});
+  if(!r||!r.ok){ ptErr('등록 실패: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='등록'; return; }
+  inp.value='';
+  ptKeywords.push(kw); ptRenderTags();
+  // 오늘 순위 즉시 수집
+  btn.textContent='순위 수집 중...';
+  await ptCollectKeyword(kw);
+  await ptLoad();
+  btn.disabled=false; btn.textContent='등록';
+}
+
+async function ptRemoveKeyword(kw){
+  if(!confirm(`"${kw}" 키워드를 추적에서 삭제할까요?`)) return;
+  await dbCall('delete_store_place_keyword',{store_id:ptStoreId,keyword:kw});
+  await ptLoad();
+}
+
+// 키워드 1개: 라이브 검색 → 오늘 스냅샷 저장(전 상위50, 저장수 포함)
+async function ptCollectKeyword(kw){
+  try{
+    const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=50`);
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'검색 실패');
+    await dbCall('save_place_rankings',{keyword:kw,rows:data.items||[]});
+    return true;
+  }catch(e){ console.warn('ptCollectKeyword',kw,e.message); return false; }
+}
+
+async function ptCollectNow(){
+  if(!ptKeywords.length){ ptErr('먼저 키워드를 등록하세요.'); return; }
+  const btn=document.getElementById('ptRefreshBtn'); btn.disabled=true;
+  let done=0;
+  for(const kw of ptKeywords){ btn.textContent=`수집 중 ${++done}/${ptKeywords.length}`; await ptCollectKeyword(kw); }
+  await ptLoad();
+  btn.disabled=false; btn.textContent='지금 수집';
+}
+
+function ptRankTier(rank){ if(rank<=1)return't1'; if(rank<=5)return't2'; if(rank<=10)return't3'; return't4'; }
+
+function ptRenderTable(){
+  const wrap=document.getElementById('ptTableWrap');
+  const detail=document.getElementById('ptDetail').checked;
+  document.getElementById('ptLegend').style.display=detail?'flex':'none';
+  if(!ptKeywords.length){ wrap.innerHTML='<div class="pt-empty">키워드를 등록하면 순위 추적이 시작됩니다.</div>'; return; }
+  // keyword -> date -> row
+  const map={}; const dateSet=new Set();
+  for(const kw of ptKeywords) map[kw]={};
+  for(const r of ptRows){ if(!(r.keyword in map)) continue; map[r.keyword][r.checked_date]=r; dateSet.add(r.checked_date); }
+  const dates=[...dateSet].sort().reverse().slice(0,PT_MAX_COLS);
+  if(dates.length===0){ wrap.innerHTML='<div class="pt-empty">아직 수집된 순위가 없습니다. <b>지금 수집</b>을 누르거나 자동 수집(새벽·저녁)을 기다리세요.</div>'; return; }
+  const fmtDate=d=>{ const [,m,day]=d.split('-'); return `${+m}/${+day}`; };
+  const head=`<tr><th class="kw">키워드</th>${dates.map(d=>`<th>${fmtDate(d)}</th>`).join('')}</tr>`;
+  const body=ptKeywords.map(kw=>{
+    const cells=dates.map((d,i)=>{
+      const row=map[kw][d];
+      if(!row) return `<td><span class="pt-rank none">-</span></td>`;
+      if(!detail){
+        // 순위 + 이전(더 오래된) 대비 변동
+        let chg='';
+        for(let j=i+1;j<dates.length;j++){ const p=map[kw][dates[j]]; if(p){ const diff=p.rank-row.rank; chg=diff>0?`<span class="pt-chg up">▲${diff}</span>`:diff<0?`<span class="pt-chg down">▼${-diff}</span>`:'<span class="pt-chg flat">-</span>'; break; } }
+        return `<td><span class="pt-rank ${ptRankTier(row.rank)}">${row.rank}</span>${chg}</td>`;
+      }
+      return `<td><div class="pt-cell">`+
+        `<div class="m rank">${row.rank}위</div>`+
+        `<div class="m save">저장 ${ptNum(row.saves)}</div>`+
+        `<div class="m vr">방문 ${ptNum(row.visitor_reviews)}</div>`+
+        `<div class="m br">블로그 ${ptNum(row.blog_reviews)}</div>`+
+        `</div></td>`;
+    }).join('');
+    return `<tr><td class="kw">${escapeHtml(kw)}</td>${cells}</tr>`;
+  }).join('');
+  wrap.innerHTML=`<table class="pt"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+function ptNum(n){ return (n==null||n==='')?'-':Number(n).toLocaleString(); }
 </script>
 </body>
 </html>

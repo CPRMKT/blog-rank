@@ -51,6 +51,7 @@ export async function scrapePlaceSearch(keyword, count = 50) {
       category: it.category || '',
       visitorReviews: toNum(it.visitorReviewCount),
       blogReviews: toNum(it.blogCafeReviewCount),
+      saves: it.saveCount == null ? null : toNum(it.saveCount),
     });
   };
   // 응답 JSON에서 items 배열을 순서대로 수집하되, 광고 컨테이너(키에 ad 포함)는 제외.
@@ -93,6 +94,7 @@ export async function scrapePlaceSearch(keyword, count = 50) {
       category: it.category,
       visitorReviews: it.visitorReviews,
       blogReviews: it.blogReviews,
+      saves: it.saves,
       placeUrl: `https://map.naver.com/p/entry/place/${it.placeId}`,
     }));
   } finally {

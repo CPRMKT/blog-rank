@@ -157,11 +157,54 @@ export default async function handler(req, res) {
         category: r.category || null,
         visitor_reviews: r.visitorReviews ?? r.visitor_reviews ?? null,
         blog_reviews: r.blogReviews ?? r.blog_reviews ?? null,
+        saves: r.saves ?? r.save ?? null,
       }));
       try { await supaFetch(`/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=eq.${checkedDate}`, { method: 'DELETE' }); } catch {}
       if (rows.length) await supaFetch('/place_rankings', { method: 'POST', body: JSON.stringify(rows) });
       return res.status(200).json({ ok: true, saved: rows.length });
     }
+    // ===== 매장 중심 플레이스 순위 추적 =====
+    // 매장별 추적 키워드 목록
+    if (action === 'list_store_place_keywords') {
+      const result = await supaFetch(`/store_place_keywords?store_id=eq.${data.store_id}&order=created_at.asc`);
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
+    if (action === 'add_store_place_keyword') {
+      const result = await supaFetch('/store_place_keywords', {
+        method: 'POST',
+        body: JSON.stringify({ store_id: data.store_id, keyword: data.keyword }),
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      });
+      return res.status(200).json({ ok: true, result });
+    }
+    if (action === 'delete_store_place_keyword') {
+      await supaFetch(`/store_place_keywords?store_id=eq.${data.store_id}&keyword=eq.${encodeURIComponent(data.keyword)}`, { method: 'DELETE' });
+      return res.status(200).json({ ok: true });
+    }
+    // 크론용: 전 매장에서 추적 중인 distinct 키워드 목록
+    if (action === 'list_all_store_place_keywords') {
+      const result = await supaFetch('/store_place_keywords?select=keyword');
+      const kws = [...new Set((Array.isArray(result) ? result : []).map((r) => r.keyword).filter(Boolean))];
+      return res.status(200).json({ ok: true, result: kws });
+    }
+    // 우리 매장 관점: 등록 키워드별 우리 매장 순위 이력(place_rankings에서 place_id 매칭 행만)
+    if (action === 'get_store_place_rankings') {
+      const days = data.days || 31;
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const pid = encodeURIComponent(String(data.place_id || ''));
+      const kws = Array.isArray(data.keywords) ? data.keywords : [];
+      if (!pid || kws.length === 0) return res.status(200).json({ ok: true, result: [] });
+      const all = await Promise.all(
+        kws.map((k) =>
+          supaFetch(
+            `/place_rankings?place_id=eq.${pid}&keyword=eq.${encodeURIComponent(k)}&checked_date=gte.${since}&order=checked_date.desc`
+          ).catch(() => [])
+        )
+      );
+      const result = all.flat().filter(Boolean);
+      return res.status(200).json({ ok: true, result });
+    }
+
     // 키워드의 최근 N일 순위 이력
     if (action === 'get_place_rankings') {
       const days = data.days || 31;
