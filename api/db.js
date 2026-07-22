@@ -125,6 +125,52 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // ===== 플레이스 키워드 분석 =====
+    // 추적 키워드 목록
+    if (action === 'list_place_keywords') {
+      const result = await supaFetch('/place_keywords?order=created_at.asc');
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
+    if (action === 'add_place_keyword') {
+      const result = await supaFetch('/place_keywords', {
+        method: 'POST',
+        body: JSON.stringify({ keyword: data.keyword }),
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      });
+      return res.status(200).json({ ok: true, result });
+    }
+    if (action === 'delete_place_keyword') {
+      await supaFetch(`/place_keywords?keyword=eq.${encodeURIComponent(data.keyword)}`, { method: 'DELETE' });
+      return res.status(200).json({ ok: true });
+    }
+
+    // 플레이스 순위 스냅샷 저장(하루치, 키워드별) — 기존 같은 날짜 삭제 후 일괄 삽입
+    if (action === 'save_place_rankings') {
+      const checkedDate = data.checked_date || new Date().toISOString().slice(0, 10);
+      const rows = (data.rows || []).map((r) => ({
+        keyword: data.keyword,
+        checked_date: checkedDate,
+        rank: r.rank,
+        place_id: String(r.placeId || r.place_id || ''),
+        name: r.name || null,
+        category: r.category || null,
+        visitor_reviews: r.visitorReviews ?? r.visitor_reviews ?? null,
+        blog_reviews: r.blogReviews ?? r.blog_reviews ?? null,
+      }));
+      try { await supaFetch(`/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=eq.${checkedDate}`, { method: 'DELETE' }); } catch {}
+      if (rows.length) await supaFetch('/place_rankings', { method: 'POST', body: JSON.stringify(rows) });
+      return res.status(200).json({ ok: true, saved: rows.length });
+    }
+    // 키워드의 최근 N일 순위 이력
+    if (action === 'get_place_rankings') {
+      const days = data.days || 31;
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const result = await supaFetch(
+        `/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=gte.${since}&order=checked_date.desc,rank.asc`
+      );
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
+
     return res.status(400).json({ ok: false, error: 'Unknown action' });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
