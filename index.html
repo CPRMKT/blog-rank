@@ -51,6 +51,7 @@ tr:hover td{background:#f8fbff}
 .r1{background:#fff8e1;color:#e65100}
 .r2{background:#e3f2fd;color:#0d47a1}
 .r3{background:#e8f5e9;color:#1b5e20}
+.r6{background:#f3e5f5;color:#4a148c}
 .r10{background:#f3e5f5;color:#4a148c}
 .rn{background:#f5f5f5;color:#777}
 .muted{color:#aaa;font-size:12px}
@@ -113,7 +114,7 @@ tr:hover td{background:#f8fbff}
 .rank-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
 .rank-num.blue{background:#cce5ff;color:#004085}
 .rank-num.yellow{background:#fff3cd;color:#856404}
-.rank-kw-title{font-weight:700;font-size:13px}
+.rank-kw-title{font-weight:700;font-size:13px;word-break:keep-all;line-height:1.35}
 .rank-kw-vol{font-size:11px;color:#aaa;margin-top:2px}
 .rank-link{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;display:inline-block;color:#333;text-decoration:none}
 .rank-link:hover{color:#1a73e8;text-decoration:underline}
@@ -157,7 +158,6 @@ tr:hover td{background:#f8fbff}
 #page-suggest .trend-bar{height:6px;background:#2a2a2a;border-radius:3px;overflow:hidden;flex:0 0 56px}
 #page-suggest .trend-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4f7cff,#7c5cff)}
 /* 매장 순위 셀: 날짜 대비 변동 */
-.chg-new{color:#e67e22;font-weight:800;font-size:10px}
 .chg-up{color:#16a34a;font-weight:800;font-size:11px}
 .chg-down{color:#dc2626;font-weight:800;font-size:11px}
 .chg-flat{color:#c0c0c0;font-size:11px}
@@ -1002,7 +1002,7 @@ function renderRankTable(){
   const rankings=curStoreId?(storeRankings[curStoreId]||{}):{};
 
   document.getElementById('rankHead').innerHTML=`<tr>
-    <th style="width:160px">키워드</th>
+    <th style="min-width:200px;width:200px">키워드</th>
     ${dates.map(d=>`<th style="min-width:150px;text-align:center">${d}</th>`).join('')}
   </tr>`;
 
@@ -1042,6 +1042,16 @@ function blogKey(url){
   return s;
 }
 
+// 순위 → 배지 색상 클래스 매핑
+//  1위: r1 / 2위: r2 / 3~5위: r3(3위색) / 6~10위: r6(통합색) / 10위 밖: rn(회색)
+function rankBadgeClass(rank){
+  if(rank===1) return 'r1';
+  if(rank===2) return 'r2';
+  if(rank>=3 && rank<=5) return 'r3';
+  if(rank>=6 && rank<=10) return 'r6';
+  return 'rn';
+}
+
 function renderRankCell(data,prior){
   // 데이터가 없는 날
   if(!data||data.rank===null||data.rank===undefined){
@@ -1060,15 +1070,15 @@ function renderRankCell(data,prior){
   }
 
   const html=curMatches.slice().sort((a,b)=>a.rank-b.rank).map(m=>{
-    const badgeCls=m.rank===1?'r1':m.rank===2?'r2':m.rank===3?'r3':m.rank<=10?'r10':'rn';
+    const badgeCls=rankBadgeClass(m.rank);
     const title=m.title?escapeHtml(m.title):'';
     const link=m.url?`<a href="${m.url}" target="_blank" style="text-decoration:none">`:'';
     const linkEnd=m.url?'</a>':'';
     const pr=priorRank[blogKey(m.url)];
     let chg='';
-    if(prior){
-      if(pr===undefined)chg='<span class="chg-new">NEW</span>';
-      else{const diff=pr-m.rank; chg=diff>0?`<span class="chg-up">▲${diff}</span>`:diff<0?`<span class="chg-down">▼${-diff}</span>`:'<span class="chg-flat">-</span>';}
+    if(prior && pr!==undefined){
+      const diff=pr-m.rank;
+      chg=diff>0?`<span class="chg-up">▲${diff}</span>`:diff<0?`<span class="chg-down">▼${-diff}</span>`:'<span class="chg-flat">-</span>';
     }
     return`<div class="rank-post">
       <div style="display:flex;align-items:center;gap:5px">
