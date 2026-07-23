@@ -261,13 +261,19 @@ tr:hover td{background:var(--surface-3)}
 .pt-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 .pt-day{border:1px solid var(--line-2);border-radius:8px;padding:7px 3px 8px;text-align:center;background:var(--surface-2);min-width:0}
 .pt-day-date{font-size:10.5px;color:var(--faint);font-weight:600;margin-bottom:3px}
+.pt-day-date .wd-sat{color:var(--brand)}
+.pt-day-date .wd-sun{color:var(--bad)}
+.pt-si-link{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--brand);text-decoration:none;white-space:nowrap}
+.pt-si-link:hover{color:var(--brand-ink);text-decoration:underline}
+.pt-storeinfo .mrow{flex-wrap:wrap}
 .pt-day-body{display:flex;flex-direction:column;align-items:center;line-height:1.3}
 .pt-rank{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px}
 .pt-rank.t1{color:#b5790f}.pt-rank.t2{color:var(--brand-ink)}.pt-rank.t3{color:var(--text)}.pt-rank.t4{color:var(--muted)}.pt-rank.none{color:var(--faint);font-weight:600;font-size:13px}
 .pt-chg{font-size:10px;font-weight:700;margin-top:1px}
 .pt-chg.up{color:var(--ok)}.pt-chg.down{color:var(--bad)}.pt-chg.flat{color:var(--faint)}
 .pt-day-metrics{display:flex;flex-direction:column;gap:1px;margin-top:5px;padding-top:5px;border-top:1px dashed var(--line);width:100%}
-.pt-day-metrics .m{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-day-metrics .m{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:normal;word-break:keep-all;line-height:1.3}
+.pt-day-metrics .m .pt-chg{font-size:9px}
 .pt-day-metrics .m.save{color:var(--bad)}
 .pt-day-metrics .m.vr{color:var(--brand)}
 .pt-day-metrics .m.br{color:var(--ok)}
@@ -647,6 +653,15 @@ tr:hover td{background:var(--surface-3)}
       </div>
 
       <div id="ptBody" style="display:none">
+        <div class="store-meta pt-storeinfo" id="ptStoreInfo" style="display:none">
+          <div class="mrow"><span class="mlabel">매장</span><span class="mval" id="ptSiName">-</span></div>
+          <div class="mrow">
+            <span class="mlabel">리뷰</span>
+            <span class="reviews-count" id="ptSiReviews">조회 중...</span>
+            <a class="pt-si-link" id="ptSiLink" href="#" target="_blank" rel="noopener">네이버 플레이스에서 보기 ↗</a>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-title">플레이스 순위 확인할 키워드 등록</div>
           <div class="card-sub">키워드별 네이버 플레이스 검색 순위를 매일 추적합니다 (최대 20개)</div>
@@ -655,6 +670,7 @@ tr:hover td{background:var(--surface-3)}
             <button class="btn primary" id="ptAddBtn" onclick="ptAddKeyword()">등록</button>
             <span id="ptKwCount" style="font-size:12px;color:var(--muted);white-space:nowrap">0/20</span>
           </div>
+          <div class="pt-tags" id="ptKwTags"><span style="color:var(--faint);font-size:12.5px">등록된 키워드가 없습니다</span></div>
           <div id="ptKwErr" style="display:none;color:var(--bad);font-size:12px;margin-top:8px"></div>
         </div>
 
@@ -664,7 +680,7 @@ tr:hover td{background:var(--surface-3)}
             <div id="ptLegend" class="pt-legend" style="display:none">
               <span><i class="dot" style="background:var(--ink)"></i>순위</span>
               <span><i class="dot" style="background:var(--bad)"></i>저장</span>
-              <span><i class="dot" style="background:var(--brand)"></i>방문자리뷰</span>
+              <span><i class="dot" style="background:var(--brand)"></i>리뷰(방문자)</span>
               <span><i class="dot" style="background:var(--ok)"></i>블로그</span>
             </div>
           </div>
@@ -1777,9 +1793,11 @@ async function ptLoad(){
   // 키워드 목록
   const kr=await dbCall('list_store_place_keywords',{store_id:ptStoreId});
   ptKeywords=(kr&&kr.result?kr.result:[]).map(k=>k.keyword);
-  ptUpdateCount();
-  // 순위 이력(우리 매장 행만)
+  ptUpdateCount(); ptRenderChips();
+  // 매장 정보 영역(매장명·리뷰·플레이스 링크)
   const st=ptStore();
+  ptRenderStoreInfo(st);
+  // 순위 이력(우리 매장 행만)
   if(st && ptKeywords.length){
     const rr=await dbCall('get_store_place_rankings',{place_id:st.place_id,keywords:ptKeywords,days:PT_DAYS_EXPANDED+1});
     ptRows=(rr&&rr.result)?rr.result:[];
@@ -1789,6 +1807,35 @@ async function ptLoad(){
 }
 
 function ptUpdateCount(){ document.getElementById('ptKwCount').textContent=`${ptKeywords.length}/${PT_MAX_KW}`; }
+
+// 입력창 아래 키워드 칩 목록(빠른 삭제용). 카드의 ✕와 동일 동작.
+function ptRenderChips(){
+  const wrap=document.getElementById('ptKwTags'); if(!wrap) return;
+  if(!ptKeywords.length){ wrap.innerHTML='<span style="color:var(--faint);font-size:12.5px">등록된 키워드가 없습니다</span>'; return; }
+  wrap.innerHTML=ptKeywords.map(kw=>`<span class="pt-tag">${escapeHtml(kw)}<span class="del" title="삭제" onclick="ptRemoveKeyword('${ptJs(kw)}')">✕</span></span>`).join('');
+}
+
+// 상단 매장 정보(매장명·리뷰요약·네이버 플레이스 모바일 링크). 리뷰수는 실시간 조회.
+function ptRenderStoreInfo(store){
+  const box=document.getElementById('ptStoreInfo'); if(!box) return;
+  if(!store){ box.style.display='none'; return; }
+  box.style.display='';
+  document.getElementById('ptSiName').textContent=store.name||'-';
+  const link=document.getElementById('ptSiLink');
+  link.href=`https://m.place.naver.com/place/${encodeURIComponent(store.place_id)}/home`;
+  const rev=document.getElementById('ptSiReviews'); rev.textContent='조회 중...';
+  const pid=String(store.place_id);
+  fetch(`/api/place?placeId=${encodeURIComponent(store.place_id)}&action=detail`)
+    .then(r=>r.json())
+    .then(res=>{
+      if(String((ptStore()||{}).place_id)!==pid) return; // 그 사이 매장 변경됐으면 무시
+      if(res.ok&&res.detail){
+        const v=Number(res.detail.visitorReviewsTotal)||0, b=Number(res.detail.cafeBlogReviewsTotal)||0;
+        rev.textContent=`방문자리뷰 ${v.toLocaleString()} · 블로그 ${b.toLocaleString()}`;
+      }else rev.textContent='리뷰 조회 실패';
+    })
+    .catch(()=>{ if(String((ptStore()||{}).place_id)===pid) rev.textContent='리뷰 조회 실패'; });
+}
 function ptErr(msg){ const e=document.getElementById('ptKwErr'); if(!msg){e.style.display='none';return;} e.textContent=msg; e.style.display='block'; }
 function ptJs(kw){ return String(kw).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
@@ -1813,7 +1860,7 @@ async function ptAddKeyword(){
   const r=await dbCall('add_store_place_keyword',{store_id:ptStoreId,keyword:kw});
   if(!r||!r.ok){ ptErr('등록 실패: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='등록'; return; }
   inp.value='';
-  ptKeywords.push(kw); ptUpdateCount(); ptRenderCards();
+  ptKeywords.push(kw); ptUpdateCount(); ptRenderChips(); ptRenderCards();
   // 오늘 순위 즉시 수집
   btn.textContent='순위 수집 중...';
   await ptCollectKeyword(kw);
@@ -1864,7 +1911,21 @@ function ptRankTier(rank){ if(rank<=1)return't1'; if(rank<=5)return't2'; if(rank
 function ptNum(n){ return (n==null||n==='')?'-':Number(n).toLocaleString(); }
 // 로컬(KST) 기준 최근 n일 ISO 날짜 배열(최신순). UTC 변환 오차 방지.
 function ptDates(n){ const out=[]; const now=new Date(); for(let i=0;i<n;i++){ const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i); out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); } return out; }
-function ptDLabel(iso){ const p=iso.split('-'); return `${+p[1]}/${+p[2]}`; }
+const PT_WD=['일','월','화','수','목','금','토'];
+// 날짜 헤더 HTML: "M/D(요일)" — 토=파랑, 일=빨강, 평일=기본
+function ptDateHeaderHTML(iso){
+  const p=iso.split('-'); const dt=new Date(+p[0],+p[1]-1,+p[2]); const w=dt.getDay();
+  const cls=w===6?'wd-sat':(w===0?'wd-sun':'');
+  return `${+p[1]}/${+p[2]}<span class="${cls}">(${PT_WD[w]})</span>`;
+}
+// 전일(이전 데이터일) 대비 증감. 증가=▲(초록), 감소=▼(빨강), 동일=-. (리뷰·블로그 등 "많을수록 좋은" 지표용)
+function ptDelta(cur,prev){
+  if(cur==null||prev==null||cur===''||prev==='') return '';
+  const d=Number(cur)-Number(prev);
+  if(d>0) return ` <span class="pt-chg up">▲${d.toLocaleString()}</span>`;
+  if(d<0) return ` <span class="pt-chg down">▼${(-d).toLocaleString()}</span>`;
+  return ` <span class="pt-chg flat">-</span>`;
+}
 
 // 키워드 카드형 렌더. 지표상세(detail)와 더보기(expand)는 서로 독립.
 function ptRenderCards(){
@@ -1885,13 +1946,20 @@ function ptRenderCards(){
       let inner;
       if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
       else{
-        // 변동: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날 대비
-        const gi=allDates.indexOf(d); let chg='';
-        for(let j=gi+1;j<allDates.length;j++){ const p=rowMap[allDates[j]]; if(p){ const diff=p.rank-row.rank; chg=diff>0?`<span class="pt-chg up">▲${diff}</span>`:diff<0?`<span class="pt-chg down">▼${-diff}</span>`:'<span class="pt-chg flat">-</span>'; break; } }
-        const metrics=detail?`<div class="pt-day-metrics"><span class="m save">저장 ${ptNum(row.saves)}</span><span class="m vr">방문 ${ptNum(row.visitor_reviews)}</span><span class="m br">블로그 ${ptNum(row.blog_reviews)}</span></div>`:'';
+        // 변동 기준: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날(prior)
+        const gi=allDates.indexOf(d); let prior=null;
+        for(let j=gi+1;j<allDates.length;j++){ if(rowMap[allDates[j]]){ prior=rowMap[allDates[j]]; break; } }
+        // 순위 변동: 순위 숫자가 낮아지면 상승(▲, 초록)
+        let chg='';
+        if(prior){ const diff=prior.rank-row.rank; chg=diff>0?`<span class="pt-chg up">▲${diff}</span>`:diff<0?`<span class="pt-chg down">▼${-diff}</span>`:'<span class="pt-chg flat">-</span>'; }
+        const metrics=detail?`<div class="pt-day-metrics">`+
+          `<span class="m save">저장 ${ptNum(row.saves)}</span>`+
+          `<span class="m vr">리뷰 ${ptNum(row.visitor_reviews)}${ptDelta(row.visitor_reviews, prior?prior.visitor_reviews:null)}</span>`+
+          `<span class="m br">블로그 ${ptNum(row.blog_reviews)}${ptDelta(row.blog_reviews, prior?prior.blog_reviews:null)}</span>`+
+          `</div>`:'';
         inner=`<div class="pt-day-body"><span class="pt-rank ${ptRankTier(row.rank)}">${row.rank}</span>${chg}${metrics}</div>`;
       }
-      return `<div class="pt-day"><div class="pt-day-date">${ptDLabel(d)}</div>${inner}</div>`;
+      return `<div class="pt-day"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
     }).join('');
     const vol=storeKwVolumes[kw];
     const volHtml=(vol!=null)?`<span class="pt-kwvol">월 ${vol.toLocaleString()}</span>`:'';
