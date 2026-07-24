@@ -83,9 +83,19 @@ export async function scrapePlaceSearch(keyword, count = 50) {
     const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
     await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
     await page.waitForTimeout(2500);
+    // 스크롤로 추가 로딩. 단, 2회 연속 새 항목이 없으면 조기 종료해
+    // 결과가 적거나 없는 키워드에서 12회를 모두 도느라 ~20초 걸리던 것을 방지.
+    let prevLen = 0;
+    let stable = 0;
     for (let i = 0; i < 12 && items.length < count; i++) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(1400);
+      if (items.length === prevLen) {
+        if (++stable >= 2) break;
+      } else {
+        stable = 0;
+      }
+      prevLen = items.length;
     }
     return items.slice(0, count).map((it, i) => ({
       rank: i + 1,
