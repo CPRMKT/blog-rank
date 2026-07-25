@@ -200,6 +200,8 @@ tr:hover td{background:var(--surface-3)}
 .chg-down{color:var(--brand);font-weight:800;font-size:11px}
 .chg-flat{color:var(--faint);font-size:11px}
 .chg-out{color:var(--brand);font-size:10px;margin-top:3px;opacity:.85}
+/* 신규 진입(NEW): 전날 순위 없다가 오늘 진입. 절제된 브랜드 블루 아웃라인 태그 */
+.chg-new{color:var(--brand);font-weight:700;font-size:9.5px;border:1px solid var(--brand);border-radius:3px;padding:0 3px;line-height:1.55;letter-spacing:.03em;white-space:nowrap}
 
 /* ============ 키워드 제안 (라이트 통일) ============ */
 #page-suggest,#page-placerank{margin:0;padding:0;background:transparent;color:var(--text);min-height:auto}
@@ -1425,9 +1427,14 @@ function renderRankCell(data,prior){
     const linkEnd=m.url?'</a>':'';
     const pr=priorRank[blogKey(m.url)];
     let chg='';
-    if(prior && pr!==undefined){
-      const diff=pr-m.rank;
-      chg=diff>0?`<span class="chg-up">▲${diff}</span>`:diff<0?`<span class="chg-down">▼${-diff}</span>`:'<span class="chg-flat">-</span>';
+    if(prior){
+      if(pr===undefined){
+        // 전날(가장 가까운 과거 데이터)에 이 블로그 순위가 없었다가 오늘 진입 → 신규
+        chg='<span class="chg-new">NEW</span>';
+      }else{
+        const diff=pr-m.rank;
+        chg=diff>0?`<span class="chg-up">▲${diff}</span>`:diff<0?`<span class="chg-down">▼${-diff}</span>`:'<span class="chg-flat">-</span>';
+      }
     }
     return`<div class="rank-post">
       <div style="display:flex;align-items:center;gap:5px">
