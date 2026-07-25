@@ -283,6 +283,7 @@ tr:hover td{background:var(--surface-3)}
 .pt-si-link{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--brand);text-decoration:none;white-space:nowrap}
 .pt-si-link:hover{color:var(--brand-ink);text-decoration:underline}
 .pt-storeinfo .mrow{flex-wrap:wrap}
+.pt-si-cat{font-size:11.5px;color:var(--muted);font-weight:400;margin-left:6px}
 .pt-day-body{display:flex;flex-direction:column;align-items:center;line-height:1.3}
 .pt-rank{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px}
 .pt-rank.t1{color:#b5790f}.pt-rank.t2{color:var(--brand-ink)}.pt-rank.t3{color:var(--text)}.pt-rank.t4{color:var(--muted)}.pt-rank.none{color:var(--faint);font-weight:600;font-size:13px}
@@ -686,7 +687,7 @@ tr:hover td{background:var(--surface-3)}
 
       <div id="ptBody" style="display:none">
         <div class="store-meta pt-storeinfo" id="ptStoreInfo" style="display:none">
-          <div class="mrow"><span class="mlabel">매장</span><span class="mval" id="ptSiName">-</span></div>
+          <div class="mrow"><span class="mlabel">매장</span><span class="mval" id="ptSiName">-</span><span class="pt-si-cat" id="ptSiCat"></span></div>
           <div class="mrow">
             <span class="mlabel">리뷰</span>
             <span class="reviews-count" id="ptSiReviews">조회 중...</span>
@@ -1932,6 +1933,7 @@ function ptRenderStoreInfo(store){
   if(!store){ box.style.display='none'; return; }
   box.style.display='';
   document.getElementById('ptSiName').textContent=store.name||'-';
+  document.getElementById('ptSiCat').textContent=store.category||'';
   const link=document.getElementById('ptSiLink');
   link.href=`https://m.place.naver.com/place/${encodeURIComponent(store.place_id)}/home`;
   const rev=document.getElementById('ptSiReviews'); rev.textContent='조회 중...';
