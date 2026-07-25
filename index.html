@@ -41,7 +41,8 @@ body{font-family:var(--fs);font-size:14px;background:var(--bg);color:var(--text)
 .brand-name{font-size:14.5px;font-weight:800;color:var(--ink);letter-spacing:-.02em;line-height:1.15}
 .brand-name span{display:block;font-size:10.5px;font-weight:500;color:var(--muted);letter-spacing:0;margin-top:3px}
 .menu-section{padding:var(--sp-2) 0}
-.menu-label{font-size:10px;color:var(--faint);font-weight:700;letter-spacing:.12em;padding:0 var(--sp-2) 10px;text-transform:uppercase}
+.menu-label{font-size:11px;color:var(--faint);font-weight:700;letter-spacing:.04em;padding:0 var(--sp-2) 8px}
+.menu-group{margin-top:18px}
 .menu-item{display:flex;align-items:center;gap:11px;padding:9px var(--sp-2);font-size:13px;font-weight:500;color:var(--text);cursor:pointer;position:relative}
 .menu-item svg{width:17px;height:17px;color:var(--faint);flex-shrink:0}
 .menu-item:hover{background:var(--surface-3);color:var(--ink)}
@@ -366,24 +367,31 @@ tr:hover td{background:var(--surface-3)}
     </button>
   </div>
   <div class="menu-section">
-    <div class="menu-label">MENU</div>
     <div class="menu-item active" id="menu-home" onclick="showPage('home')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-6h5v6"/></svg> 홈
     </div>
-    <div class="menu-item" id="menu-post" onclick="showPage('post')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/><path d="M9 6h11M9 12h11M9 18h11"/></svg> 포스팅 순위 조회
+
+    <div class="menu-group">
+      <div class="menu-label">블로그</div>
+      <div class="menu-item" id="menu-post" onclick="showPage('post')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="4.5" cy="6" r="1.3"/><circle cx="4.5" cy="12" r="1.3"/><circle cx="4.5" cy="18" r="1.3"/><path d="M9 6h11M9 12h11M9 18h11"/></svg> 포스팅 순위 조회
+      </div>
+      <div class="menu-item" id="menu-store" onclick="showPage('store')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 5.2 5h13.6L20 9.5"/><path d="M4.6 9.5a2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0"/><path d="M5.5 11v8h13v-8"/><path d="M10 19v-4.5h4V19"/></svg> 매장 블로그 순위
+      </div>
     </div>
-    <div class="menu-item" id="menu-store" onclick="showPage('store')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 5.2 5h13.6L20 9.5"/><path d="M4.6 9.5a2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0"/><path d="M5.5 11v8h13v-8"/><path d="M10 19v-4.5h4V19"/></svg> 매장 블로그 순위
-    </div>
-    <div class="menu-item" id="menu-placetrack" onclick="showPage('placetrack')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/><path d="M4 20.5h16"/></svg> 플레이스 순위 추적
-    </div>
-    <div class="menu-item" id="menu-suggest" onclick="showPage('suggest')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4c.7 3.6 2.7 5.6 6.2 6.2-3.5.7-5.5 2.7-6.2 6.2-.7-3.5-2.7-5.5-6.2-6.2C9.3 9.6 11.3 7.6 12 4Z"/></svg> 키워드 제안
-    </div>
-    <div class="menu-item" id="menu-placerank" onclick="showPage('placerank')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/></svg> 플레이스 키워드 분석
+
+    <div class="menu-group">
+      <div class="menu-label">플레이스</div>
+      <div class="menu-item" id="menu-placetrack" onclick="showPage('placetrack')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/><path d="M4 20.5h16"/></svg> 플레이스 순위 추적
+      </div>
+      <div class="menu-item" id="menu-placerank" onclick="showPage('placerank')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/></svg> 플레이스 키워드 분석
+      </div>
+      <div class="menu-item" id="menu-suggest" onclick="showPage('suggest')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4c.7 3.6 2.7 5.6 6.2 6.2-3.5.7-5.5 2.7-6.2 6.2-.7-3.5-2.7-5.5-6.2-6.2C9.3 9.6 11.3 7.6 12 4Z"/></svg> 키워드 제안
+      </div>
     </div>
   </div>
 </div>
