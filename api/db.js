@@ -58,6 +58,22 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
     if (action === 'create_store') {
+      // 탭별 소속 플래그: in_blog(매장 블로그 순위) / in_place(플레이스 순위 추적)
+      const inBlog = data.in_blog !== false;   // 기본 true (블로그/키워드제안 탭)
+      const inPlace = data.in_place === true;   // 기본 false
+      // 같은 place_id가 이미 있으면 새로 만들지 않고 해당 탭 플래그만 켠다(중복 방지·병합)
+      const existing = await supaFetch(`/stores?place_id=eq.${encodeURIComponent(data.place_id)}&select=id,in_blog,in_place`);
+      if (Array.isArray(existing) && existing.length) {
+        const cur = existing[0];
+        const patch = {};
+        if (inBlog && cur.in_blog === false) patch.in_blog = true;
+        if (inPlace && cur.in_place === false) patch.in_place = true;
+        let result = existing;
+        if (Object.keys(patch).length) {
+          result = await supaFetch(`/stores?id=eq.${cur.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+        }
+        return res.status(200).json({ ok: true, result, merged: true });
+      }
       const result = await supaFetch('/stores', {
         method: 'POST',
         body: JSON.stringify({
@@ -67,6 +83,8 @@ export default async function handler(req, res) {
           category: data.category || null,
           address: data.address || null,
           phone: data.phone || null,
+          in_blog: inBlog,
+          in_place: inPlace,
         }),
       });
       return res.status(200).json({ ok: true, result });
@@ -74,6 +92,20 @@ export default async function handler(req, res) {
     if (action === 'delete_store') {
       await supaFetch(`/stores?id=eq.${data.store_id}`, { method: 'DELETE' });
       return res.status(200).json({ ok: true });
+    }
+    // 탭에서 매장 제거: 해당 탭 플래그만 내리고, 다른 탭에도 없으면 완전 삭제(연결 데이터 포함)
+    if (action === 'remove_store_from_tab') {
+      const col = data.tab === 'place' ? 'in_place' : 'in_blog';
+      const other = data.tab === 'place' ? 'in_blog' : 'in_place';
+      const rows = await supaFetch(`/stores?id=eq.${data.store_id}&select=in_blog,in_place`);
+      const s = Array.isArray(rows) && rows[0] ? rows[0] : null;
+      if (!s) return res.status(200).json({ ok: true, deleted: true });
+      if (s[other] === false) {
+        await supaFetch(`/stores?id=eq.${data.store_id}`, { method: 'DELETE' });
+        return res.status(200).json({ ok: true, deleted: true });
+      }
+      await supaFetch(`/stores?id=eq.${data.store_id}`, { method: 'PATCH', body: JSON.stringify({ [col]: false }) });
+      return res.status(200).json({ ok: true, deleted: false });
     }
 
     // 매장 키워드

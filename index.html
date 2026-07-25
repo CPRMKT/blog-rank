@@ -677,12 +677,29 @@ tr:hover td{background:var(--surface-3)}
           <div class="pt-storemenu" id="ptStoreMenu">
             <div class="store-search" id="ptStoreSearchWrap" style="display:none"><input type="text" id="ptStoreSearch" placeholder="매장 검색" oninput="ptRenderStoreDropdown()" autocomplete="off"></div>
             <div class="pt-storelist" id="ptStoreList"></div>
+            <div class="store-dropdown-divider"></div>
+            <div class="store-dropdown-add" onclick="ptToggleAddForm()">＋ 매장 추가하기</div>
+            <div class="store-add-form" id="ptStoreAddForm">
+              <div class="hint">네이버 지도에서 매장을 검색한 후 <b>URL을 복사</b>해서 붙여넣어주세요.<br>모바일 공유 링크(naver.me)도 지원합니다.</div>
+              <input type="text" id="ptAddStoreUrl" placeholder="예: https://naver.me/xlbCC65x" onkeydown="if(event.key==='Enter')ptPreviewStore()">
+              <div class="err" id="ptAddStoreErr"></div>
+              <div class="preview" id="ptAddStorePreview">
+                <div class="pname" id="ptPreviewName"></div>
+                <div class="pcat" id="ptPreviewCategory"></div>
+                <div class="paddr" id="ptPreviewAddress"></div>
+              </div>
+              <div class="btns">
+                <button class="btn sm" onclick="ptToggleAddForm()">취소</button>
+                <button class="btn sm" id="ptPreviewBtn" onclick="ptPreviewStore()">조회</button>
+                <button class="btn sm primary" id="ptConfirmBtn" onclick="ptConfirmAddStore()" style="display:none">등록</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div id="ptNoStore" class="card" style="display:none">
-        <div class="pt-empty">등록된 매장이 없습니다. <b>매장 블로그 순위</b> 탭에서 먼저 매장을 추가하세요.</div>
+        <div class="pt-empty">플레이스 순위를 추적할 매장이 없습니다. 우측 상단 <b>매장 선택 ▸ ＋매장 추가하기</b>로 등록하세요.</div>
       </div>
 
       <div id="ptBody" style="display:none">
@@ -1090,19 +1107,21 @@ async function loadStores(){
   }
 }
 
+function blogStores(){ return (stores||[]).filter(s=>s.in_blog!==false); }
 function renderStoreDropdown(){
   const list=document.getElementById('storeDropdownList');
   const wrap=document.getElementById('storeSearchWrap');
   const input=document.getElementById('storeSearchInput');
+  const base=blogStores();
   // 검색창은 매장이 6개 이상일 때만 노출(적을 땐 방해되지 않게)
-  const searchOn=stores.length>5;
+  const searchOn=base.length>5;
   if(wrap) wrap.style.display=searchOn?'':'none';
-  if(stores.length===0){
+  if(base.length===0){
     list.innerHTML='<div class="store-empty">등록된 매장이 없습니다</div>';
     return;
   }
   const q=(searchOn&&input?input.value:'').trim().toLowerCase();
-  const filtered=q?stores.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):stores;
+  const filtered=q?base.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):base;
   if(filtered.length===0){
     list.innerHTML='<div class="store-empty">검색 결과가 없습니다</div>';
     return;
@@ -1167,7 +1186,7 @@ async function confirmAddStore(){
   console.log('[등록] pending:', pending);
   if(!pending){alert('매장을 먼저 조회하세요');return;}
 
-  if(Array.isArray(stores)&&stores.find(s=>s.place_id===pending.placeId)){
+  if(Array.isArray(stores)&&stores.find(s=>s.place_id===pending.placeId&&s.in_blog!==false)){
     alert('이미 등록된 매장입니다');
     return;
   }
@@ -1184,6 +1203,7 @@ async function confirmAddStore(){
       category:pending.category,
       address:pending.roadAddress||pending.address,
       phone:pending.phone,
+      in_blog:true, in_place:false,   // 블로그 탭 등록 → 블로그 탭에만 노출
     });
     console.log('[등록] DB 응답:', JSON.stringify(saveRes));
     if(!saveRes.ok){throw new Error(saveRes.error||'매장 저장 실패');}
@@ -1212,8 +1232,12 @@ async function removeStore(id,e){
   e.stopPropagation();
   const s=stores.find(s=>s.id===id);
   if(!s)return;
-  if(!confirm(`"${s.name}" 매장을 삭제할까요?\n(키워드, 순위 기록도 함께 삭제됩니다)`))return;
-  await dbCall('delete_store',{store_id:id});
+  const alsoPlace=s.in_place!==false;
+  const msg=alsoPlace
+    ? `"${s.name}"을(를) 매장 블로그 순위에서 제거할까요?\n(플레이스 순위 추적에는 그대로 남아 있습니다)`
+    : `"${s.name}" 매장을 삭제할까요?\n(키워드·순위 기록도 함께 삭제됩니다)`;
+  if(!confirm(msg))return;
+  await dbCall('remove_store_from_tab',{store_id:id,tab:'blog'});
   if(curStoreId===id){
     curStoreId=null;
     document.getElementById('storeHeaderName').textContent='매장 선택';
@@ -1830,26 +1854,35 @@ let ptStoreId=null; let ptKeywords=[]; let ptRows=[]; let ptExpanded={};  // key
 let ptCollecting=new Set();  // 현재 순위 수집(스크래핑) 중인 키워드 — 오늘 칸에 "조회 중…" 표시
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
 
+function placeStores(){ return (stores||[]).filter(s=>s.in_place!==false); }
+
 async function initPlaceTrack(){
   if(!Array.isArray(stores)||stores.length===0){
     const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result;
   }
-  if(!stores||stores.length===0){
+  await ptApplyStoreState();
+}
+
+// stores(전역) 기준으로 플레이스 탭 매장 상태 반영(진입·등록·삭제 후 공통 호출)
+async function ptApplyStoreState(){
+  ptRenderStoreDropdown();
+  const ps=placeStores();
+  if(ps.length===0){
     document.getElementById('ptNoStore').style.display='';
     document.getElementById('ptBody').style.display='none';
-    ptSetStoreBtnName('매장 없음');
+    ptSetStoreBtnName('매장 선택');
     return;
   }
   document.getElementById('ptNoStore').style.display='none';
   document.getElementById('ptBody').style.display='';
-  // 이전 선택 유지, 없으면 첫 매장
-  if(!ptStore()) ptStoreId=stores[0].id;
+  // 선택 매장이 없거나 플레이스 목록에서 빠졌으면 첫 매장 선택
+  if(!ptStore()||ptStore().in_place===false) ptStoreId=ps[0].id;
   ptSetStoreBtnName();
-  ptRenderStoreDropdown();
   await ptLoad();
 }
 
 async function ptSelectStore(id){ ptStoreId=id; ptExpanded={}; ptSetStoreBtnName(); await ptLoad(); }
+async function ptReloadStores(){ const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result; }
 
 // ---- 플레이스 탭 매장 선택 커스텀 드롭다운 ----
 function ptSetStoreBtnName(name){ const el=document.getElementById('ptStoreBtnName'); if(el) el.textContent=(name!==undefined)?name:((ptStore()||{}).name||'매장 선택'); }
@@ -1869,17 +1902,20 @@ function ptCloseDropdown(){
   const menu=document.getElementById('ptStoreMenu'); const btn=document.getElementById('ptStoreBtn');
   if(btn) btn.classList.remove('open'); if(menu) menu.classList.remove('show');
   const inp=document.getElementById('ptStoreSearch'); if(inp) inp.value='';
+  const form=document.getElementById('ptStoreAddForm'); if(form) form.classList.remove('show');
+  ptResetAddForm();
 }
 function ptRenderStoreDropdown(){
   const list=document.getElementById('ptStoreList');
   const wrap=document.getElementById('ptStoreSearchWrap');
   const input=document.getElementById('ptStoreSearch');
   if(!list) return;
-  const searchOn=stores&&stores.length>5;
+  const base=placeStores();
+  const searchOn=base.length>5;
   if(wrap) wrap.style.display=searchOn?'':'none';
-  if(!stores||stores.length===0){ list.innerHTML='<div class="store-empty">등록된 매장이 없습니다</div>'; return; }
+  if(base.length===0){ list.innerHTML='<div class="store-empty">등록된 매장이 없습니다</div>'; return; }
   const q=(searchOn&&input?input.value:'').trim().toLowerCase();
-  const filtered=q?stores.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):stores;
+  const filtered=q?base.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):base;
   if(filtered.length===0){ list.innerHTML='<div class="store-empty">검색 결과가 없습니다</div>'; return; }
   list.innerHTML=filtered.map(s=>
     `<div class="store-dropdown-item${String(s.id)===String(ptStoreId)?' active':''}" onclick="ptPickStore('${s.id}')">
@@ -1887,9 +1923,73 @@ function ptRenderStoreDropdown(){
         <div>🏪 ${escapeHtml(s.name)}</div>
         <div class="meta">${escapeHtml(s.category||'')}${(s.category&&(s.address||s.place_url))?' · ':''}${escapeHtml(s.address||s.place_url||'')}</div>
       </div>
+      <span class="store-dropdown-del" onclick="ptRemoveStore('${s.id}',event)">✕</span>
     </div>`).join('');
 }
 async function ptPickStore(id){ ptCloseDropdown(); if(String(id)===String(ptStoreId)) return; await ptSelectStore(id); }
+
+// ---- 플레이스 탭 매장 등록/삭제(플레이스 탭 전용 in_place 플래그) ----
+function ptToggleAddForm(){
+  const form=document.getElementById('ptStoreAddForm');
+  form.classList.toggle('show');
+  if(form.classList.contains('show')) setTimeout(()=>{const el=document.getElementById('ptAddStoreUrl'); if(el) el.focus();},80);
+  else ptResetAddForm();
+}
+function ptResetAddForm(){
+  const url=document.getElementById('ptAddStoreUrl'); if(url) url.value='';
+  const err=document.getElementById('ptAddStoreErr'); if(err) err.classList.remove('show');
+  const prev=document.getElementById('ptAddStorePreview'); if(prev) prev.classList.remove('show');
+  const pb=document.getElementById('ptPreviewBtn'); if(pb) pb.style.display='';
+  const cb=document.getElementById('ptConfirmBtn'); if(cb) cb.style.display='none';
+  window._ptPendingStore=null;
+}
+async function ptPreviewStore(){
+  const url=document.getElementById('ptAddStoreUrl').value.trim();
+  const errEl=document.getElementById('ptAddStoreErr'); const previewEl=document.getElementById('ptAddStorePreview');
+  errEl.classList.remove('show'); previewEl.classList.remove('show');
+  if(!url){ errEl.textContent='URL을 입력하세요'; errEl.classList.add('show'); return; }
+  const btn=document.getElementById('ptPreviewBtn'); btn.disabled=true; btn.textContent='조회 중...';
+  try{
+    const res=await fetch(`/api/place?url=${encodeURIComponent(url)}`);
+    const data=await res.json();
+    if(!data.ok){ errEl.textContent=data.error||'매장 정보를 가져올 수 없습니다'; errEl.classList.add('show'); btn.disabled=false; btn.textContent='조회'; return; }
+    document.getElementById('ptPreviewName').textContent=data.detail.name;
+    document.getElementById('ptPreviewCategory').textContent=data.detail.category||'';
+    document.getElementById('ptPreviewAddress').textContent=data.detail.roadAddress||data.detail.address||'';
+    previewEl.classList.add('show');
+    document.getElementById('ptConfirmBtn').style.display=''; btn.style.display='none';
+    window._ptPendingStore={...data.detail,placeUrl:data.placeUrl,originalUrl:data.originalUrl};
+  }catch(e){ errEl.textContent='조회 오류: '+e.message; errEl.classList.add('show'); btn.disabled=false; btn.textContent='조회'; }
+}
+async function ptConfirmAddStore(){
+  const pending=window._ptPendingStore;
+  if(!pending){ alert('매장을 먼저 조회하세요'); return; }
+  if(Array.isArray(stores)&&stores.find(s=>s.place_id===pending.placeId&&s.in_place!==false)){ alert('이미 등록된 매장입니다'); return; }
+  const btn=document.getElementById('ptConfirmBtn'); btn.disabled=true; btn.textContent='등록 중...';
+  try{
+    const r=await dbCall('create_store',{ place_id:pending.placeId, name:pending.name, place_url:pending.placeUrl, category:pending.category, address:pending.roadAddress||pending.address, phone:pending.phone, in_blog:false, in_place:true });
+    if(!r.ok) throw new Error(r.error||'매장 저장 실패');
+    await ptReloadStores();
+    const ns=stores.find(s=>s.place_id===pending.placeId);
+    ptCloseDropdown();
+    if(ns){ ptStoreId=ns.id; }
+    await ptApplyStoreState();
+  }catch(e){ alert('매장 등록 오류: '+e.message); btn.disabled=false; btn.textContent='등록'; }
+}
+async function ptRemoveStore(id,e){
+  e.stopPropagation();
+  const s=(stores||[]).find(s=>String(s.id)===String(id));
+  if(!s) return;
+  const alsoBlog=s.in_blog!==false;
+  const msg=alsoBlog
+    ? `"${s.name}"을(를) 플레이스 순위 추적에서 제거할까요?\n(매장 블로그 순위에는 그대로 남아 있습니다)`
+    : `"${s.name}" 매장을 삭제할까요?\n(플레이스 키워드·순위 기록도 함께 삭제됩니다)`;
+  if(!confirm(msg)) return;
+  await dbCall('remove_store_from_tab',{store_id:id,tab:'place'});
+  if(String(ptStoreId)===String(id)) ptStoreId=null;
+  await ptReloadStores();
+  await ptApplyStoreState();
+}
 
 async function ptLoad(){
   // 키워드 목록
