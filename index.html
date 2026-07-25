@@ -150,6 +150,20 @@ tr:hover td{background:var(--surface-3)}
 .store-dropdown-divider{height:1px;background:var(--line-2);margin:4px 0}
 .store-dropdown-add{display:flex;align-items:center;gap:8px;padding:11px 16px;font-size:13px;color:var(--brand);font-weight:600;cursor:pointer}
 .store-dropdown-add:hover{background:var(--surface-3)}
+/* 매장 드롭다운 검색 + 스크롤 (블로그·플레이스 공통) */
+.store-search{padding:10px 12px 8px;border-bottom:1px solid var(--line-2)}
+.store-search input{width:100%;height:34px;font-size:13px}
+.store-empty{padding:18px;text-align:center;color:var(--muted);font-size:12.5px}
+#storeDropdownList{max-height:300px;overflow-y:auto}
+/* 플레이스 탭 매장 선택기(커스텀 드롭다운, 검색 포함) */
+.pt-storepick{position:relative}
+.pt-storebtn{display:flex;align-items:center;justify-content:space-between;gap:8px;height:38px;min-width:200px;padding:0 14px;border:1px solid var(--line);border-radius:var(--r-btn);background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
+.pt-storebtn:hover{background:var(--surface-3);border-color:var(--line-strong)}
+.pt-storebtn .arrow{font-size:10px;color:var(--muted);transition:transform .2s}
+.pt-storebtn.open .arrow{transform:rotate(180deg)}
+.pt-storemenu{position:absolute;top:calc(100% + 5px);right:0;min-width:300px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--sh-2);z-index:40;display:none;overflow:hidden}
+.pt-storemenu.show{display:block}
+.pt-storelist{max-height:300px;overflow-y:auto}
 .store-add-form{padding:14px 16px;border-top:1px solid var(--line-2);display:none}
 .store-add-form.show{display:block}
 .store-add-form input{width:100%;height:36px;margin-bottom:8px}
@@ -524,6 +538,7 @@ tr:hover td{background:var(--surface-3)}
         <span class="arrow">▼</span>
       </div>
       <div class="store-dropdown" id="storeDropdown">
+        <div class="store-search" id="storeSearchWrap" style="display:none"><input type="text" id="storeSearchInput" placeholder="매장 검색" oninput="filterStoreDropdown()" autocomplete="off"></div>
         <div id="storeDropdownList"></div>
         <div class="store-dropdown-divider"></div>
         <div class="store-dropdown-add" onclick="toggleAddForm()">＋ 매장 추가하기</div>
@@ -652,7 +667,15 @@ tr:hover td{background:var(--surface-3)}
           <div class="h-lg">📍 플레이스 순위 추적</div>
           <div class="card-sub" style="margin:5px 0 0">매장별로 키워드를 등록하고, 네이버 플레이스 검색 순위·저장·리뷰를 날짜별로 추적합니다.</div>
         </div>
-        <select id="ptStoreSel" onchange="ptSelectStore(this.value)"></select>
+        <div class="pt-storepick" id="ptStorePick">
+          <button class="pt-storebtn" id="ptStoreBtn" onclick="ptToggleDropdown(event)">
+            <span id="ptStoreBtnName">매장 선택</span><span class="arrow">▼</span>
+          </button>
+          <div class="pt-storemenu" id="ptStoreMenu">
+            <div class="store-search" id="ptStoreSearchWrap" style="display:none"><input type="text" id="ptStoreSearch" placeholder="매장 검색" oninput="ptRenderStoreDropdown()" autocomplete="off"></div>
+            <div class="pt-storelist" id="ptStoreList"></div>
+          </div>
+        </div>
       </div>
 
       <div id="ptNoStore" class="card" style="display:none">
@@ -776,14 +799,23 @@ function showPage(page){
 }
 
 function toggleDropdown(){
+  const dd=document.getElementById('storeDropdown');
+  const opening=!dd.classList.contains('show');
   document.getElementById('storeDropdownBtn').classList.toggle('open');
-  document.getElementById('storeDropdown').classList.toggle('show');
+  dd.classList.toggle('show');
+  if(opening){
+    const inp=document.getElementById('storeSearchInput'); if(inp) inp.value='';
+    renderStoreDropdown();
+    const wrap=document.getElementById('storeSearchWrap');
+    if(inp&&wrap&&wrap.style.display!=='none') setTimeout(()=>inp.focus(),50);
+  }
 }
 
 function closeDropdown(){
   document.getElementById('storeDropdownBtn').classList.remove('open');
   document.getElementById('storeDropdown').classList.remove('show');
   document.getElementById('storeAddForm').classList.remove('show');
+  const inp=document.getElementById('storeSearchInput'); if(inp) inp.value='';
   resetAddForm();
 }
 
@@ -806,6 +838,8 @@ function resetAddForm(){
 document.addEventListener('click',function(e){
   const header=document.querySelector('.store-header');
   if(header&&!header.contains(e.target)) closeDropdown();
+  const pick=document.getElementById('ptStorePick');
+  if(pick&&!pick.contains(e.target)) ptCloseDropdown();
 });
 
 // ========== 포스팅 순위 (기존 코드 - 건드리지 않음) ==========
@@ -1055,11 +1089,22 @@ async function loadStores(){
 
 function renderStoreDropdown(){
   const list=document.getElementById('storeDropdownList');
+  const wrap=document.getElementById('storeSearchWrap');
+  const input=document.getElementById('storeSearchInput');
+  // 검색창은 매장이 6개 이상일 때만 노출(적을 땐 방해되지 않게)
+  const searchOn=stores.length>5;
+  if(wrap) wrap.style.display=searchOn?'':'none';
   if(stores.length===0){
-    list.innerHTML='<div style="padding:10px 16px;font-size:12px;color:#aaa">등록된 매장이 없습니다</div>';
+    list.innerHTML='<div class="store-empty">등록된 매장이 없습니다</div>';
     return;
   }
-  list.innerHTML=stores.map(s=>
+  const q=(searchOn&&input?input.value:'').trim().toLowerCase();
+  const filtered=q?stores.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):stores;
+  if(filtered.length===0){
+    list.innerHTML='<div class="store-empty">검색 결과가 없습니다</div>';
+    return;
+  }
+  list.innerHTML=filtered.map(s=>
     `<div class="store-dropdown-item${s.id===curStoreId?' active':''}" onclick="selectStore(${s.id})">
       <div>
         <div>🏪 ${escapeHtml(s.name)}</div>
@@ -1068,6 +1113,7 @@ function renderStoreDropdown(){
       <span class="store-dropdown-del" onclick="removeStore(${s.id},event)">✕</span>
     </div>`).join('');
 }
+function filterStoreDropdown(){ renderStoreDropdown(); }
 
 function escapeHtml(s){
   if(!s)return'';
@@ -1780,22 +1826,62 @@ async function initPlaceTrack(){
   if(!Array.isArray(stores)||stores.length===0){
     const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result;
   }
-  const sel=document.getElementById('ptStoreSel');
   if(!stores||stores.length===0){
     document.getElementById('ptNoStore').style.display='';
     document.getElementById('ptBody').style.display='none';
-    sel.innerHTML='<option value="">매장 없음</option>';
+    ptSetStoreBtnName('매장 없음');
     return;
   }
   document.getElementById('ptNoStore').style.display='none';
   document.getElementById('ptBody').style.display='';
   // 이전 선택 유지, 없으면 첫 매장
   if(!ptStore()) ptStoreId=stores[0].id;
-  sel.innerHTML=stores.map(s=>`<option value="${s.id}"${String(s.id)===String(ptStoreId)?' selected':''}>${escapeHtml(s.name)}</option>`).join('');
+  ptSetStoreBtnName();
+  ptRenderStoreDropdown();
   await ptLoad();
 }
 
-async function ptSelectStore(id){ ptStoreId=id; ptExpanded={}; await ptLoad(); }
+async function ptSelectStore(id){ ptStoreId=id; ptExpanded={}; ptSetStoreBtnName(); await ptLoad(); }
+
+// ---- 플레이스 탭 매장 선택 커스텀 드롭다운 ----
+function ptSetStoreBtnName(name){ const el=document.getElementById('ptStoreBtnName'); if(el) el.textContent=(name!==undefined)?name:((ptStore()||{}).name||'매장 선택'); }
+function ptToggleDropdown(e){
+  if(e) e.stopPropagation();
+  const menu=document.getElementById('ptStoreMenu'); const btn=document.getElementById('ptStoreBtn');
+  const opening=!menu.classList.contains('show');
+  btn.classList.toggle('open'); menu.classList.toggle('show');
+  if(opening){
+    const inp=document.getElementById('ptStoreSearch'); if(inp) inp.value='';
+    ptRenderStoreDropdown();
+    const wrap=document.getElementById('ptStoreSearchWrap');
+    if(inp&&wrap&&wrap.style.display!=='none') setTimeout(()=>inp.focus(),50);
+  }
+}
+function ptCloseDropdown(){
+  const menu=document.getElementById('ptStoreMenu'); const btn=document.getElementById('ptStoreBtn');
+  if(btn) btn.classList.remove('open'); if(menu) menu.classList.remove('show');
+  const inp=document.getElementById('ptStoreSearch'); if(inp) inp.value='';
+}
+function ptRenderStoreDropdown(){
+  const list=document.getElementById('ptStoreList');
+  const wrap=document.getElementById('ptStoreSearchWrap');
+  const input=document.getElementById('ptStoreSearch');
+  if(!list) return;
+  const searchOn=stores&&stores.length>5;
+  if(wrap) wrap.style.display=searchOn?'':'none';
+  if(!stores||stores.length===0){ list.innerHTML='<div class="store-empty">등록된 매장이 없습니다</div>'; return; }
+  const q=(searchOn&&input?input.value:'').trim().toLowerCase();
+  const filtered=q?stores.filter(s=>((s.name||'')+' '+(s.address||'')+' '+(s.category||'')).toLowerCase().includes(q)):stores;
+  if(filtered.length===0){ list.innerHTML='<div class="store-empty">검색 결과가 없습니다</div>'; return; }
+  list.innerHTML=filtered.map(s=>
+    `<div class="store-dropdown-item${String(s.id)===String(ptStoreId)?' active':''}" onclick="ptPickStore('${s.id}')">
+      <div>
+        <div>🏪 ${escapeHtml(s.name)}</div>
+        <div class="meta">${escapeHtml(s.category||'')}${(s.category&&(s.address||s.place_url))?' · ':''}${escapeHtml(s.address||s.place_url||'')}</div>
+      </div>
+    </div>`).join('');
+}
+async function ptPickStore(id){ ptCloseDropdown(); if(String(id)===String(ptStoreId)) return; await ptSelectStore(id); }
 
 async function ptLoad(){
   // 키워드 목록
