@@ -20,6 +20,7 @@ export default async function handler(req, res) {
   const password = (b.password || '').toString();
   const email = (b.email || '').toString().trim();
   const role = (b.role || '').toString();
+  const roleDetail = (b.role_detail || '').toString().trim();
 
   // 검증
   if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) return res.status(400).json({ ok: false, error: '아이디는 영문·숫자·밑줄 4~20자입니다.' });
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
   if (!b.terms_agreed) return res.status(400).json({ ok: false, error: '약관에 동의해야 가입할 수 있습니다.' });
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ ok: false, error: '올바른 이메일을 입력하세요.' });
   if (role && !['매장주', '대행사', '직원', '기타'].includes(role)) return res.status(400).json({ ok: false, error: '역할 값이 올바르지 않습니다.' });
+  if (role === '기타' && !roleDetail) return res.status(400).json({ ok: false, error: '역할을 직접 입력해 주세요.' });
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const KEY = process.env.SUPABASE_SECRET_KEY;
@@ -53,6 +55,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         id: user.id, username, email,
         name: b.name || null, company: b.company || null, role: role || null,
+        role_detail: role === '기타' ? (roleDetail || null) : null,
         phone: b.phone || null, referrer: b.referrer || null, terms_agreed: true,
       }),
     });
