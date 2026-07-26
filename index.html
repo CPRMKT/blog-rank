@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>용코치의 CPR 마케팅</title>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 /* ============ 디자인 토큰 ============ */
 :root{
@@ -355,9 +356,89 @@ tr:hover td{background:var(--surface-3)}
   .home-hero{grid-template-columns:1fr}
   .home-why,.home-feats{grid-template-columns:1fr}
 }
+/* ============ 로그인 게이트 ============ */
+#authGate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+#authGate.hidden{display:none}
+.auth-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--sh-2);width:100%;max-width:420px;padding:32px 28px}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.auth-brand .brand-mark{width:34px;height:34px;border-radius:8px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.auth-brand .brand-mark svg{width:19px;height:19px}
+.auth-brand b{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+.auth-brand span{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+.auth-tabs{display:flex;gap:6px;margin-bottom:20px}
+.auth-tab{flex:1;text-align:center;padding:9px;border-radius:var(--r-btn);border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
+.auth-tab.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.auth-field{margin-bottom:12px}
+.auth-field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px}
+.auth-field input,.auth-field select{width:100%;height:40px}
+.auth-field .with-btn{display:flex;gap:6px}
+.auth-field .with-btn input{flex:1}
+.auth-field .with-btn button{white-space:nowrap;height:40px;padding:0 12px}
+.auth-hint{font-size:11.5px;margin-top:5px}
+.auth-hint.ok{color:var(--ok)} .auth-hint.bad{color:var(--bad)}
+.auth-check{display:flex;align-items:flex-start;gap:8px;margin:14px 0;font-size:12.5px;color:var(--text);line-height:1.5}
+.auth-check input{width:16px;height:16px;margin-top:1px;accent-color:var(--brand);flex-shrink:0}
+.auth-submit{width:100%;height:44px;font-size:14px;margin-top:6px}
+.auth-msg{font-size:12.5px;margin-top:12px;text-align:center;min-height:16px}
+.auth-msg.bad{color:var(--bad)} .auth-msg.ok{color:var(--ok)}
+.auth-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.menu-logout{margin-top:auto;border-top:1px solid var(--line);padding:12px var(--sp-2)}
+.menu-logout button{width:100%;height:36px;font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-btn);cursor:pointer;font-weight:600}
+.menu-logout button:hover{background:var(--surface-3);color:var(--bad);border-color:var(--line-strong)}
+.menu-logout .who{font-size:11px;color:var(--faint);margin-bottom:8px;padding:0 2px;word-break:break-all}
 </style>
 </head>
 <body>
+
+<!-- ============ 로그인 게이트 (로그인 전 전체 차단) ============ -->
+<div id="authGate">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></span>
+      <b>용코치의 CPR 마케팅<span>데이터 기반 셀프 마케팅</span></b>
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" id="authTabLogin" onclick="authSwitch('login')">로그인</div>
+      <div class="auth-tab" id="authTabSignup" onclick="authSwitch('signup')">회원가입</div>
+    </div>
+
+    <!-- 로그인 -->
+    <div id="authLoginForm">
+      <div class="auth-field"><label>아이디</label><input type="text" id="liId" placeholder="아이디" autocomplete="username" onkeydown="if(event.key==='Enter')authLogin()"></div>
+      <div class="auth-field"><label>비밀번호</label><input type="password" id="liPw" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()"></div>
+      <button class="btn primary auth-submit" id="liBtn" onclick="authLogin()">로그인</button>
+      <div class="auth-msg bad" id="liMsg"></div>
+    </div>
+
+    <!-- 회원가입 -->
+    <div id="authSignupForm" style="display:none">
+      <div class="auth-field">
+        <label>아이디 <span style="color:var(--faint);font-weight:400">(영문·숫자·밑줄 4~20자)</span></label>
+        <div class="with-btn">
+          <input type="text" id="suId" placeholder="로그인에 쓸 아이디" autocomplete="off" oninput="suIdChanged()">
+          <button class="btn" id="suIdCheckBtn" onclick="authCheckId()">아이디 확인</button>
+        </div>
+        <div class="auth-hint" id="suIdHint"></div>
+      </div>
+      <div class="auth-field"><label>비밀번호 <span style="color:var(--faint);font-weight:400">(6자 이상)</span></label><input type="password" id="suPw" placeholder="비밀번호" autocomplete="new-password"></div>
+      <div class="auth-field"><label>이메일 <span style="color:var(--faint);font-weight:400">(공지·알림용)</span></label><input type="text" id="suEmail" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="auth-row2">
+        <div class="auth-field"><label>이름</label><input type="text" id="suName" placeholder="이름"></div>
+        <div class="auth-field"><label>업체명</label><input type="text" id="suCompany" placeholder="업체명"></div>
+      </div>
+      <div class="auth-row2">
+        <div class="auth-field"><label>역할</label>
+          <select id="suRole"><option value="매장주">매장주</option><option value="대행사">대행사</option><option value="직원">직원</option><option value="기타">기타</option></select>
+        </div>
+        <div class="auth-field"><label>휴대폰번호</label><input type="text" id="suPhone" placeholder="010-0000-0000"></div>
+      </div>
+      <div class="auth-field"><label>추천인 <span style="color:var(--faint);font-weight:400">(선택)</span></label><input type="text" id="suReferrer" placeholder="추천인 아이디/이름"></div>
+      <label class="auth-check"><input type="checkbox" id="suTerms"><span>이용약관 및 개인정보 처리방침에 전체 동의합니다. (필수)</span></label>
+      <button class="btn primary auth-submit" id="suBtn" onclick="authSignup()">가입하기</button>
+      <div class="auth-msg" id="suMsg"></div>
+    </div>
+  </div>
+</div>
 
 <div class="sidebar">
   <div class="sidebar-logo">
@@ -393,6 +474,10 @@ tr:hover td{background:var(--surface-3)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4c.7 3.6 2.7 5.6 6.2 6.2-3.5.7-5.5 2.7-6.2 6.2-.7-3.5-2.7-5.5-6.2-6.2C9.3 9.6 11.3 7.6 12 4Z"/></svg> 키워드 제안
       </div>
     </div>
+  </div>
+  <div class="menu-logout" id="menuLogout" style="display:none">
+    <div class="who" id="logoutWho"></div>
+    <button onclick="authLogout()">로그아웃</button>
   </div>
 </div>
 
@@ -808,12 +893,116 @@ tr:hover td{background:var(--surface-3)}
 </div>
 
 <script>
+// ============ 인증(로그인 게이트) ============
+let SB=null;                 // Supabase 클라이언트
+const AUTH_DOMAIN='users.blogrank.internal';
+const synthEmail=(id)=>`${String(id||'').toLowerCase()}@${AUTH_DOMAIN}`;
+
+async function authToken(){
+  if(!SB) return '';
+  try{ const {data}=await SB.auth.getSession(); return data.session?data.session.access_token:''; }catch(e){ return ''; }
+}
+
 async function dbCall(action,data){
   try{
-    const res=await fetch('/api/db',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,data})});
+    const headers={'Content-Type':'application/json'};
+    const t=await authToken();
+    if(t) headers['Authorization']='Bearer '+t;
+    const res=await fetch('/api/db',{method:'POST',headers,body:JSON.stringify({action,data})});
+    if(res.status===401){ showAuthGate(); return {ok:false,error:'로그인이 필요합니다'}; }
     return res.json();
   }catch(e){return{ok:false};}
 }
+
+function showAuthGate(){ const g=document.getElementById('authGate'); if(g) g.classList.remove('hidden'); const m=document.getElementById('menuLogout'); if(m) m.style.display='none'; }
+function hideAuthGate(){ const g=document.getElementById('authGate'); if(g) g.classList.add('hidden'); }
+function authSwitch(t){
+  document.getElementById('authTabLogin').classList.toggle('active',t==='login');
+  document.getElementById('authTabSignup').classList.toggle('active',t==='signup');
+  document.getElementById('authLoginForm').style.display=t==='login'?'':'none';
+  document.getElementById('authSignupForm').style.display=t==='signup'?'':'none';
+}
+function suIdChanged(){ const h=document.getElementById('suIdHint'); h.textContent=''; h.className='auth-hint'; }
+async function authCheckId(){
+  const id=document.getElementById('suId').value.trim();
+  const h=document.getElementById('suIdHint');
+  if(!/^[a-zA-Z0-9_]{4,20}$/.test(id)){ h.textContent='영문·숫자·밑줄 4~20자로 입력하세요.'; h.className='auth-hint bad'; return; }
+  h.textContent='확인 중...'; h.className='auth-hint';
+  try{
+    const r=await fetch('/api/auth-check-username?username='+encodeURIComponent(id)).then(x=>x.json());
+    if(r.available){ h.textContent='사용 가능한 아이디입니다.'; h.className='auth-hint ok'; }
+    else { h.textContent=r.reason||'이미 사용 중인 아이디입니다.'; h.className='auth-hint bad'; }
+  }catch(e){ h.textContent='확인 실패. 잠시 후 다시 시도하세요.'; h.className='auth-hint bad'; }
+}
+async function authLogin(){
+  const id=document.getElementById('liId').value.trim();
+  const pw=document.getElementById('liPw').value;
+  const msg=document.getElementById('liMsg'); msg.textContent='';
+  if(!id||!pw){ msg.textContent='아이디와 비밀번호를 입력하세요.'; return; }
+  const btn=document.getElementById('liBtn'); btn.disabled=true; btn.textContent='로그인 중...';
+  try{
+    const {error}=await SB.auth.signInWithPassword({email:synthEmail(id),password:pw});
+    if(error){ msg.textContent='아이디 또는 비밀번호가 올바르지 않습니다.'; }
+    else { await onAuthed(); }
+  }catch(e){ msg.textContent='로그인 오류: '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='로그인'; }
+}
+async function authSignup(){
+  const msg=document.getElementById('suMsg'); msg.className='auth-msg bad'; msg.textContent='';
+  const body={
+    username:document.getElementById('suId').value.trim(),
+    password:document.getElementById('suPw').value,
+    email:document.getElementById('suEmail').value.trim(),
+    name:document.getElementById('suName').value.trim(),
+    company:document.getElementById('suCompany').value.trim(),
+    role:document.getElementById('suRole').value,
+    phone:document.getElementById('suPhone').value.trim(),
+    referrer:document.getElementById('suReferrer').value.trim(),
+    terms_agreed:document.getElementById('suTerms').checked,
+  };
+  if(!/^[a-zA-Z0-9_]{4,20}$/.test(body.username)){ msg.textContent='아이디는 영문·숫자·밑줄 4~20자입니다.'; return; }
+  if(body.password.length<6){ msg.textContent='비밀번호는 6자 이상이어야 합니다.'; return; }
+  if(!body.email||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)){ msg.textContent='올바른 이메일을 입력하세요.'; return; }
+  if(!body.terms_agreed){ msg.textContent='약관에 동의해야 가입할 수 있습니다.'; return; }
+  const btn=document.getElementById('suBtn'); btn.disabled=true; btn.textContent='가입 중...';
+  try{
+    const r=await fetch('/api/auth-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    if(!r.ok){ msg.textContent=r.error||'가입 실패'; return; }
+    msg.className='auth-msg ok'; msg.textContent='가입 완료! 로그인 중...';
+    const {error}=await SB.auth.signInWithPassword({email:synthEmail(body.username),password:body.password});
+    if(error){ authSwitch('login'); msg.textContent='가입은 됐어요. 로그인해 주세요.'; }
+    else { await onAuthed(); }
+  }catch(e){ msg.textContent='가입 오류: '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='가입하기'; }
+}
+async function authLogout(){
+  try{ if(SB) await SB.auth.signOut(); }catch(e){}
+  // 앱 상태 초기화(다른 계정 데이터 잔상 방지)
+  stores=[]; curStoreId=null; ptStoreId=null; storeKeywords={}; storeRankings={}; ptKeywords=[]; ptRows=[];
+  showAuthGate();
+}
+async function onAuthed(){
+  hideAuthGate();
+  // 사용자 표시 + 로그아웃 버튼
+  let who='';
+  try{ const {data}=await SB.auth.getSession(); const em=data.session&&data.session.user&&data.session.user.email||''; who=em.split('@')[0]; }catch(e){}
+  const w=document.getElementById('logoutWho'); if(w) w.textContent=who?('@'+who):'';
+  const m=document.getElementById('menuLogout'); if(m) m.style.display='';
+  // 앱 상태 초기화 후 홈으로
+  stores=[]; curStoreId=null; ptStoreId=null;
+  showPage('home');
+}
+async function initAuth(){
+  try{
+    const cfg=await fetch('/api/public-config').then(r=>r.json());
+    if(!cfg.supabaseUrl||!cfg.supabaseAnonKey){ document.getElementById('liMsg').textContent='설정 로드 실패(관리자 문의)'; return; }
+    SB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});
+    const {data}=await SB.auth.getSession();
+    if(data.session){ await onAuthed(); } else { showAuthGate(); }
+    SB.auth.onAuthStateChange((_e,s)=>{ if(!s){ showAuthGate(); } });
+  }catch(e){ document.getElementById('liMsg').textContent='초기화 오류: '+e.message; }
+}
+window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
   ['home','post','store','suggest','placetrack','placerank'].forEach(p=>{

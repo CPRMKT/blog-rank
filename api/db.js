@@ -2,21 +2,39 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY;
+  const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY;
+  const ANON_KEY = process.env.SUPABASE_ANON_KEY;
   const { action, data } = req.body || {};
+
+  // 인증 모드: 크론 시크릿 or 사용자 세션 토큰. 둘 다 없으면 차단.
+  const cronSecret = (req.headers['x-cron-secret'] || '').toString();
+  const isCron = !!process.env.CRON_SECRET && cronSecret === process.env.CRON_SECRET;
+  const authHeader = (req.headers['authorization'] || req.headers['Authorization'] || '').toString();
+  const userToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!isCron && !userToken) return res.status(401).json({ ok: false, error: '인증이 필요합니다. 다시 로그인해 주세요.' });
+
+  // 계정분리 제외(공용 레거시: 포스팅 순위 조회)는 service_role로.
+  const SHARED_ACTIONS = new Set(['save_blogs', 'get_blogs', 'save_posts', 'save_rank', 'get_rank_history']);
+  const useServiceRole = isCron || SHARED_ACTIONS.has(action);
+  // 사용자 모드: anon key + 사용자 JWT → PostgREST가 RLS(owner_id=auth.uid())로 자동 격리.
+  //             insert owner_id는 컬럼 default auth.uid()가 채움(직접 지정 안 함).
+  // 크론 모드: service_role(RLS 우회) + owner_id 직접 지정.
+  const apikey = useServiceRole ? SERVICE_KEY : ANON_KEY;
+  const authz = useServiceRole ? SERVICE_KEY : userToken;
+  const cronOwner = isCron && data ? data.owner_id : undefined; // 크론이 저장 시 지정하는 소유자
 
   const supaFetch = (path, options = {}) =>
     fetch(`${SUPABASE_URL}/rest/v1${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': apikey,
+        'Authorization': `Bearer ${authz}`,
         'Prefer': 'return=representation',
         ...options.headers,
       },
@@ -147,6 +165,7 @@ export default async function handler(req, res) {
     if (action === 'save_store_ranking') {
       // matches: 이 키워드에 걸린 우리 매장 블로그 전부 [{rank,url,title}, ...]
       const payload = { store_id: data.store_id, keyword: data.keyword, checked_date: data.checked_date || new Date().toISOString().slice(0, 10), rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null, matches: Array.isArray(data.matches) ? data.matches : null };
+      if (cronOwner) payload.owner_id = cronOwner; // 크론: 소유자 지정(사용자모드는 default auth.uid())
       try { await supaFetch(`/store_rankings?store_id=eq.${payload.store_id}&keyword=eq.${encodeURIComponent(payload.keyword)}&checked_date=eq.${payload.checked_date}`, { method: 'DELETE' }); } catch {}
       const result = await supaFetch('/store_rankings', { method: 'POST', body: JSON.stringify(payload) });
       return res.status(200).json({ ok: true, result });
@@ -190,8 +209,12 @@ export default async function handler(req, res) {
         visitor_reviews: r.visitorReviews ?? r.visitor_reviews ?? null,
         blog_reviews: r.blogReviews ?? r.blog_reviews ?? null,
         saves: r.saves ?? r.save ?? null,
+        ...(cronOwner ? { owner_id: cronOwner } : {}), // 크론: 소유자 지정(사용자모드는 default auth.uid())
       }));
-      try { await supaFetch(`/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=eq.${checkedDate}`, { method: 'DELETE' }); } catch {}
+      // 크론(service_role)은 owner 범위로 삭제, 사용자모드는 RLS가 자동 범위 제한
+      let delPath = `/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=eq.${checkedDate}`;
+      if (cronOwner) delPath += `&owner_id=eq.${cronOwner}`;
+      try { await supaFetch(delPath, { method: 'DELETE' }); } catch {}
       if (rows.length) await supaFetch('/place_rankings', { method: 'POST', body: JSON.stringify(rows) });
       return res.status(200).json({ ok: true, saved: rows.length });
     }
@@ -218,6 +241,23 @@ export default async function handler(req, res) {
       const result = await supaFetch('/store_place_keywords?select=keyword');
       const kws = [...new Set((Array.isArray(result) ? result : []).map((r) => r.keyword).filter(Boolean))];
       return res.status(200).json({ ok: true, result: kws });
+    }
+    // 크론용: 전 계정의 플레이스 추적 (owner_id, keyword) 페어 — place_keywords + store_place_keywords 합집합
+    if (action === 'list_all_place_tracking') {
+      const [pk, spk] = await Promise.all([
+        supaFetch('/place_keywords?select=owner_id,keyword').catch(() => []),
+        supaFetch('/store_place_keywords?select=owner_id,keyword').catch(() => []),
+      ]);
+      const seen = new Set();
+      const pairs = [];
+      for (const r of [...(Array.isArray(pk) ? pk : []), ...(Array.isArray(spk) ? spk : [])]) {
+        if (!r || !r.owner_id || !r.keyword) continue;
+        const k = r.owner_id + ' ' + r.keyword;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        pairs.push({ owner_id: r.owner_id, keyword: r.keyword });
+      }
+      return res.status(200).json({ ok: true, result: pairs });
     }
     // 우리 매장 관점: 등록 키워드별 우리 매장 순위 이력(place_rankings에서 place_id 매칭 행만)
     if (action === 'get_store_place_rankings') {

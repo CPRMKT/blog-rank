@@ -25,7 +25,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function dbCall(action, data = {}) {
   const resp = await fetch(`${BASE}/api/db`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET || '' },
     body: JSON.stringify({ action, data }),
   });
   const t = await resp.text();
@@ -42,17 +42,21 @@ async function main() {
   const summary = { keywords: 0, saved: 0, errors: 0 };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
-    // 전역 추적 키워드(place_keywords) + 매장별 추적 키워드(store_place_keywords) 합집합
-    const [globalRes, storeRes] = await Promise.all([
-      dbCall('list_place_keywords').catch(() => null),
-      dbCall('list_all_store_place_keywords').catch(() => null),
-    ]);
-    const globalKws = ((globalRes && globalRes.result) || []).map((k) => k.keyword);
-    const storeKws = (storeRes && storeRes.result) || []; // 이미 distinct keyword 문자열 배열
-    const keywords = [...new Set([...globalKws, ...storeKws].map((s) => String(s || '').trim()).filter(Boolean))];
-    log(`추적 키워드 ${keywords.length}개 (전역 ${globalKws.length} + 매장 ${storeKws.length})`);
+    // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
+    const trackRes = await dbCall('list_all_place_tracking').catch(() => null);
+    const pairs = (trackRes && trackRes.result) || []; // [{owner_id, keyword}]
+    // 스크래핑은 키워드 단위로 1번만(같은 키워드를 여러 계정이 추적해도 재사용) → 계정별로 저장만 반복
+    const byKeyword = new Map(); // keyword -> [owner_id, ...]
+    for (const p of pairs) {
+      if (!p || !p.owner_id || !p.keyword) continue;
+      const arr = byKeyword.get(p.keyword) || [];
+      arr.push(p.owner_id);
+      byKeyword.set(p.keyword, arr);
+    }
+    log(`추적 키워드 ${byKeyword.size}개 / 계정×키워드 ${pairs.length}건`);
 
-    for (const keyword of keywords) {
+    const today = kstDate();
+    for (const [keyword, owners] of byKeyword) {
       summary.keywords++;
       try {
         const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=50`;
@@ -60,9 +64,12 @@ async function main() {
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);
         const items = data.items || [];
-        await dbCall('save_place_rankings', { keyword, checked_date: kstDate(), rows: items });
-        summary.saved++;
-        log(`  • "${keyword}" → ${items.length}곳 저장`);
+        // 이 키워드를 추적하는 각 계정에 대해 owner별로 저장
+        for (const owner_id of owners) {
+          await dbCall('save_place_rankings', { keyword, owner_id, checked_date: today, rows: items });
+          summary.saved++;
+        }
+        log(`  • "${keyword}" → ${items.length}곳 × 계정 ${owners.length}개 저장`);
       } catch (e) {
         summary.errors++;
         log(`  ✗ "${keyword}" 에러: ${e.message}`);

@@ -49,7 +49,7 @@ async function api(path, options = {}, timeoutMs = 30000) {
 async function dbCall(action, data = {}) {
   return api('/api/db', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET || '' },
     body: JSON.stringify({ action, data }),
   }, 30000);
 }
@@ -102,6 +102,7 @@ async function main() {
           if (!DRY_RUN) {
             await dbCall('save_store_ranking', {
               store_id: store.id,
+              owner_id: store.owner_id || null,   // 크론: 매장 소유자 지정
               keyword,
               checked_date: kstDate(),
               rank: best.rank,
