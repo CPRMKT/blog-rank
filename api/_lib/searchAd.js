@@ -75,7 +75,7 @@ export async function fetchSearchVolumes(keywords) {
       if (!row) continue;
       const pc = toNum(row.monthlyPcQcCnt);
       const mobile = toNum(row.monthlyMobileQcCnt);
-      result.set(kw, { pc, mobile, total: pc + mobile });
+      result.set(kw, { pc, mobile, total: pc + mobile, compIdx: row.compIdx || null });
     }
   }
 

@@ -1197,11 +1197,12 @@ function volHtml(vol,loading){
 
 function compHtml(comp,loading){
   if(loading)return'';
-  if(comp===null)return'<span class="muted">-</span>';
-  const v=parseFloat(comp);if(isNaN(v))return'<span class="muted">-</span>';
-  const cls=v<0.3?'comp-low':v<0.7?'comp-mid':'comp-high';
-  const label=v<0.3?'낮음':v<0.7?'보통':'높음';
-  return`<span class="${cls}" style="font-size:12px">${v.toFixed(2)} (${label})</span>`;
+  if(comp===null||comp===undefined||comp==='')return'<span class="muted">-</span>';
+  // 검색광고 경쟁정도(compIdx): 높음/중간/낮음
+  const map={'높음':['comp-high','높음'],'중간':['comp-mid','보통'],'낮음':['comp-low','낮음']};
+  const m=map[String(comp)];
+  if(!m)return`<span class="muted">${escapeHtml(String(comp))}</span>`;
+  return`<span class="${m[0]}" style="font-size:12px">${m[1]}</span>`;
 }
 
 async function doSearch(blogId,idx){
@@ -1211,20 +1212,23 @@ async function doSearch(blogId,idx){
   postData[blogId].posts[idx].rank=null;postData[blogId].posts[idx].vol=null;postData[blogId].posts[idx].comp=null;
   renderPosts(blogId);
   try{
-    const res=await fetch(`/api/search?query=${encodeURIComponent(kw)}`);
-    if(!res.ok){const err=await res.json();throw new Error(err.error||'서버 오류');}
-    const data=await res.json();
-    const items=data.items||[];const total=data.total||0;
+    const post=postData[blogId].posts[idx];
+    // 순위(관련도순 검색) + 월검색량/경쟁지수(검색광고) 병렬 조회
+    const [data,volRes]=await Promise.all([
+      fetch(`/api/search?query=${encodeURIComponent(kw)}`).then(async r=>{ if(!r.ok){const e=await r.json();throw new Error(e.error||'서버 오류');} return r.json(); }),
+      fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:[kw]})}).then(r=>r.json()).catch(()=>null),
+    ]);
+    const items=data.items||[];
+    // 이 "포스트" 순위 — blogId만이 아니라 포스트 URL(blogId/postId)까지 정확히 일치
+    const myKey=blogKey(post.link);
     let rank=0;
-    for(let i=0;i<items.length;i++){
-      const link=(items[i].link||'')+(items[i].bloggername||'');
-      if(link.toLowerCase().includes(blogId.toLowerCase())){rank=i+1;break;}
-    }
-    const comp=total>0?Math.min(1,total/10000):null;
-    postData[blogId].posts[idx].rank=rank;
-    postData[blogId].posts[idx].vol=total;
-    postData[blogId].posts[idx].comp=comp!==null?parseFloat(comp.toFixed(2)):null;
-    dbCall('save_rank',{post_url:postData[blogId].posts[idx].link,blog_id:blogId,keyword:kw,rank,search_volume:total,competition:postData[blogId].posts[idx].comp});
+    for(let i=0;i<items.length;i++){ if(blogKey(items[i].link||'')===myKey){ rank=i+1; break; } }
+    // 검색량·경쟁지수는 검색광고 API 값
+    const v=(volRes&&volRes.volumes&&volRes.volumes[kw])||null;
+    post.rank=rank;
+    post.vol=v?v.total:null;                 // 월 검색량(PC+모바일)
+    post.comp=v?(v.compIdx||null):null;       // 경쟁정도: 높음/중간/낮음
+    dbCall('save_rank',{post_url:post.link,blog_id:blogId,keyword:kw,rank,search_volume:post.vol,competition:post.comp});
   }catch(e){alert('조회 오류: '+e.message);postData[blogId].posts[idx].rank=null;}
   postData[blogId].posts[idx].loading=false;
   renderPosts(blogId);updateStats();

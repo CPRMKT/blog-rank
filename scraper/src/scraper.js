@@ -26,7 +26,8 @@ export async function closeBrowser() {
   }
 }
 
-export async function scrapeBlogTab(keyword, count = 15) {
+// sort: 'date'(최신순, 매장 블로그 순위 기본) | 'rel'(관련도순, 포스팅 순위 조회)
+export async function scrapeBlogTab(keyword, count = 15, sort = 'date') {
   const b = await initBrowser();
   // 모바일 컨텍스트로 접속한다. 데스크톱 검색 페이지는 이 서버 환경에서
   // 최신순 조직 결과 대신 "인기글"(인기순) 모듈만 렌더되는 경우가 있어
@@ -60,11 +61,12 @@ export async function scrapeBlogTab(keyword, count = 15) {
   const page = await context.newPage();
 
   try {
-    // 모바일 블로그탭 최신순(sort=date). 데스크톱 URL은 이 서버에서 인기글
-    // 모듈만 렌더되는 문제가 있어 조직 최신순 순위를 못 얻는다.
+    // 모바일 블로그탭. 데스크톱 URL은 이 서버에서 인기글 모듈만 렌더되는
+    // 문제가 있어 모바일을 쓴다. sort=date(최신순) / nso=so:r(관련도순).
+    const sortParam = sort === 'rel' ? '&nso=so%3Ar%2Cp%3Aall' : '&sort=date';
     const url =
       `https://m.search.naver.com/search.naver?ssc=tab.m_blog.all` +
-      `&query=${encodeURIComponent(keyword)}&sort=date`;
+      `&query=${encodeURIComponent(keyword)}${sortParam}`;
 
     // waitUntil:'commit'은 최초 응답 직후 반환되므로, 무거운 페이지 전체
     // 파싱을 기다리다 나는 타임아웃을 피한다. 결과는 아래 selector 대기로 확인.

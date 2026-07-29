@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     for (const k of list) {
       const v = volumes.get(norm(k));
       out[k] = v
-        ? { total: v.total, pc: v.pc, mobile: v.mobile }
+        ? { total: v.total, pc: v.pc, mobile: v.mobile, compIdx: v.compIdx || null }
         : null;
     }
     return res.status(200).json({ ok: true, hasVolume: volumes.size > 0, volumes: out });

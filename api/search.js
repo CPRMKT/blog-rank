@@ -23,7 +23,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await getBlogRankings(query, parseInt(count) || 30);
+    // 포스팅 순위 조회 탭: "지금 실제로 몇 위" 확인이 목적 → 관련도순(rel)
+    const result = await getBlogRankings(query, parseInt(count) || 30, 'rel');
 
     // 기존 프론트엔드 호환: items + total 형태 유지
     return res.status(200).json({

@@ -31,6 +31,7 @@ app.get('/health', (req, res) => {
 app.get('/scrape', async (req, res) => {
   const keyword = (req.query.keyword || '').toString().trim();
   const count = parseInt(req.query.count || '15', 10);
+  const sort = (req.query.sort || 'date').toString() === 'rel' ? 'rel' : 'date';
 
   if (!keyword) return res.status(400).json({ error: 'keyword required' });
   if (!Number.isFinite(count) || count < 1 || count > 30) {
@@ -39,7 +40,7 @@ app.get('/scrape', async (req, res) => {
 
   const t0 = Date.now();
   try {
-    const items = await scrapeBlogTab(keyword, count);
+    const items = await scrapeBlogTab(keyword, count, sort);
     res.json({
       items,
       total: items.length,
