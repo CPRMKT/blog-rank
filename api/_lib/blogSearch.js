@@ -19,7 +19,7 @@ const USER_AGENT =
 // 방법 1 (메인): 한국 서버 Playwright 스크래퍼
 // ============================================================
 
-async function searchKoreanScraper(keyword, count = 30) {
+async function searchKoreanScraper(keyword, count = 30, sort = 'date') {
   const baseUrl = process.env.KOREAN_SCRAPER_URL;
   const apiKey = process.env.KOREAN_SCRAPER_KEY;
   if (!baseUrl || !apiKey) {
@@ -28,7 +28,7 @@ async function searchKoreanScraper(keyword, count = 30) {
 
   const endpoint =
     `${baseUrl.replace(/\/$/, '')}/scrape` +
-    `?keyword=${encodeURIComponent(keyword)}&count=${count}`;
+    `?keyword=${encodeURIComponent(keyword)}&count=${count}&sort=${sort}`;
 
   const resp = await fetch(endpoint, {
     method: 'GET',
@@ -251,11 +251,11 @@ async function searchNaverApi(keyword, count = 30) {
  * @param {number} [count=30]
  * @returns {Promise<{items: Array, total: number, method: string}>}
  */
-export async function getBlogRankings(keyword, count = 30) {
+export async function getBlogRankings(keyword, count = 30, sort = 'date') {
   const method = (process.env.SEARCH_METHOD || 'korean').toLowerCase();
 
   if (method === 'korean') {
-    return searchKoreanScraper(keyword, count);
+    return searchKoreanScraper(keyword, count, sort);
   }
   if (method === 'direct') {
     return searchDirect(keyword, count);
@@ -266,7 +266,7 @@ export async function getBlogRankings(keyword, count = 30) {
 
   // auto: korean → direct → naver_api
   try {
-    const r = await searchKoreanScraper(keyword, count);
+    const r = await searchKoreanScraper(keyword, count, sort);
     if (r.items.length > 0) return r;
     console.log('[blogSearch] korean 결과 0건, direct 폴백');
   } catch (e) {
