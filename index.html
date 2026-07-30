@@ -934,7 +934,7 @@ async function authCheckId(){
   if(!/^[a-zA-Z0-9_]{4,20}$/.test(id)){ h.textContent='영문·숫자·밑줄 4~20자로 입력하세요.'; h.className='auth-hint bad'; return; }
   h.textContent='확인 중...'; h.className='auth-hint';
   try{
-    const r=await fetch('/api/auth-check-username?username='+encodeURIComponent(id)).then(x=>x.json());
+    const r=await fetch('/api/auth?op=check-username&username='+encodeURIComponent(id)).then(x=>x.json());
     if(r.available){ h.textContent='사용 가능한 아이디입니다.'; h.className='auth-hint ok'; }
     else { h.textContent=r.reason||'이미 사용 중인 아이디입니다.'; h.className='auth-hint bad'; }
   }catch(e){ h.textContent='확인 실패. 잠시 후 다시 시도하세요.'; h.className='auth-hint bad'; }
@@ -986,7 +986,7 @@ async function authSignup(){
   if(!body.terms_agreed){ msg.textContent='약관에 동의해야 가입할 수 있습니다.'; return; }
   const btn=document.getElementById('suBtn'); btn.disabled=true; btn.textContent='가입 중...';
   try{
-    const r=await fetch('/api/auth-signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'signup',...body})}).then(x=>x.json());
     if(!r.ok){ msg.textContent=r.error||'가입 실패'; return; }
     msg.className='auth-msg ok'; msg.textContent='가입 완료! 로그인 중...';
     const {error}=await SB.auth.signInWithPassword({email:synthEmail(body.username),password:body.password});
@@ -1014,7 +1014,7 @@ async function onAuthed(){
 }
 async function initAuth(){
   try{
-    const cfg=await fetch('/api/public-config').then(r=>r.json());
+    const cfg=await fetch('/api/auth?op=config').then(r=>r.json());
     if(!cfg.supabaseUrl||!cfg.supabaseAnonKey){ document.getElementById('liMsg').textContent='설정 로드 실패(관리자 문의)'; return; }
     SB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});
     const {data}=await SB.auth.getSession();
