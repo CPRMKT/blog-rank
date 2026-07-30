@@ -10,5 +10,6 @@ export default async function handler(req, res) {
     ok: true,
     supabaseUrl: process.env.SUPABASE_URL || '',
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+    tossClientKey: process.env.TOSS_CLIENT_KEY || '', // 토스 결제창용 공개 클라이언트 키
   });
 }

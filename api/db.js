@@ -287,6 +287,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // ===== 포인트(발주) =====
+    // 내 포인트 잔액(원장 합산) — RLS로 본인 것만
+    if (action === 'get_point_balance') {
+      const rows = await supaFetch('/point_transactions?select=amount');
+      const balance = (Array.isArray(rows) ? rows : []).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      return res.status(200).json({ ok: true, balance });
+    }
+    // 내 포인트 내역
+    if (action === 'list_point_transactions') {
+      const result = await supaFetch('/point_transactions?select=*&order=created_at.desc&limit=100');
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
+    // 세금계산서 신청 접수(본인) — business_number+email(+상호/충전건)
+    if (action === 'create_tax_invoice_request') {
+      const body = { business_number: data.business_number, email: data.email, company_name: data.company_name || null, related_transaction_id: data.related_transaction_id || null };
+      const result = await supaFetch('/tax_invoice_requests', { method: 'POST', body: JSON.stringify(body) });
+      return res.status(200).json({ ok: true, result });
+    }
+
     return res.status(400).json({ ok: false, error: 'Unknown action' });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
