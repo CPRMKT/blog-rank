@@ -489,6 +489,9 @@ tr:hover td{background:var(--surface-3)}
       <div class="menu-item" id="menu-charge" onclick="showPage('charge')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14.5h4"/></svg> 포인트 충전
       </div>
+      <div class="menu-item" id="menu-admin" onclick="showPage('admin')" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/><path d="M9.2 12l1.9 1.9 3.7-3.8"/></svg> 주문 관리
+      </div>
     </div>
   </div>
   <div class="menu-logout" id="menuLogout" style="display:none">
@@ -907,6 +910,60 @@ tr:hover td{background:var(--surface-3)}
   </div>
 
   <!-- ============================================= -->
+  <!-- 주문 관리 (발주 4단계, 관리자 전용)             -->
+  <!-- ============================================= -->
+  <style>
+  #page-admin{padding:0}
+  #page-admin .ad-title{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+  #page-admin .ad-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+  #page-admin .ad-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-2);margin-top:var(--sp-2);box-shadow:var(--sh)}
+  #page-admin .ad-stats{display:flex;gap:8px;flex-wrap:wrap}
+  #page-admin .ad-stat{flex:1;min-width:90px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:center}
+  #page-admin .ad-stat:hover{border-color:var(--brand)}
+  #page-admin .ad-stat.active{border-color:var(--brand);background:var(--brand-soft)}
+  #page-admin .ad-stat .v{font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  #page-admin .ad-stat.active .v{color:var(--brand-ink)}
+  #page-admin .ad-stat .l{font-size:11px;font-weight:600;color:var(--muted);margin-top:4px}
+  #page-admin .ad-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  #page-admin .ad-tools input{flex:1;min-width:180px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:0 12px;height:38px;font-size:13px;outline:none}
+  #page-admin .ad-tools input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  #page-admin .ad-refresh{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:var(--r-btn);height:38px;padding:0 14px;font-weight:600;cursor:pointer;font-size:13px}
+  #page-admin .ad-refresh:hover{background:var(--surface-3)}
+  #page-admin table{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--text);min-width:820px}
+  #page-admin thead th{background:var(--surface-2);color:var(--muted);text-align:left;padding:10px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+  #page-admin tbody td{padding:10px;border-top:1px solid var(--line-2);vertical-align:top}
+  #page-admin .ad-empty{color:var(--muted);text-align:center;padding:24px}
+  #page-admin .ad-who{font-weight:700;color:var(--ink)}
+  #page-admin .ad-who small{display:block;font-weight:500;color:var(--faint);font-size:11px;margin-top:2px}
+  #page-admin select.ad-status{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r-chip);height:30px;padding:0 8px;font-size:12px;font-weight:700;cursor:pointer;outline:none}
+  #page-admin select.ad-status:focus{border-color:var(--brand)}
+  #page-admin select.ad-status[data-st="접수"]{color:var(--brand-ink)}
+  #page-admin select.ad-status[data-st="진행중"]{color:var(--warn,#b45309)}
+  #page-admin select.ad-status[data-st="완료"]{color:var(--ok)}
+  #page-admin select.ad-status[data-st="취소"]{color:var(--faint)}
+  </style>
+  <div id="page-admin" style="display:none">
+    <div class="ad-title">🛡️ 주문 관리 <span style="font-size:12px;font-weight:600;color:var(--faint)">· 관리자</span></div>
+    <div class="ad-sub">전체 회원의 발주 내역을 확인하고 상태를 변경합니다.</div>
+
+    <div class="ad-card">
+      <div class="ad-stats" id="adStats"></div>
+    </div>
+
+    <div class="ad-card">
+      <div class="ad-tools">
+        <input type="text" id="adSearch" placeholder="주문자·상품·매장·키워드 검색" oninput="adRender()">
+        <button class="ad-refresh" onclick="adLoad()">↻ 새로고침</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th style="width:120px">일시</th><th style="width:130px">주문자</th><th>상품</th><th style="width:90px">매장</th><th style="text-align:right;width:52px">수량</th><th style="text-align:right;width:96px">포인트</th><th style="width:96px">상태</th>
+        </tr></thead><tbody id="adBody"><tr><td colspan="7" class="ad-empty">불러오는 중…</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
   <!-- 발주하기 (발주 3단계)                          -->
   <!-- ============================================= -->
   <style>
@@ -1134,6 +1191,7 @@ tr:hover td{background:var(--surface-3)}
 <script>
 // ============ 인증(로그인 게이트) ============
 let SB=null;                 // Supabase 클라이언트
+let IS_ADMIN=false;          // 관리자 여부(본인 profiles.is_admin)
 let TOSS_CLIENT_KEY='';      // 토스페이먼츠 클라이언트 키(config에서 로드)
 const AUTH_DOMAIN='users.blogrank.internal';
 const synthEmail=(id)=>`${String(id||'').toLowerCase()}@${AUTH_DOMAIN}`;
@@ -1234,6 +1292,7 @@ async function authLogout(){
   try{ if(SB) await SB.auth.signOut(); }catch(e){}
   // 앱 상태 초기화(다른 계정 데이터 잔상 방지)
   stores=[]; curStoreId=null; ptStoreId=null; storeKeywords={}; storeRankings={}; ptKeywords=[]; ptRows=[];
+  IS_ADMIN=false; const am=document.getElementById('menu-admin'); if(am) am.style.display='none';
   showAuthGate();
 }
 async function onAuthed(){
@@ -1243,6 +1302,13 @@ async function onAuthed(){
   try{ const {data}=await SB.auth.getSession(); const em=data.session&&data.session.user&&data.session.user.email||''; who=em.split('@')[0]; }catch(e){}
   const w=document.getElementById('logoutWho'); if(w) w.textContent=who?('@'+who):'';
   const m=document.getElementById('menuLogout'); if(m) m.style.display='';
+  // 관리자면 "주문 관리" 메뉴 노출(본인 프로필 is_admin, RLS 본인조회 허용)
+  IS_ADMIN=false;
+  try{
+    const {data:sd}=await SB.auth.getSession(); const uid=sd.session&&sd.session.user&&sd.session.user.id;
+    if(uid){ const {data:pr}=await SB.from('profiles').select('is_admin').eq('id',uid).single(); IS_ADMIN=!!(pr&&pr.is_admin); }
+  }catch(e){}
+  const am=document.getElementById('menu-admin'); if(am) am.style.display=IS_ADMIN?'':'none';
   // 앱 상태 초기화 후 홈으로
   stores=[]; curStoreId=null; ptStoreId=null;
   showPage('home');
@@ -1261,7 +1327,7 @@ async function initAuth(){
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','placetrack','placerank','charge','order'].forEach(p=>{
+  ['home','post','store','suggest','placetrack','placerank','charge','order','admin'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
@@ -1270,6 +1336,7 @@ function showPage(page){
   if(page==='placerank') initPlaceRank();
   if(page==='charge') initCharge();
   if(page==='order') initOrder();
+  if(page==='admin') initAdmin();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
 }
 
@@ -1526,6 +1593,71 @@ async function odLoadHistory(){
     const st=o.status||'접수';
     return `<tr><td style="white-space:nowrap;color:var(--muted)">${ds}</td><td><div style="font-weight:600;color:var(--ink)">${escapeHtml(o.product_name||'')}</div>${extra?`<div style="font-size:11px;color:var(--faint);margin-top:2px">${escapeHtml(extra)}</div>`:''}</td><td style="color:var(--muted)">${escapeHtml(storeName(o.store_id))}</td><td style="text-align:right">${odFmt(o.quantity)}</td><td style="text-align:right;font-weight:700">${odFmt(o.total_price)}P</td><td><span class="od-st ${st}">${st}</span></td></tr>`;
   }).join('');
+}
+
+// ============ 주문 관리 (발주 4단계, 관리자) ============
+const AD_STATUSES=['접수','진행중','완료','취소'];
+let adOrders=[], adFilter='전체';
+const adFmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+
+async function initAdmin(){
+  if(!IS_ADMIN){ document.getElementById('adBody').innerHTML='<tr><td colspan="7" class="ad-empty">관리자 전용 화면입니다.</td></tr>'; return; }
+  adLoad();
+}
+
+async function adLoad(){
+  const body=document.getElementById('adBody');
+  body.innerHTML='<tr><td colspan="7" class="ad-empty">불러오는 중…</td></tr>';
+  const r=await dbCall('admin_list_orders');
+  adOrders=(r&&r.ok&&Array.isArray(r.result))?r.result:[];
+  adRenderStats();
+  adRender();
+}
+
+function adRenderStats(){
+  const counts={전체:adOrders.length,접수:0,진행중:0,완료:0,취소:0};
+  adOrders.forEach(o=>{ counts[o.status]=(counts[o.status]||0)+1; });
+  const items=[['전체','전체 주문'],['접수','접수'],['진행중','진행중'],['완료','완료'],['취소','취소']];
+  document.getElementById('adStats').innerHTML=items.map(([k,l])=>
+    `<div class="ad-stat ${adFilter===k?'active':''}" onclick="adSetFilter('${k}')"><div class="v">${adFmt(counts[k]||0)}</div><div class="l">${l}</div></div>`
+  ).join('');
+}
+function adSetFilter(k){ adFilter=k; adRenderStats(); adRender(); }
+
+function adRender(){
+  const body=document.getElementById('adBody');
+  const q=(document.getElementById('adSearch').value||'').trim().toLowerCase();
+  let rows=adOrders.slice();
+  if(adFilter!=='전체') rows=rows.filter(o=>o.status===adFilter);
+  if(q) rows=rows.filter(o=>{
+    const opt=o.options||{};
+    return ((o.username||'')+' '+(o.company||'')+' '+(o.product_name||'')+' '+(o.store_name||'')+' '+(o.category||'')+' '+(opt.keyword||'')+' '+(opt.memo||'')).toLowerCase().includes(q);
+  });
+  if(!rows.length){ body.innerHTML='<tr><td colspan="7" class="ad-empty">해당하는 주문이 없습니다.</td></tr>'; return; }
+  body.innerHTML=rows.map(o=>{
+    const d=new Date(o.created_at); const ds=isNaN(d)?'':(d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));
+    const opt=o.options||{}; const extra=[opt.keyword?('키워드: '+opt.keyword):'',opt.memo?('요청: '+opt.memo):''].filter(Boolean).join(' · ');
+    const who=escapeHtml(o.username||'(탈퇴)')+(o.company?`<small>${escapeHtml(o.company)}</small>`:'');
+    const st=o.status||'접수';
+    const sel=`<select class="ad-status" data-st="${st}" onchange="adChangeStatus(${o.id},this.value,this)">`+AD_STATUSES.map(s=>`<option ${s===st?'selected':''}>${s}</option>`).join('')+`</select>`;
+    return `<tr><td style="white-space:nowrap;color:var(--muted)">${ds}</td><td class="ad-who">${who}</td><td><div style="font-weight:600;color:var(--ink)">${escapeHtml(o.product_name||'')}</div>${extra?`<div style="font-size:11px;color:var(--faint);margin-top:2px">${escapeHtml(extra)}</div>`:''}</td><td style="color:var(--muted)">${escapeHtml(o.store_name||'-')}</td><td style="text-align:right">${adFmt(o.quantity)}</td><td style="text-align:right;font-weight:700">${adFmt(o.total_price)}P</td><td>${sel}</td></tr>`;
+  }).join('');
+}
+
+async function adChangeStatus(orderId,status,el){
+  const prev=el.getAttribute('data-st');
+  if(status===prev) return;
+  el.disabled=true;
+  const r=await dbCall('admin_set_order_status',{order_id:orderId,status});
+  el.disabled=false;
+  if(r&&r.ok){
+    el.setAttribute('data-st',status);
+    const o=adOrders.find(x=>x.id===orderId); if(o) o.status=status;
+    adRenderStats();
+  } else {
+    alert('상태 변경 실패: '+((r&&r.error)||'다시 시도해 주세요.'));
+    el.value=prev; // 롤백
+  }
 }
 
 function toggleDropdown(){

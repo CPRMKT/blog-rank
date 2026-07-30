@@ -324,6 +324,16 @@ export default async function handler(req, res) {
       const result = await supaFetch('/orders?select=*&order=created_at.desc&limit=200');
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
+    // (관리자) 전체 주문 조회 — RPC 내부 is_admin() 검증, 비관리자는 0행
+    if (action === 'admin_list_orders') {
+      const result = await supaFetch('/rpc/admin_list_orders', { method: 'POST', body: JSON.stringify({}) });
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
+    // (관리자) 주문 상태 변경 — RPC 내부 is_admin() 검증
+    if (action === 'admin_set_order_status') {
+      const result = await supaFetch('/rpc/admin_set_order_status', { method: 'POST', body: JSON.stringify({ p_order_id: data.order_id, p_status: data.status }) });
+      return res.status(200).json({ ok: true, result });
+    }
 
     return res.status(400).json({ ok: false, error: 'Unknown action' });
   } catch (e) {
