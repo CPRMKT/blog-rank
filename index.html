@@ -6,6 +6,7 @@
 <title>용코치의 CPR 마케팅</title>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://js.tosspayments.com/v1/payment"></script>
 <style>
 /* ============ 디자인 토큰 ============ */
 :root{
@@ -479,6 +480,13 @@ tr:hover td{background:var(--surface-3)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4c.7 3.6 2.7 5.6 6.2 6.2-3.5.7-5.5 2.7-6.2 6.2-.7-3.5-2.7-5.5-6.2-6.2C9.3 9.6 11.3 7.6 12 4Z"/></svg> 키워드 제안
       </div>
     </div>
+
+    <div class="menu-group">
+      <div class="menu-label">발주</div>
+      <div class="menu-item" id="menu-charge" onclick="showPage('charge')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14.5h4"/></svg> 포인트 충전
+      </div>
+    </div>
   </div>
   <div class="menu-logout" id="menuLogout" style="display:none">
     <div class="who" id="logoutWho"></div>
@@ -895,11 +903,118 @@ tr:hover td{background:var(--surface-3)}
     </div>
   </div>
 
+  <!-- ============================================= -->
+  <!-- 포인트 충전 (발주 2단계)                       -->
+  <!-- ============================================= -->
+  <style>
+  #page-charge{padding:0}
+  #page-charge .ch-title{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+  #page-charge .ch-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+  #page-charge .ch-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-2);margin-top:var(--sp-2);box-shadow:var(--sh)}
+  #page-charge .ch-card-t{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:14px}
+  #page-charge .ch-bal{display:flex;align-items:baseline;gap:10px}
+  #page-charge .ch-bal .n{font-size:34px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  #page-charge .ch-bal .u{font-size:15px;font-weight:700;color:var(--muted)}
+  #page-charge .ch-bal .sub{font-size:12px;color:var(--faint);margin-left:auto}
+  #page-charge .ch-presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  #page-charge .ch-preset{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-input);padding:13px 10px;text-align:center;cursor:pointer;font-weight:700;color:var(--text);font-size:14px;font-variant-numeric:tabular-nums}
+  #page-charge .ch-preset:hover{border-color:var(--brand);background:var(--brand-soft)}
+  #page-charge .ch-preset.active{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-ink);box-shadow:0 0 0 2px var(--brand-soft)}
+  #page-charge .ch-preset small{display:block;font-size:10.5px;color:var(--faint);font-weight:600;margin-top:3px}
+  #page-charge .ch-free{display:flex;gap:8px;align-items:center;margin-top:12px}
+  #page-charge .ch-free input{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:0 12px;height:42px;font-size:15px;outline:none;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  #page-charge .ch-free input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  #page-charge .ch-free .won{font-size:14px;color:var(--muted);font-weight:700}
+  #page-charge .ch-summary{display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2)}
+  #page-charge .ch-summary .lbl{font-size:12.5px;color:var(--muted)}
+  #page-charge .ch-summary .amt{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  #page-charge .ch-pay{width:100%;margin-top:14px;background:var(--brand);color:#fff;border:none;border-radius:var(--r-btn);height:46px;font-weight:700;cursor:pointer;font-size:14.5px}
+  #page-charge .ch-pay:hover{background:var(--brand-ink)}
+  #page-charge .ch-pay:disabled{opacity:.5;cursor:default}
+  #page-charge .ch-note{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.5}
+  #page-charge table{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--text);min-width:520px}
+  #page-charge thead th{background:var(--surface-2);color:var(--muted);text-align:left;padding:10px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+  #page-charge tbody td{padding:10px;border-top:1px solid var(--line-2)}
+  #page-charge .ch-plus{color:var(--ok);font-weight:800}
+  #page-charge .ch-minus{color:var(--bad);font-weight:800}
+  #page-charge .ch-empty{color:var(--muted);text-align:center;padding:24px}
+  #page-charge .ch-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #page-charge .ch-form label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:5px}
+  #page-charge .ch-form input{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:0 12px;height:40px;font-size:13px;outline:none}
+  #page-charge .ch-form input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  #page-charge .ch-form .full{grid-column:1 / -1}
+  #page-charge .ch-ghost{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:var(--r-btn);height:40px;padding:0 18px;font-weight:600;cursor:pointer;font-size:13px}
+  #page-charge .ch-ghost:hover{background:var(--surface-3)}
+  @media(max-width:560px){#page-charge .ch-form{grid-template-columns:1fr}}
+  </style>
+  <div id="page-charge" style="display:none">
+    <div class="ch-title">💳 포인트 충전</div>
+    <div class="ch-sub">충전한 포인트로 발주(리워드·기자단·체험단 등)를 진행합니다. 1포인트 = 1원</div>
+
+    <!-- 잔액 -->
+    <div class="ch-card">
+      <div class="ch-bal">
+        <span class="n" id="chBalance">-</span><span class="u">P</span>
+        <span class="sub" id="chBalanceSub"></span>
+      </div>
+    </div>
+
+    <!-- 충전 -->
+    <div class="ch-card">
+      <div class="ch-card-t">충전 금액 선택</div>
+      <div class="ch-presets" id="chPresets"></div>
+      <div class="ch-free">
+        <input type="text" id="chFreeAmt" inputmode="numeric" placeholder="직접 입력" oninput="chFreeInput()">
+        <span class="won">원</span>
+      </div>
+      <div class="ch-summary">
+        <span class="lbl">충전 후 받는 포인트</span>
+        <span class="amt"><span id="chGetPoint">0</span> P</span>
+      </div>
+      <button class="ch-pay" id="chPayBtn" onclick="chRequestPay()" disabled>결제하기</button>
+      <div class="ch-note" id="chNote">※ 최소 결제 금액 1,000원. 결제는 토스페이먼츠로 안전하게 처리됩니다.</div>
+    </div>
+
+    <!-- 포인트 내역 -->
+    <div class="ch-card">
+      <div class="ch-card-t">포인트 내역</div>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th style="width:130px">일시</th><th style="width:70px">구분</th><th>내용</th><th style="text-align:right;width:110px">변동</th>
+        </tr></thead><tbody id="chTxBody"><tr><td colspan="4" class="ch-empty">불러오는 중…</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- 세금계산서 신청 -->
+    <div class="ch-card">
+      <div class="ch-card-t">세금계산서 신청 <span style="font-weight:500;color:var(--faint);font-size:11.5px">· 접수 후 담당자가 발행합니다</span></div>
+      <div class="ch-form">
+        <div>
+          <label>사업자등록번호</label>
+          <input type="text" id="chTaxBizNo" inputmode="numeric" placeholder="000-00-00000">
+        </div>
+        <div>
+          <label>수신 이메일</label>
+          <input type="email" id="chTaxEmail" placeholder="tax@example.com">
+        </div>
+        <div class="full">
+          <label>상호 (선택)</label>
+          <input type="text" id="chTaxCompany" placeholder="상호명">
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end">
+        <button class="ch-ghost" id="chTaxBtn" onclick="chSubmitTax()">세금계산서 신청</button>
+      </div>
+      <div class="ch-note" id="chTaxMsg" style="display:none"></div>
+    </div>
+  </div>
+
 </div>
 
 <script>
 // ============ 인증(로그인 게이트) ============
 let SB=null;                 // Supabase 클라이언트
+let TOSS_CLIENT_KEY='';      // 토스페이먼츠 클라이언트 키(config에서 로드)
 const AUTH_DOMAIN='users.blogrank.internal';
 const synthEmail=(id)=>`${String(id||'').toLowerCase()}@${AUTH_DOMAIN}`;
 
@@ -1016,23 +1131,149 @@ async function initAuth(){
   try{
     const cfg=await fetch('/api/auth?op=config').then(r=>r.json());
     if(!cfg.supabaseUrl||!cfg.supabaseAnonKey){ document.getElementById('liMsg').textContent='설정 로드 실패(관리자 문의)'; return; }
+    TOSS_CLIENT_KEY=cfg.tossClientKey||'';
     SB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true}});
     const {data}=await SB.auth.getSession();
-    if(data.session){ await onAuthed(); } else { showAuthGate(); }
+    if(data.session){ await onAuthed(); await chHandleReturn(); } else { showAuthGate(); }
     SB.auth.onAuthStateChange((_e,s)=>{ if(!s){ showAuthGate(); } });
   }catch(e){ document.getElementById('liMsg').textContent='초기화 오류: '+e.message; }
 }
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','placetrack','placerank'].forEach(p=>{
+  ['home','post','store','suggest','placetrack','placerank','charge'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
   if(page==='store') loadStores();
   if(page==='placetrack') initPlaceTrack();
   if(page==='placerank') initPlaceRank();
+  if(page==='charge') initCharge();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
+}
+
+// ============ 포인트 충전 (발주 2단계) ============
+const CH_PRESETS=[10000,30000,50000,100000,500000];
+let chAmount=0, chInited=false;
+const chFmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+function chManUnit(v){ if(v>=10000&&v%10000===0) return (v/10000)+'만원'; if(v>=1000&&v%1000===0) return (v/1000)+'천원'; return chFmt(v)+'원'; }
+
+async function initCharge(){
+  if(!chInited){
+    const box=document.getElementById('chPresets');
+    box.innerHTML=CH_PRESETS.map(v=>`<div class="ch-preset" data-v="${v}" onclick="chSelectPreset(${v})">${chManUnit(v)}<small>${chFmt(v)} P</small></div>`).join('');
+    chInited=true;
+  }
+  chRefreshBalance();
+  chLoadTx();
+}
+
+function chSelectPreset(v){
+  chAmount=v;
+  document.getElementById('chFreeAmt').value='';
+  document.querySelectorAll('#chPresets .ch-preset').forEach(el=>el.classList.toggle('active',Number(el.dataset.v)===v));
+  chUpdateSummary();
+}
+function chFreeInput(){
+  const el=document.getElementById('chFreeAmt');
+  let n=parseInt((el.value||'').replace(/[^0-9]/g,''),10)||0;
+  el.value=n?chFmt(n):'';
+  chAmount=n;
+  document.querySelectorAll('#chPresets .ch-preset').forEach(el=>el.classList.remove('active'));
+  chUpdateSummary();
+}
+function chUpdateSummary(){
+  document.getElementById('chGetPoint').textContent=chFmt(chAmount);
+  document.getElementById('chPayBtn').disabled=!(chAmount>=1000);
+}
+
+async function chRefreshBalance(){
+  const el=document.getElementById('chBalance'); const sub=document.getElementById('chBalanceSub');
+  el.textContent='…'; sub.textContent='';
+  const r=await dbCall('get_point_balance');
+  if(r&&r.ok){ el.textContent=chFmt(r.balance); sub.textContent='= '+chFmt(r.balance)+'원 상당'; }
+  else { el.textContent='-'; }
+}
+
+async function chLoadTx(){
+  const body=document.getElementById('chTxBody');
+  const r=await dbCall('list_point_transactions');
+  const rows=(r&&r.ok&&Array.isArray(r.result))?r.result:[];
+  if(!rows.length){ body.innerHTML='<tr><td colspan="4" class="ch-empty">아직 포인트 내역이 없습니다.</td></tr>'; return; }
+  body.innerHTML=rows.map(t=>{
+    const d=new Date(t.created_at); const ds=isNaN(d)?'':(d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));
+    const amt=Number(t.amount)||0; const pos=amt>=0;
+    const memo=(t.memo||'').replace(/^toss:.*/,'토스 결제 충전');
+    return `<tr><td style="white-space:nowrap;color:var(--muted)">${ds}</td><td>${t.type||''}</td><td style="color:var(--muted)">${memo||'-'}</td><td style="text-align:right" class="${pos?'ch-plus':'ch-minus'}">${pos?'+':''}${chFmt(amt)} P</td></tr>`;
+  }).join('');
+}
+
+async function chRequestPay(){
+  if(chAmount<1000){ alert('최소 충전 금액은 1,000원입니다.'); return; }
+  if(!TOSS_CLIENT_KEY){ alert('결제 설정(토스 키)이 아직 준비되지 않았습니다. 관리자에게 문의해 주세요.'); return; }
+  if(typeof TossPayments==='undefined'){ alert('결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'); return; }
+  let customerName='회원';
+  try{ const {data}=await SB.auth.getSession(); const em=(data.session&&data.session.user&&data.session.user.email)||''; customerName=em.split('@')[0]||'회원'; }catch(e){}
+  const orderId='charge_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
+  try{ sessionStorage.setItem('ch_pending', JSON.stringify({orderId,amount:chAmount})); }catch(e){}
+  const base=location.origin+location.pathname;
+  try{
+    const tp=TossPayments(TOSS_CLIENT_KEY);
+    await tp.requestPayment('카드',{
+      amount:chAmount,
+      orderId,
+      orderName:'포인트 충전 '+chFmt(chAmount)+'P',
+      customerName,
+      successUrl:base+'?chpay=ok',
+      failUrl:base+'?chpay=fail'
+    });
+  }catch(err){
+    // 사용자가 결제창을 닫은 경우 등 — 조용히 무시(취소는 알림 불필요)
+    if(err&&err.code&&err.code!=='USER_CANCEL') alert('결제를 시작하지 못했습니다: '+(err.message||err.code));
+  }
+}
+
+// 토스 결제 리다이렉트 복귀 처리(성공/실패)
+async function chHandleReturn(){
+  const p=new URLSearchParams(location.search);
+  const flag=p.get('chpay');
+  if(!flag) return;
+  const clean=()=>{ try{ history.replaceState({},'',location.origin+location.pathname); }catch(e){} };
+  if(flag==='fail'){
+    clean();
+    alert('결제가 취소되었거나 실패했습니다.'+(p.get('message')?('\n'+p.get('message')):''));
+    return;
+  }
+  const paymentKey=p.get('paymentKey'), orderId=p.get('orderId'), amount=parseInt(p.get('amount'),10);
+  clean();
+  if(!paymentKey||!orderId||!Number.isFinite(amount)) return;
+  showPage('charge');
+  try{
+    const t=await authToken();
+    const res=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+t},body:JSON.stringify({op:'charge-confirm',paymentKey,orderId,amount})});
+    const r=await res.json();
+    if(r.ok){ alert('충전 완료! '+chFmt(r.charged)+'P가 적립되었습니다.\n현재 잔액: '+chFmt(r.balance)+'P'); }
+    else { alert('충전 승인 실패: '+(r.error||'알 수 없는 오류')); }
+  }catch(e){ alert('충전 처리 중 오류: '+e.message); }
+  try{ sessionStorage.removeItem('ch_pending'); }catch(e){}
+  chRefreshBalance(); chLoadTx();
+}
+
+async function chSubmitTax(){
+  const biz=(document.getElementById('chTaxBizNo').value||'').trim();
+  const email=(document.getElementById('chTaxEmail').value||'').trim();
+  const company=(document.getElementById('chTaxCompany').value||'').trim();
+  const msg=document.getElementById('chTaxMsg');
+  const show=(txt,ok)=>{ msg.style.display=''; msg.style.color=ok?'var(--ok)':'var(--bad)'; msg.textContent=txt; };
+  if(!/^[0-9-]{10,12}$/.test(biz)){ show('사업자등록번호를 정확히 입력해 주세요.',false); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ show('올바른 이메일을 입력해 주세요.',false); return; }
+  const btn=document.getElementById('chTaxBtn'); btn.disabled=true; btn.textContent='신청 중…';
+  try{
+    const r=await dbCall('create_tax_invoice_request',{business_number:biz,email,company_name:company||null});
+    if(r&&r.ok){ show('세금계산서 신청이 접수되었습니다. 담당자 확인 후 발행됩니다.',true); document.getElementById('chTaxBizNo').value=''; document.getElementById('chTaxEmail').value=''; document.getElementById('chTaxCompany').value=''; }
+    else { show('신청 실패: '+((r&&r.error)||'다시 시도해 주세요.'),false); }
+  }catch(e){ show('신청 오류: '+e.message,false); }
+  finally{ btn.disabled=false; btn.textContent='세금계산서 신청'; }
 }
 
 function toggleDropdown(){
