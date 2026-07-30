@@ -305,6 +305,25 @@ export default async function handler(req, res) {
       const result = await supaFetch('/tax_invoice_requests', { method: 'POST', body: JSON.stringify(body) });
       return res.status(200).json({ ok: true, result });
     }
+    // 발주 생성 — 원자적 RPC(잔액확인+차감+주문). auth.uid() 기준 본인 소유.
+    if (action === 'create_order') {
+      const body = {
+        p_category: data.category || null,
+        p_product_name: data.product_name || null,
+        p_options: data.options || null,
+        p_unit_price: Number(data.unit_price) || 0,
+        p_quantity: Number(data.quantity) || 0,
+        p_total_price: Number(data.total_price) || 0,
+        p_store_id: data.store_id || null,
+      };
+      const result = await supaFetch('/rpc/create_order', { method: 'POST', body: JSON.stringify(body) });
+      return res.status(200).json({ ok: true, result });
+    }
+    // 내 주문내역(RLS 본인/관리자)
+    if (action === 'list_orders') {
+      const result = await supaFetch('/orders?select=*&order=created_at.desc&limit=200');
+      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+    }
 
     return res.status(400).json({ ok: false, error: 'Unknown action' });
   } catch (e) {

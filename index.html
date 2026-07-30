@@ -483,6 +483,9 @@ tr:hover td{background:var(--surface-3)}
 
     <div class="menu-group">
       <div class="menu-label">발주</div>
+      <div class="menu-item" id="menu-order" onclick="showPage('order')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.2 11.5a1.5 1.5 0 0 0 1.5 1.2h8.1a1.5 1.5 0 0 0 1.5-1.2L20.5 8H6"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17.5" cy="19.5" r="1.3"/></svg> 발주하기
+      </div>
       <div class="menu-item" id="menu-charge" onclick="showPage('charge')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14.5h4"/></svg> 포인트 충전
       </div>
@@ -904,6 +907,123 @@ tr:hover td{background:var(--surface-3)}
   </div>
 
   <!-- ============================================= -->
+  <!-- 발주하기 (발주 3단계)                          -->
+  <!-- ============================================= -->
+  <style>
+  #page-order{padding:0}
+  #page-order .od-title{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+  #page-order .od-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+  #page-order .od-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-2);margin-top:var(--sp-2);box-shadow:var(--sh)}
+  #page-order .od-card-t{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:14px}
+  #page-order .od-balbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #page-order .od-balbar .lbl{font-size:12.5px;color:var(--muted)}
+  #page-order .od-balbar .n{font-size:22px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums}
+  #page-order .od-balbar .u{font-size:13px;font-weight:700;color:var(--muted)}
+  #page-order .od-charge-link{margin-left:auto;background:var(--surface);color:var(--brand-ink);border:1px solid var(--brand);border-radius:var(--r-btn);height:34px;padding:0 14px;font-weight:700;cursor:pointer;font-size:12.5px}
+  #page-order .od-charge-link:hover{background:var(--brand-soft)}
+  #page-order .od-hub{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  #page-order .od-cat{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:18px;cursor:pointer;transition:border-color .1s}
+  #page-order .od-cat:hover{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
+  #page-order .od-cat .ic{font-size:26px}
+  #page-order .od-cat .nm{font-size:15px;font-weight:800;color:var(--ink);margin-top:10px}
+  #page-order .od-cat .ds{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+  #page-order .od-cat .pr{font-size:11.5px;color:var(--faint);margin-top:8px;font-variant-numeric:tabular-nums}
+  #page-order .od-back{background:none;border:none;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:6px}
+  #page-order .od-back:hover{color:var(--ink)}
+  #page-order label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:5px;margin-top:14px}
+  #page-order label:first-of-type{margin-top:0}
+  #page-order select,#page-order input[type=text],#page-order input[type=number]{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:0 12px;height:42px;font-size:14px;outline:none}
+  #page-order select:focus,#page-order input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  #page-order .od-qty{display:flex;align-items:center;gap:8px}
+  #page-order .od-qty button{width:42px;height:42px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-input);font-size:18px;font-weight:700;color:var(--text);cursor:pointer}
+  #page-order .od-qty button:hover{background:var(--surface-3)}
+  #page-order .od-qty input{text-align:center;font-weight:700;max-width:90px}
+  #page-order .od-total{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2)}
+  #page-order .od-total .lbl{font-size:13px;color:var(--muted)}
+  #page-order .od-total .amt{font-size:24px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+  #page-order .od-total .amt small{font-size:14px;color:var(--muted);font-weight:700}
+  #page-order .od-submit{width:100%;margin-top:14px;background:var(--brand);color:#fff;border:none;border-radius:var(--r-btn);height:48px;font-weight:800;cursor:pointer;font-size:15px}
+  #page-order .od-submit:hover{background:var(--brand-ink)}
+  #page-order .od-submit:disabled{opacity:.5;cursor:default}
+  #page-order .od-msg{font-size:12.5px;margin-top:10px;display:none;line-height:1.5}
+  #page-order table{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--text);min-width:640px}
+  #page-order thead th{background:var(--surface-2);color:var(--muted);text-align:left;padding:10px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+  #page-order tbody td{padding:10px;border-top:1px solid var(--line-2);vertical-align:top}
+  #page-order .od-empty{color:var(--muted);text-align:center;padding:24px}
+  #page-order .od-st{display:inline-block;padding:2px 9px;border-radius:var(--r-chip);font-size:11px;font-weight:700}
+  #page-order .od-st.접수{background:var(--brand-soft);color:var(--brand-ink)}
+  #page-order .od-st.진행중{background:var(--warn-soft,#fef3c7);color:var(--warn,#b45309)}
+  #page-order .od-st.완료{background:var(--ok-soft);color:var(--ok)}
+  #page-order .od-st.취소{background:var(--surface-3);color:var(--faint)}
+  #page-order .od-plh{font-size:11.5px;color:var(--faint);margin-top:8px;line-height:1.5}
+  </style>
+  <div id="page-order" style="display:none">
+    <div class="od-title">🛒 발주하기</div>
+    <div class="od-sub">충전한 포인트로 마케팅 상품을 발주합니다. 발주 시 포인트가 즉시 차감됩니다.</div>
+
+    <!-- 잔액 바 -->
+    <div class="od-card">
+      <div class="od-balbar">
+        <span class="lbl">보유 포인트</span>
+        <span class="n" id="odBalance">-</span><span class="u">P</span>
+        <button class="od-charge-link" onclick="showPage('charge')">＋ 충전하기</button>
+      </div>
+    </div>
+
+    <!-- 카테고리 허브 -->
+    <div class="od-card" id="odHubCard">
+      <div class="od-card-t">상품 카테고리 선택</div>
+      <div class="od-hub" id="odHub"></div>
+      <div class="od-plh" id="odPlh"></div>
+    </div>
+
+    <!-- 주문 폼 -->
+    <div class="od-card" id="odFormCard" style="display:none">
+      <button class="od-back" onclick="odCloseForm()">← 카테고리로 돌아가기</button>
+      <div class="od-card-t" id="odFormTitle"></div>
+
+      <label>상품</label>
+      <select id="odProduct" onchange="odCalc()"></select>
+
+      <label>매장 선택 <span style="font-weight:500;color:var(--faint)">(선택)</span></label>
+      <select id="odStore"><option value="">매장 지정 안 함</option></select>
+
+      <div id="odKeywordWrap" style="display:none">
+        <label>키워드</label>
+        <input type="text" id="odKeyword" placeholder="상위노출 원하는 키워드 (예: 강남 맛집)">
+      </div>
+
+      <label>수량</label>
+      <div class="od-qty">
+        <button type="button" onclick="odQty(-1)">−</button>
+        <input type="number" id="odQty" value="1" min="1" oninput="odCalc()">
+        <button type="button" onclick="odQty(1)">＋</button>
+        <span id="odUnitInfo" style="font-size:12.5px;color:var(--muted)"></span>
+      </div>
+
+      <label>요청사항 <span style="font-weight:500;color:var(--faint)">(선택)</span></label>
+      <input type="text" id="odMemo" placeholder="담당자에게 전달할 내용">
+
+      <div class="od-total">
+        <span class="lbl">결제 포인트</span>
+        <span class="amt"><span id="odTotal">0</span> <small>P</small></span>
+      </div>
+      <button class="od-submit" id="odSubmit" onclick="odSubmit()">발주하기</button>
+      <div class="od-msg" id="odMsg"></div>
+    </div>
+
+    <!-- 내 주문내역 -->
+    <div class="od-card">
+      <div class="od-card-t">내 주문내역</div>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th style="width:120px">일시</th><th>상품</th><th style="width:80px">매장</th><th style="text-align:right;width:60px">수량</th><th style="text-align:right;width:100px">포인트</th><th style="width:70px">상태</th>
+        </tr></thead><tbody id="odHistBody"><tr><td colspan="6" class="od-empty">불러오는 중…</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
   <!-- 포인트 충전 (발주 2단계)                       -->
   <!-- ============================================= -->
   <style>
@@ -1141,7 +1261,7 @@ async function initAuth(){
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','placetrack','placerank','charge'].forEach(p=>{
+  ['home','post','store','suggest','placetrack','placerank','charge','order'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
@@ -1149,6 +1269,7 @@ function showPage(page){
   if(page==='placetrack') initPlaceTrack();
   if(page==='placerank') initPlaceRank();
   if(page==='charge') initCharge();
+  if(page==='order') initOrder();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
 }
 
@@ -1274,6 +1395,137 @@ async function chSubmitTax(){
     else { show('신청 실패: '+((r&&r.error)||'다시 시도해 주세요.'),false); }
   }catch(e){ show('신청 오류: '+e.message,false); }
   finally{ btn.disabled=false; btn.textContent='세금계산서 신청'; }
+}
+
+// ============ 발주하기 (발주 3단계) ============
+// ⚠️ 상품/가격은 임시(placeholder)값입니다. 실제 상품·단가로 교체하세요.
+const ORDER_CATALOG=[
+  { key:'reward-blog', icon:'📈', label:'블로그 리워드', desc:'키워드 상위노출 트래픽',
+    products:[
+      {name:'블로그 리워드 (1일)', price:3000, unit:'일', keyword:true},
+      {name:'블로그 리워드 (7일)', price:19000, unit:'건', keyword:true},
+      {name:'블로그 리워드 (30일)', price:75000, unit:'건', keyword:true},
+    ]},
+  { key:'press', icon:'📝', label:'블로그 기자단', desc:'기자단 포스팅 발행',
+    products:[
+      {name:'블로그 기자단', price:15000, unit:'건', keyword:true},
+      {name:'상위 블로거 기자단', price:30000, unit:'건', keyword:true},
+    ]},
+  { key:'experience', icon:'🎁', label:'체험단', desc:'실사용 체험 리뷰 모집',
+    products:[
+      {name:'블로그 체험단', price:20000, unit:'명', keyword:false},
+      {name:'인스타 체험단', price:18000, unit:'명', keyword:false},
+    ]},
+  { key:'place-save', icon:'📍', label:'플레이스 저장', desc:'플레이스 저장수 증대',
+    products:[
+      {name:'플레이스 저장', price:1000, unit:'건', keyword:true},
+    ]},
+];
+
+let odCat=null, odInited=false, odStoresLoaded=false;
+const odFmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+
+function initOrder(){
+  if(!odInited){
+    document.getElementById('odHub').innerHTML=ORDER_CATALOG.map((c,i)=>{
+      const min=Math.min(...c.products.map(p=>p.price));
+      return `<div class="od-cat" onclick="odOpenCat(${i})"><div class="ic">${c.icon}</div><div class="nm">${c.label}</div><div class="ds">${c.desc}</div><div class="pr">${odFmt(min)}P~</div></div>`;
+    }).join('');
+    document.getElementById('odPlh').textContent='※ 상품·단가는 임시값입니다. 실제 상품/가격이 정해지면 반영해 드립니다.';
+    odInited=true;
+  }
+  odCloseForm();
+  odRefreshBalance();
+  odLoadHistory();
+  odLoadStores();
+}
+
+async function odRefreshBalance(){
+  const el=document.getElementById('odBalance'); el.textContent='…';
+  const r=await dbCall('get_point_balance');
+  el.textContent=(r&&r.ok)?odFmt(r.balance):'-';
+}
+
+async function odLoadStores(){
+  if(odStoresLoaded) return;
+  const sel=document.getElementById('odStore');
+  const r=await dbCall('list_stores');
+  const rows=(r&&r.ok&&Array.isArray(r.result))?r.result:[];
+  sel.innerHTML='<option value="">매장 지정 안 함</option>'+rows.map(s=>`<option value="${s.id}">${escapeHtml(s.name||('매장 '+s.id))}</option>`).join('');
+  odStoresLoaded=true;
+}
+
+function odOpenCat(i){
+  odCat=ORDER_CATALOG[i];
+  document.getElementById('odFormTitle').textContent=odCat.icon+' '+odCat.label;
+  document.getElementById('odProduct').innerHTML=odCat.products.map((p,j)=>`<option value="${j}">${p.name} — ${odFmt(p.price)}P / ${p.unit}</option>`).join('');
+  document.getElementById('odQty').value=1;
+  document.getElementById('odKeyword').value='';
+  document.getElementById('odMemo').value='';
+  document.getElementById('odMsg').style.display='none';
+  document.getElementById('odHubCard').style.display='none';
+  document.getElementById('odFormCard').style.display='';
+  odCalc();
+}
+function odCloseForm(){
+  odCat=null;
+  const f=document.getElementById('odFormCard'); if(f) f.style.display='none';
+  const h=document.getElementById('odHubCard'); if(h) h.style.display='';
+}
+function odQty(d){
+  const el=document.getElementById('odQty');
+  el.value=Math.max(1,(parseInt(el.value,10)||1)+d);
+  odCalc();
+}
+function odCurProduct(){ return odCat?odCat.products[parseInt(document.getElementById('odProduct').value,10)||0]:null; }
+function odCalc(){
+  const p=odCurProduct(); if(!p) return;
+  let qty=parseInt(document.getElementById('odQty').value,10); if(!(qty>=1)){ qty=1; }
+  document.getElementById('odKeywordWrap').style.display=p.keyword?'':'none';
+  document.getElementById('odUnitInfo').textContent='단가 '+odFmt(p.price)+'P × '+qty+p.unit;
+  document.getElementById('odTotal').textContent=odFmt(p.price*qty);
+}
+
+async function odSubmit(){
+  const p=odCurProduct(); if(!p) return;
+  const qty=Math.max(1,parseInt(document.getElementById('odQty').value,10)||1);
+  const keyword=(document.getElementById('odKeyword').value||'').trim();
+  const memo=(document.getElementById('odMemo').value||'').trim();
+  const storeVal=document.getElementById('odStore').value;
+  const msg=document.getElementById('odMsg');
+  const show=(txt,ok)=>{ msg.style.display=''; msg.style.color=ok?'var(--ok)':'var(--bad)'; msg.innerHTML=txt; };
+  if(p.keyword&&!keyword){ show('키워드를 입력해 주세요.',false); return; }
+  const total=p.price*qty;
+  const options={unit:p.unit}; if(keyword) options.keyword=keyword; if(memo) options.memo=memo;
+  if(!confirm(`발주하시겠습니까?\n\n${p.name} × ${qty}${p.unit}\n결제 포인트: ${odFmt(total)}P`)) return;
+  const btn=document.getElementById('odSubmit'); btn.disabled=true; btn.textContent='발주 처리 중…';
+  try{
+    const r=await dbCall('create_order',{ category:odCat.label, product_name:p.name, options, unit_price:p.price, quantity:qty, total_price:total, store_id:storeVal?Number(storeVal):null });
+    if(r&&r.ok){
+      show('✅ 발주가 접수되었습니다. 포인트 '+odFmt(total)+'P가 차감되었습니다.',true);
+      odRefreshBalance(); odLoadHistory();
+      setTimeout(()=>{ odCloseForm(); }, 1400);
+    } else {
+      const err=(r&&r.error)||'발주에 실패했습니다.';
+      if(/부족/.test(err)) show(err+' <a href="#" onclick="showPage(\'charge\');return false" style="color:var(--brand);font-weight:700">충전하러 가기 →</a>',false);
+      else show('발주 실패: '+err,false);
+    }
+  }catch(e){ show('발주 오류: '+e.message,false); }
+  finally{ btn.disabled=false; btn.textContent='발주하기'; }
+}
+
+async function odLoadHistory(){
+  const body=document.getElementById('odHistBody');
+  const r=await dbCall('list_orders');
+  const rows=(r&&r.ok&&Array.isArray(r.result))?r.result:[];
+  if(!rows.length){ body.innerHTML='<tr><td colspan="6" class="od-empty">아직 주문 내역이 없습니다.</td></tr>'; return; }
+  const storeName=(id)=>{ if(!id) return '-'; const sel=document.getElementById('odStore'); const o=sel&&sel.querySelector('option[value="'+id+'"]'); return o?o.textContent:('#'+id); };
+  body.innerHTML=rows.map(o=>{
+    const d=new Date(o.created_at); const ds=isNaN(d)?'':(d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));
+    const opt=o.options||{}; const extra=[opt.keyword?('키워드: '+opt.keyword):'',opt.memo?('요청: '+opt.memo):''].filter(Boolean).join(' · ');
+    const st=o.status||'접수';
+    return `<tr><td style="white-space:nowrap;color:var(--muted)">${ds}</td><td><div style="font-weight:600;color:var(--ink)">${escapeHtml(o.product_name||'')}</div>${extra?`<div style="font-size:11px;color:var(--faint);margin-top:2px">${escapeHtml(extra)}</div>`:''}</td><td style="color:var(--muted)">${escapeHtml(storeName(o.store_id))}</td><td style="text-align:right">${odFmt(o.quantity)}</td><td style="text-align:right;font-weight:700">${odFmt(o.total_price)}P</td><td><span class="od-st ${st}">${st}</span></td></tr>`;
+  }).join('');
 }
 
 function toggleDropdown(){
