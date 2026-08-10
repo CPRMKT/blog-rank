@@ -16,8 +16,10 @@ const BLOG_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
-const FETCH_TIMEOUT_MS = 8000;
-const CONCURRENCY = 4;
+const FETCH_TIMEOUT_MS = 6000;
+// 프런트가 한 번에 보내는 배치 크기(8)와 맞춰, 한 요청이 한 웨이브로 끝나
+// Vercel 함수 실행시간(기본 10초) 안에 완료되도록 한다.
+const CONCURRENCY = 8;
 
 // ---------------------------------------------------------------- 지역 사전
 // 시·도 단위만 판정에 사용한다. "동"이나 "구"는 전국 중복이 심해(예: 북구, 태전동)
