@@ -67,6 +67,50 @@ function sigunguOf(address) {
   return null;
 }
 
+// 주소 → 정확 비교용 키 (시도|시군구|도로명|건물번호)
+//   "경기도 광주시 태봉로 8-4 2층"  → "경기|광주시|태봉로|8-4"
+//   "경기 광주시 태봉로 8-4 2층"    → "경기|광주시|태봉로|8-4"  (같은 키)
+//   층·호수·상호명이 뒤에 붙어도 무시된다.
+// 도로명이 없으면 지번(동+번지)으로 대체. 둘 다 없으면 null(정확 비교 불가).
+export function addressKey(address) {
+  const s = String(address || '').trim();
+  if (!s) return null;
+  const sido = sidoOf(s);
+  const sigungu = sigunguOf(s);
+
+  const road = s.match(/([가-힣A-Za-z0-9]+(?:대로|로|길))\s*(\d+(?:-\d+)?)/);
+  if (road) return [sido || '', sigungu || '', road[1], road[2]].join('|');
+
+  const jibun = s.match(/([가-힣]+(?:동|읍|면|리))\s*(\d+(?:-\d+)?)/);
+  if (jibun) return [sido || '', sigungu || '', jibun[1], jibun[2]].join('|');
+
+  return null;
+}
+
+// 매장명 → 텍스트 매칭용 토큰
+//   "태전갈비 경기광주태전점" → ["태전갈비경기광주태전점","태전갈비"]
+// ⚠️ 업종명(갈비·칼국수 등)은 절대 떼지 않는다. "태전갈비"에서 "태전"만 남기면
+//    "태전동"이 들어간 모든 글이 우리 매장 글로 오인된다.
+export function buildStoreNameTokens(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return [];
+  const out = new Set();
+  const squash = (x) => x.replace(/\s+/g, '');
+
+  const full = squash(raw);
+  if (full.length >= 3) out.add(full);
+
+  // 공백 기준 첫 토큰(핵심 상호명)
+  const first = raw.split(/\s+/)[0] || '';
+  if (first.length >= 3) out.add(squash(first));
+
+  // 지점 접미사만 제거 (업종명은 유지)
+  const noBranch = raw.replace(/\s*[가-힣A-Za-z0-9]*(?:본점|직영점|점)\s*$/, '').trim();
+  if (noBranch && squash(noBranch).length >= 3) out.add(squash(noBranch));
+
+  return [...out];
+}
+
 // 매장 주소 → 판정 기준
 export function parseStoreRegion(address) {
   const sido = sidoOf(address);
@@ -149,37 +193,42 @@ function htmlToText(html) {
 export function judge({ html, title, store }) {
   const widgets = extractPlaceWidgets(html || '');
 
-  // ── 1) 플레이스 위젯이 있으면 위젯 주소로 확정 판정
+  // ── 1) 플레이스 위젯 = 확정 신호.
+  //    같은 동네라도 주소가 다르면 명백히 다른 사업장이므로 바로 제외한다.
   if (widgets.length > 0) {
-    // 매장 place_id와 같은 위젯이 있으면 확실히 우리 글
+    // (a) 매장 place_id와 같은 위젯 → 확실히 우리 글
     if (store.placeId && widgets.some((w) => w.placeId && w.placeId === String(store.placeId))) {
       return { verdict: 'ok', reason: 'widget_place_id', address: null };
     }
-    // 주소의 시·도 + 시/군/구가 매장과 일치하는 위젯이 있으면 우리 글
-    const match = widgets.find((w) => {
-      if (!w.address) return false;
-      const s = sidoOf(w.address);
-      const g = sigunguOf(w.address);
-      const sidoOk = store.sido ? s === store.sido : true;
-      const gunguOk = store.sigungu ? g === store.sigungu : true;
-      return sidoOk && gunguOk && (s || g);
-    });
-    if (match) return { verdict: 'ok', reason: 'widget_address_match', address: match.address };
 
-    // 위젯이 있는데 전부 다른 주소 → 확정 불일치
-    const other = widgets.find((w) => w.address) || widgets[0];
-    return { verdict: 'excluded', reason: 'widget_address_mismatch', address: other.address || null };
+    // (b) 정확 주소 비교 (층·호수·상호 표기 차이는 무시)
+    if (store.addressKey) {
+      const match = widgets.find((w) => w.address && addressKey(w.address) === store.addressKey);
+      if (match) return { verdict: 'ok', reason: 'widget_address_match', address: match.address };
+
+      const other = widgets.find((w) => w.address) || widgets[0];
+      return { verdict: 'excluded', reason: 'widget_address_mismatch', address: other.address || null };
+    }
+    // 매장 주소를 정확 비교할 수 없으면(파싱 불가) 위젯으로 확정하지 않고
+    // 아래 텍스트 판정으로 넘어간다. 잘못 제외하는 것보다 안전하다.
   }
 
-  // ── 2) 위젯 없음 → 제목+본문 텍스트에서 지역명 검사
+  // ── 2) 텍스트 판정: 매장명 > 우리 지역 > 다른 지역
   const text = `${title || ''} ${htmlToText(html)}`;
+  const squashed = text.replace(/\s+/g, '');
 
-  // (a) 매장 지역명이 나오면 우리 글로 본다 (다른 지역이 같이 언급돼도 매장 우선)
-  if (store.ownTokens.some((t) => t && text.includes(t))) {
-    return { verdict: 'ok', reason: 'text_own_region', address: null };
+  // (a) 매장 이름이 언급되면 우리 글 (정확 일치·띄어쓰기 변형만 인정)
+  const nameHit = (store.nameTokens || []).find((t) => t && squashed.includes(t));
+  if (nameHit) {
+    return { verdict: 'ok', reason: 'text_store_name', matched: nameHit };
   }
 
-  // (b) 다른 시·도명이 명시돼 있으면 확정 불일치
+  // (b) 우리 지역명은 있지만 매장 이름이 없음 → 같은 동네 다른 가게일 수 있어 확정 불가
+  if (store.ownTokens.some((t) => t && text.includes(t))) {
+    return { verdict: 'ambiguous', reason: 'own_region_no_store_name' };
+  }
+
+  // (c) 다른 시·도명이 명시돼 있으면 확정 불일치
   const others = [];
   for (const sd of SIDO) {
     if (sd.key === store.sido) continue;
@@ -189,7 +238,7 @@ export function judge({ html, title, store }) {
     return { verdict: 'excluded', reason: 'text_other_region', regions: others };
   }
 
-  // (c) 아무 지역 단서도 없음 → 확정 불가. 순위 계산엔 포함시키되 화면에서만 표시.
+  // (d) 아무 단서도 없음 → 확정 불가. 순위 계산엔 포함시키되 화면에서만 표시.
   return { verdict: 'ambiguous', reason: 'no_region_signal' };
 }
 
@@ -246,7 +295,7 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    const { storeAddress, placeId, posts } = body;
+    const { storeAddress, storeName, placeId, posts } = body;
 
     if (!Array.isArray(posts) || posts.length === 0) {
       return res.status(400).json({ ok: false, error: 'posts required' });
@@ -261,7 +310,12 @@ export default async function handler(req, res) {
     }
 
     const region = parseStoreRegion(storeAddress);
-    const store = { ...region, placeId: placeId || null };
+    const store = {
+      ...region,
+      placeId: placeId || null,
+      addressKey: addressKey(storeAddress),
+      nameTokens: buildStoreNameTokens(storeName),
+    };
 
     const results = await mapLimit(posts.slice(0, 60), CONCURRENCY, async (p) => {
       const key = p.key || p.url;
@@ -281,7 +335,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      store: { sido: region.sido, sigungu: region.sigungu },
+      store: {
+        sido: region.sido,
+        sigungu: region.sigungu,
+        addressKey: store.addressKey,
+        nameTokens: store.nameTokens,
+      },
       results,
     });
   } catch (e) {

@@ -2308,7 +2308,7 @@ async function ensureRegionChecks(storeId){
     const res=await fetch('/api/region-check',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({storeAddress:store.address,placeId:store.place_id||null,posts}),
+      body:JSON.stringify({storeAddress:store.address,storeName:store.name||'',placeId:store.place_id||null,posts}),
     });
     const data=await res.json();
     if(data&&data.ok&&Array.isArray(data.results)){
