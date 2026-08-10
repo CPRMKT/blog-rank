@@ -194,23 +194,31 @@ export function judge({ html, title, store }) {
   const widgets = extractPlaceWidgets(html || '');
 
   // ── 1) 플레이스 위젯 = 확정 신호.
-  //    같은 동네라도 주소가 다르면 명백히 다른 사업장이므로 바로 제외한다.
+  //    위젯이 우리 매장(place_id 또는 정확 주소)과 일치하면 ok,
+  //    일치하지 않으면 같은 시/군/구라도 명백히 다른 사업장이므로 excluded.
+  //    ⚠️ "같은 시/군/구면 ok" 같은 완화 폴백은 두지 않는다(경쟁사 오탐의 원인).
   if (widgets.length > 0) {
     // (a) 매장 place_id와 같은 위젯 → 확실히 우리 글
-    if (store.placeId && widgets.some((w) => w.placeId && w.placeId === String(store.placeId))) {
+    if (store.placeId && widgets.some((w) => w.placeId && String(w.placeId) === String(store.placeId))) {
       return { verdict: 'ok', reason: 'widget_place_id', address: null };
     }
 
-    // (b) 정확 주소 비교 (층·호수·상호 표기 차이는 무시)
+    // (b) 정확 주소 일치(층·호수·상호 표기 차이는 무시) → 우리 글
     if (store.addressKey) {
       const match = widgets.find((w) => w.address && addressKey(w.address) === store.addressKey);
       if (match) return { verdict: 'ok', reason: 'widget_address_match', address: match.address };
-
-      const other = widgets.find((w) => w.address) || widgets[0];
-      return { verdict: 'excluded', reason: 'widget_address_mismatch', address: other.address || null };
     }
-    // 매장 주소를 정확 비교할 수 없으면(파싱 불가) 위젯으로 확정하지 않고
-    // 아래 텍스트 판정으로 넘어간다. 잘못 제외하는 것보다 안전하다.
+
+    // (c) 위젯이 있는데 우리 매장으로 확인되지 않음.
+    //     우리 매장을 식별할 수단(place_id 또는 파싱된 정확 주소)이 있으면
+    //     이 위젯은 다른 사업장 확정 → 같은 시/군/구여도 제외한다.
+    if (store.placeId || store.addressKey) {
+      const other = widgets.find((w) => w.address) || widgets[0];
+      return { verdict: 'excluded', reason: 'widget_store_mismatch', address: (other && other.address) || null };
+    }
+
+    // (d) 매장을 식별할 수단이 전혀 없어(주소 파싱 불가 + place_id 없음) 위젯 비교가
+    //     불가능한 경우에만, 잘못 제외하지 않도록 아래 텍스트 판정으로 넘어간다.
   }
 
   // ── 2) 텍스트 판정: 매장명 > 우리 지역 > 다른 지역
