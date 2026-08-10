@@ -4,12 +4,13 @@
 //   매장과 무관한 타 지역 블로그 글이 순위 결과에 섞이는 문제를 걸러낸다.
 //
 // 판정 (post 하나당):
-//   ok        - 우리 매장 글로 확인됨 (플레이스 위젯이 매장과 일치하거나, 본문에 매장 지역명 존재)
-//   excluded  - 명백히 다른 지역 글 (위젯 주소 불일치 / 본문에 다른 시·도명만 존재)
-//   ambiguous - 확정 불가 (지역 단서가 전혀 없음) → 순위 계산엔 포함, 화면에서만 흐리게
+//   ok        - 우리 매장 글로 확인됨 (플레이스 위젯 일치 / 본문에 매장 상호명 언급) 또는 시스템 오류(제외 방지)
+//   excluded  - 우리 글로 확인되지 않음 (위젯 불일치 / 다른 지역명 / 매장명·단서 없음)
+//   ambiguous - (현재 정책상 미발생) 과거 회색 처리용 값. 프론트 코드는 재정책 대비 보존.
 //
-// ⚠️ 핵심 원칙: "지역명 없음(확인 불가)"과 "다른 지역명 명시(확정 불일치)"를 반드시 구분한다.
-//    전자를 excluded로 처리하면 지역명을 안 쓴 우리 매장 글이 억울하게 사라진다.
+// 정책(2026-07): 체험단 특성상 우리 매장 글은 상호명/플레이스 링크가 거의 항상 포함된다.
+//   따라서 매장명 단서가 없는 글은 우리 글일 가능성이 낮다고 보고 excluded 처리한다.
+//   단, fetch 실패·매장 정보 없음·API 오류 등 "시스템 오류"는 ok로 통과시켜 오탐 제외를 막는다.
 
 const BLOG_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
@@ -231,9 +232,11 @@ export function judge({ html, title, store }) {
     return { verdict: 'ok', reason: 'text_store_name', matched: nameHit };
   }
 
-  // (b) 우리 지역명은 있지만 매장 이름이 없음 → 같은 동네 다른 가게일 수 있어 확정 불가
+  // (b) 우리 지역명은 있지만 매장 이름이 없음 → 같은 동네 다른 가게로 보고 제외.
+  //     (체험단 특성상 우리 매장 글은 상호명/플레이스 링크가 거의 항상 포함되므로,
+  //      매장명 단서가 없으면 우리 글일 가능성이 낮다는 정책 변경.)
   if (store.ownTokens.some((t) => t && text.includes(t))) {
-    return { verdict: 'ambiguous', reason: 'own_region_no_store_name' };
+    return { verdict: 'excluded', reason: 'own_region_no_store_name' };
   }
 
   // (c) 다른 시·도명이 명시돼 있으면 확정 불일치
@@ -246,8 +249,8 @@ export function judge({ html, title, store }) {
     return { verdict: 'excluded', reason: 'text_other_region', regions: others };
   }
 
-  // (d) 아무 단서도 없음 → 확정 불가. 순위 계산엔 포함시키되 화면에서만 표시.
-  return { verdict: 'ambiguous', reason: 'no_region_signal' };
+  // (d) 아무 단서도 없음 → 매장명/지역 단서가 전혀 없으면 우리 글로 보기 어려워 제외.
+  return { verdict: 'excluded', reason: 'no_region_signal' };
 }
 
 // ---------------------------------------------------------------- 본문 fetch
@@ -334,8 +337,8 @@ export default async function handler(req, res) {
       }
       const html = await fetchBlogHtml(parsed.blogId, parsed.postId);
       if (html == null) {
-        // 본문을 못 읽었으면 확정 불가 → 제외하지 않는다(억울한 삭제 방지)
-        return { key, verdict: 'ambiguous', reason: 'fetch_failed' };
+        // 본문을 못 읽은 건 시스템 오류 → 오탐 제외 방지 위해 통과(ok) 유지.
+        return { key, verdict: 'ok', reason: 'fetch_failed' };
       }
       const v = judge({ html, title: p.title, store });
       return { key, ...v };
