@@ -54,6 +54,54 @@ async function dbCall(action, data = {}) {
   }, 30000);
 }
 
+// ── region-check(동명 지역 오탐 판정) ─────────────────────────────
+// index.html 의 blogKey 와 동일 규칙(같은 포스트 식별키).
+function blogKey(url) {
+  const s = String(url || '');
+  let m = s.match(/blog\.naver\.com\/([a-zA-Z0-9_-]+)\/(\d+)/);
+  if (m) return m[1] + '/' + m[2];
+  m = s.match(/blogId=([^&]+).*?logNo=(\d+)/);
+  if (m) return m[1] + '/' + m[2];
+  return s;
+}
+
+const REGION_BATCH = 8; // /api/region-check 배치 크기(서버 concurrency 와 맞춤: 한 요청=한 웨이브)
+
+// 매장 단위 캐시(cache: Map blogKey->verdict)를 채운다. 같은 블로그가 여러 키워드에
+// 걸려도 한 번만 판정(중복 본문 fetch 방지). 주소 없으면 판정 불가 → 아무것도 안 채움.
+async function fillRegionVerdicts(store, matches, cache) {
+  if (!store.address) return;
+  const need = [];
+  const seen = new Set();
+  for (const m of matches) {
+    const url = m.link || m.url || '';
+    if (!url) continue;
+    const k = blogKey(url);
+    if (cache.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    need.push({ key: k, url, title: (m.title || '').replace(/<[^>]+>/g, '') });
+  }
+  for (let i = 0; i < need.length; i += REGION_BATCH) {
+    const batch = need.slice(i, i + REGION_BATCH);
+    try {
+      const data = await api('/api/region-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeAddress: store.address, storeName: store.name || '', placeId: store.place_id || null, posts: batch }),
+      }, 30000);
+      if (data && data.ok && Array.isArray(data.results)) {
+        for (const r of data.results) {
+          if (!r || !r.key) continue;
+          if (r.reason === 'fetch_failed') continue; // 일시 실패는 확정 아님 → 캐시 안 함(다음에 재판정)
+          cache.set(r.key, r.verdict || 'ok');
+        }
+      }
+    } catch (e) {
+      log(`  · region-check 배치 실패: ${e.message}`);
+    }
+  }
+}
+
 async function main() {
   // 중복 실행 방지(락파일)
   if (fs.existsSync(LOCK)) {
@@ -76,6 +124,7 @@ async function main() {
       const kwRes = await dbCall('list_store_keywords', { store_id: store.id });
       const keywords = ((kwRes && kwRes.result) || []).map((k) => k.keyword);
       log(`[매장 ${store.id}] ${store.name} — 키워드 ${keywords.length}개`);
+      const rcCache = new Map(); // 매장 내 blogKey->verdict (키워드 간 중복 판정 방지)
 
       for (const keyword of keywords) {
         summary.keywords++;
@@ -99,6 +148,9 @@ async function main() {
           if (best.rank > 0) summary.matched++;
           log(`  • "${keyword}" → ${best.rank > 0 ? best.rank + '위' : '없음'} (검색 ${data.searchCount || data.total || 0}건)`);
 
+          // region-check 판정을 미리 계산해 매장 캐시에 채운다(매장 주소 있을 때).
+          await fillRegionVerdicts(store, matches, rcCache);
+
           if (!DRY_RUN) {
             await dbCall('save_store_ranking', {
               store_id: store.id,
@@ -109,12 +161,16 @@ async function main() {
               matched_blog_url: best.link || null,
               matched_title: (best.title || '').replace(/<[^>]+>/g, '') || null,
               search_volume: data.total || null,
-              // 매칭된 블로그 전부 저장 (다중 블로그 추적)
-              matches: matches.map((m) => ({
-                rank: m.rank,
-                url: m.link || m.url || '',
-                title: (m.title || '').replace(/<[^>]+>/g, ''),
-              })),
+              // 매칭된 블로그 전부 저장 (다중 블로그 추적) + region-check verdict
+              matches: matches.map((m) => {
+                const url = m.link || m.url || '';
+                return {
+                  rank: m.rank,
+                  url,
+                  title: (m.title || '').replace(/<[^>]+>/g, ''),
+                  verdict: rcCache.get(blogKey(url)) || null, // 판정 못 하면 null(프론트 폴백)
+                };
+              }),
             });
             summary.saved++;
           }

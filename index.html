@@ -2290,6 +2290,26 @@ function regionVerdictOf(url){
   return v||'ok'; // 판정 전에는 기존 동작 유지(임의로 숨기지 않음)
 }
 
+// 온디맨드(키워드 수동 등록) 경로용: matches 각 항목의 region-check 판정을 즉시 계산.
+// 8건씩 배치로 /api/region-check 호출. 반환: Map(url → verdict). 주소 없으면 빈 Map.
+async function computeRegionVerdicts(store,matches){
+  const out=new Map();
+  if(!store||!store.address)return out;
+  const posts=(matches||[]).filter(m=>m&&m.url).map(m=>({key:m.url,url:m.url,title:m.title||''}));
+  for(let i=0;i<posts.length;i+=REGION_BATCH_SIZE){
+    const batch=posts.slice(i,i+REGION_BATCH_SIZE);
+    try{
+      const res=await fetch('/api/region-check',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({storeAddress:store.address,storeName:store.name||'',placeId:store.place_id||null,posts:batch})});
+      const data=await res.json();
+      if(data&&data.ok&&Array.isArray(data.results))data.results.forEach(r=>{
+        if(r&&r.key&&r.reason!=='fetch_failed')out.set(r.key,r.verdict||'ok'); // 일시 실패는 verdict 미부여
+      });
+    }catch(e){ /* 무시: verdict 없이 저장 → 다음 렌더에서 온디맨드 폴백이 처리 */ }
+  }
+  return out;
+}
+
 // 현재 매장의 순위 데이터에서 아직 판정 안 된 글을 큐에 적재하고, 배치 워커를 기동한다.
 // ⚠️ renderRankTable()이 렌더마다 이 함수를 호출하므로, 여기서는 "적재만" 하고
 //    실제 서버 요청은 단일 워커가 배치(REGION_BATCH_SIZE)씩 순차 처리한다(메인 스레드 폭주 방지).
@@ -2314,6 +2334,8 @@ function ensureRegionChecks(storeId){
       for(const m of ms){
         if(!m||!m.url)continue;
         const k=blogKey(m.url);
+        // 새벽 배치가 저장한 판정(m.verdict)이 있으면 그대로 사용 → API 재조회 불필요
+        if(m.verdict){ if(!regionVerdicts[k])regionVerdicts[k]=m.verdict; continue; }
         if(regionVerdicts[k]||regionPending.has(k))continue; // 이미 판정됨/조회 중/큐에 있음
         // 현재 버전으로 캐싱된 판정이 있으면 API 재조회 없이 재사용
         const cached=rcCacheGet(storeId,k);
@@ -2515,6 +2537,13 @@ async function checkKeywordRank(storeId,keyword){
     url:m.link||'',
     title:(m.title||'').replace(/<[^>]+>/g,''),
   }));
+
+  // region-check 판정을 즉시 계산해 verdict를 붙인다(다음 새벽 배치 안 기다리게).
+  const vmap=await computeRegionVerdicts(store,matches);
+  matches.forEach(m=>{
+    const v=vmap.get(m.url);
+    if(v){ m.verdict=v; const k=blogKey(m.url); regionVerdicts[k]=v; rcCacheSet(storeId,k,v); }
+  });
 
   // DB에 매칭된 블로그 전부 저장(best는 하위호환용 스칼라, matches에 전체 배열)
   const best=matches.length>0?matches[0]:{rank:0,url:null,title:null};
