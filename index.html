@@ -271,19 +271,27 @@ tr:hover td{background:var(--surface-3)}
 .pt-empty{text-align:center;color:var(--muted);padding:28px;font-size:13px}
 
 /* 키워드 카드 */
-.pt-kwcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:16px 18px;margin-bottom:14px;box-shadow:var(--sh)}
-.pt-kwhead{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.pt-refresh{width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;transition:all .14s}
+.pt-kwcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--sh);max-width:420px}
+.pt-kwhead{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.pt-badge{width:30px;height:30px;border-radius:8px;background:var(--brand-soft);color:var(--brand-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pt-badge svg{width:16px;height:16px}
+.pt-kwmeta{min-width:0;flex:1}
+.pt-kwname{font-size:14px;font-weight:600;color:var(--ink);line-height:1.25;word-break:keep-all}
+.pt-kwstore{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-kwright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.pt-kwvol{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap}
+.pt-kwactions{display:flex;gap:4px}
+.pt-refresh{width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;transition:all .14s;padding:0}
 .pt-refresh:hover{background:var(--surface-3);color:var(--brand);border-color:var(--line-strong)}
 .pt-refresh.spin{animation:ptspin .8s linear infinite;color:var(--brand)}
 @keyframes ptspin{to{transform:rotate(360deg)}}
-.pt-kwname{font-size:15px;font-weight:700;color:var(--ink)}
-.pt-kwvol{font-size:11.5px;color:var(--muted);font-weight:600;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--r-chip);padding:2px 8px;white-space:nowrap}
-.pt-del{margin-left:auto;width:26px;height:26px;border:none;background:none;color:var(--faint);cursor:pointer;font-size:14px;flex-shrink:0}
-.pt-del:hover{color:var(--bad)}
-.pt-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
-.pt-day{border:1px solid var(--line-2);border-radius:8px;padding:7px 3px 8px;text-align:center;background:var(--surface-2);min-width:0}
-.pt-day-date{font-size:10.5px;color:var(--faint);font-weight:600;margin-bottom:3px}
+.pt-del{width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--faint);cursor:pointer;font-size:12px;padding:0;flex-shrink:0;transition:all .14s}
+.pt-del:hover{color:var(--bad);border-color:var(--line-strong)}
+.pt-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0}
+.pt-day{padding:6px 2px;text-align:center;background:var(--surface);border-bottom:1px solid var(--line-2);min-width:0}
+.pt-day.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
+.pt-day-date{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:2px}
+.pt-day.today .pt-day-date{color:var(--brand-ink)}
 .pt-day-date .wd-sat{color:var(--brand)}
 .pt-day-date .wd-sun{color:var(--bad)}
 .pt-si-link{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--brand);text-decoration:none;white-space:nowrap}
@@ -291,11 +299,14 @@ tr:hover td{background:var(--surface-3)}
 .pt-storeinfo .mrow{flex-wrap:wrap}
 .pt-si-cat{font-size:11.5px;color:var(--muted);font-weight:400;margin-left:6px}
 .pt-day-body{display:flex;flex-direction:column;align-items:center;line-height:1.3}
-.pt-rank{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px}
-.pt-rank.t1{color:#b5790f}.pt-rank.t2{color:var(--brand-ink)}.pt-rank.t3{color:var(--text)}.pt-rank.t4{color:var(--muted)}.pt-rank.none{color:var(--faint);font-weight:600;font-size:13px}
+.pt-rank{font-weight:600;font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink)}
+.pt-rank.none{color:var(--faint);font-weight:500;font-size:12px}
+.pt-day.today .pt-rank{color:var(--brand-ink);font-weight:700}
 /* 순위 변동(한국 증시 관례): 상승(숫자↓)=빨강 ▲, 하락(숫자↑)=파랑 ▼, 변동없음=회색 */
-.pt-chg{font-size:10px;font-weight:700;margin-top:1px}
-.pt-chg.up{color:var(--bad)}.pt-chg.down{color:var(--brand)}.pt-chg.flat{color:var(--faint)}
+.pt-chg{display:inline-block;font-size:9px;font-weight:700;margin-top:2px;padding:0 5px;border-radius:8px;line-height:1.5}
+.pt-chg.up{background:var(--bad-soft);color:var(--bad)}
+.pt-chg.down{background:var(--brand-soft);color:var(--brand)}
+.pt-chg.flat{color:var(--faint);background:none;padding:0}
 /* 리뷰·블로그 증감(증가=초록 유지, 순위와 별개 클래스) */
 .pt-mchg{font-size:10px;font-weight:700}
 .pt-mchg.up{color:var(--ok)}.pt-mchg.down{color:var(--bad)}.pt-mchg.flat{color:var(--faint)}
@@ -307,14 +318,15 @@ tr:hover td{background:var(--surface-3)}
 .pt-day-metrics .m.save{color:var(--bad)}
 .pt-day-metrics .m.vr{color:var(--brand)}
 .pt-day-metrics .m.br{color:var(--ok)}
-.pt-more{margin-top:12px;width:100%;border:1px dashed var(--line-strong);background:var(--surface-2);color:var(--muted);border-radius:8px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;transition:all .14s}
-.pt-more:hover{background:var(--surface-3);color:var(--ink)}
+.pt-more{margin-top:8px;padding-top:8px;width:100%;border:none;border-top:1px solid var(--line-2);background:none;color:var(--faint);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:color .14s}
+.pt-more:hover{color:var(--brand)}
+.pt-more svg{width:18px;height:18px;transition:transform .18s}
+.pt-more.expanded svg{transform:rotate(180deg)}
 @media(max-width:640px){
-  .pt-kwcard{padding:14px 12px}
-  .pt-grid{gap:4px}
-  .pt-day{padding:6px 2px 7px}
+  .pt-kwcard{padding:12px 12px;max-width:none}
+  .pt-day{padding:5px 1px}
   .pt-day-date{font-size:9.5px}
-  .pt-rank{font-size:13px}
+  .pt-rank{font-size:12px}
   .pt-day-metrics .m{font-size:9px}
 }
 
@@ -2848,6 +2860,8 @@ const PT_MAX_KW=20;
 const PT_COLS=6;              // 한 줄 6일 고정
 const PT_DAYS_COLLAPSED=12;   // 기본 2줄 = 12일
 const PT_DAYS_EXPANDED=30;    // 펼침 5줄 = 30일
+const PT_PIN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg>';
+const PT_CHEV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 let ptStoreId=null; let ptKeywords=[]; let ptRows=[]; let ptExpanded={};  // keyword -> bool (더보기 상태, 지표상세와 독립)
 let ptCollecting=new Set();  // 현재 순위 수집(스크래핑) 중인 키워드 — 오늘 칸에 "조회 중…" 표시
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
@@ -3146,6 +3160,7 @@ function ptRenderCards(){
   document.getElementById('ptLegend').style.display=detail?'flex':'none';
   if(!ptKeywords.length){ cards.innerHTML='<div class="pt-empty">키워드를 등록하면 순위 추적이 시작됩니다.</div>'; return; }
   const allDates=ptDates(PT_DAYS_EXPANDED);
+  const ptStName=escapeHtml((ptStore()||{}).name||'');
   // keyword -> date -> row
   const map={}; for(const kw of ptKeywords) map[kw]={};
   for(const r of ptRows){ if(r.keyword in map) map[r.keyword][r.checked_date]=r; }
@@ -3172,19 +3187,29 @@ function ptRenderCards(){
           `</div>`:'';
         inner=`<div class="pt-day-body"><span class="pt-rank ${ptRankTier(row.rank)}">${row.rank}</span>${chg}${metrics}</div>`;
       }
-      return `<div class="pt-day"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
+      const isToday=(d===allDates[0]);
+      return `<div class="pt-day${isToday?' today':''}"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
     }).join('');
     const vol=storeKwVolumes[kw];
     const volHtml=(vol!=null)?`<span class="pt-kwvol">월 ${vol.toLocaleString()}</span>`:'';
     const jkw=ptJs(kw);
     return `<div class="pt-kwcard">
       <div class="pt-kwhead">
-        <button class="pt-refresh" title="이 키워드 순위 새로고침" onclick="ptRefreshOne('${jkw}')">⟳</button>
-        <div class="pt-kwname">${escapeHtml(kw)}</div>${volHtml}
-        <button class="pt-del" title="키워드 삭제" onclick="ptRemoveKeyword('${jkw}')">✕</button>
+        <div class="pt-badge">${PT_PIN_SVG}</div>
+        <div class="pt-kwmeta">
+          <div class="pt-kwname">${escapeHtml(kw)}</div>
+          ${ptStName?`<div class="pt-kwstore">${ptStName}</div>`:''}
+        </div>
+        <div class="pt-kwright">
+          ${volHtml}
+          <div class="pt-kwactions">
+            <button class="pt-refresh" title="이 키워드 순위 새로고침" onclick="ptRefreshOne('${jkw}')">⟳</button>
+            <button class="pt-del" title="키워드 삭제" onclick="ptRemoveKeyword('${jkw}')">✕</button>
+          </div>
+        </div>
       </div>
       <div class="pt-grid">${cells}</div>
-      <button class="pt-more" onclick="ptToggleExpand('${jkw}')">${expanded?'접기 ▲':'더보기 ▼'}</button>
+      <button class="pt-more${expanded?' expanded':''}" title="${expanded?'접기':'더보기(최근 30일)'}" onclick="ptToggleExpand('${jkw}')">${PT_CHEV_SVG}</button>
     </div>`;
   }).join('');
 }
