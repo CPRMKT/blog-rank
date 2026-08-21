@@ -186,8 +186,9 @@ export async function scrapeBlogTab(keyword, count = 15, sort = 'date') {
 }
 
 // ── 매장 순위 딜스캔(최대 maxRank위) + 매칭 조기종료 ──────────
-// 스크롤로 결과를 순차 확장하며 각 결과가 우리 매장 글인지 판별하고,
-// 첫 매칭(가장 높은 순위)을 찾으면 즉시 중단해 그 순위를 반환한다.
+// 스크롤로 결과를 순차 확장하며 각 결과가 우리 매장 글인지 판별한다.
+//   · 0~30위(BODY_CHECK_LIMIT): 조기종료 없이 전수 스캔해 매칭 글 전부 수집(다중 매칭 보존)
+//   · 30위 밖: 30위 안에서 매칭이 하나도 없을 때만 계속 진행하고, 첫 매칭에서 즉시 종료
 // 매칭 신호: (1) 제목/스니펫에 매장명 토큰  (2) 상위 BODY_CHECK_LIMIT위 한정 본문 place_id/매장명.
 const RANK_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
@@ -287,19 +288,23 @@ export async function scrapeBlogRank(keyword, opts = {}) {
     const t0 = Date.now();
     const budgetMs = Math.min(120000, Math.max(10000, parseInt(opts.budgetMs, 10) || 55000));
     const checked = new Set();
-    let scanned = 0, lastLen = 0, stable = 0;
+    const found = [];          // 매칭된 글 전부(30위 이내 다중 매칭 보존)
+    let scanned = 0, lastLen = 0, stable = 0, done = false;
     const maxScrolls = Math.ceil(maxRank / 7) + 12;
 
-    for (let s = 0; s <= maxScrolls; s++) {
+    for (let s = 0; s <= maxScrolls && !done; s++) {
       if (Date.now() - t0 > budgetMs) break; // 시간 예산 초과 → 여기까지 스캔한 선에서 종료
       const list = await page.evaluate(extractOrganicWithText, maxRank);
 
       for (const item of list) {
-        if (item.rank > maxRank) break;
+        if (item.rank > maxRank) { done = true; break; }
         const key = `${item.blogId}/${item.postId}`;
         if (checked.has(key)) continue;
         checked.add(key);
         if (item.rank > scanned) scanned = item.rank;
+
+        // 이미 30위 이내 매칭을 확보했는데 30위를 벗어났다 → 전수 수집 끝(딥 진입 불필요)
+        if (found.length > 0 && item.rank > BODY_CHECK_LIMIT) { done = true; break; }
 
         const hay = `${item.title} ${item.text || ''}`;
         let hit = tokens.length > 0 && tokens.some((t) => hay.includes(t));
@@ -308,12 +313,15 @@ export async function scrapeBlogRank(keyword, opts = {}) {
           if (body && (body.includes(placeId) || tokens.some((t) => body.includes(t)))) hit = true;
         }
         if (hit) {
-          return {
-            matched: true, rank: item.rank, scanned,
-            items: [{ rank: item.rank, link: item.link, title: item.title, blogId: item.blogId, postId: item.postId }],
-          };
+          found.push({ rank: item.rank, link: item.link, title: item.title, blogId: item.blogId, postId: item.postId });
+          // 30위 밖에서의 첫 매칭 → 즉시 종료(딥 조기종료). 30위 이내면 계속 스캔(전수 수집).
+          if (item.rank > BODY_CHECK_LIMIT) { done = true; break; }
         }
       }
+      if (done) break;
+
+      // 30위까지 전부 확인됐고 그 안에 매칭이 있으면 → 딥 진입 없이 종료(전수 수집 완료)
+      if (scanned >= BODY_CHECK_LIMIT && found.length > 0) break;
 
       if (list.length >= maxRank) break;
       if (list.length === lastLen) { stable++; if (stable >= 2) break; } else stable = 0;
@@ -321,7 +329,9 @@ export async function scrapeBlogRank(keyword, opts = {}) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(RANK_SCROLL_WAIT);
     }
-    return { matched: false, rank: null, scanned, items: [] };
+
+    found.sort((a, b) => a.rank - b.rank);
+    return { matched: found.length > 0, rank: found.length ? found[0].rank : null, scanned, items: found };
   } finally {
     await page.close().catch(() => {});
     await context.close().catch(() => {});
