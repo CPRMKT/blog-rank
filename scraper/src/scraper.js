@@ -184,3 +184,146 @@ export async function scrapeBlogTab(keyword, count = 15, sort = 'date') {
     await context.close().catch(() => {});
   }
 }
+
+// ── 매장 순위 딜스캔(최대 maxRank위) + 매칭 조기종료 ──────────
+// 스크롤로 결과를 순차 확장하며 각 결과가 우리 매장 글인지 판별하고,
+// 첫 매칭(가장 높은 순위)을 찾으면 즉시 중단해 그 순위를 반환한다.
+// 매칭 신호: (1) 제목/스니펫에 매장명 토큰  (2) 상위 BODY_CHECK_LIMIT위 한정 본문 place_id/매장명.
+const RANK_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
+  'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
+const BODY_CHECK_LIMIT = 30;   // 이름 매칭 실패 시 본문까지 확인할 최대 순위
+const RANK_SCROLL_WAIT = 700;
+
+// region-check식 토큰(업종명 유지, 통짜 상호명) — "태전" 같은 과매칭 방지.
+function rankNameTokens(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return [];
+  const squash = (x) => x.replace(/\s+/g, '');
+  const out = new Set();
+  const full = squash(raw);
+  if (full.length >= 3) out.add(full);
+  const first = raw.split(/\s+/)[0] || '';
+  if (first.length >= 3) out.add(squash(first));
+  const noBranch = raw.replace(/\s*[가-힣A-Za-z0-9]*(?:본점|직영점|점)\s*$/, '').trim();
+  if (noBranch && squash(noBranch).length >= 3) out.add(squash(noBranch));
+  return [...out];
+}
+
+async function fetchBlogBodyNode(blogId, postId, timeoutMs = 7000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(`https://m.blog.naver.com/${blogId}/${postId}`, {
+      headers: { 'User-Agent': RANK_UA, Accept: 'text/html', 'Accept-Language': 'ko-KR,ko;q=0.9' },
+      redirect: 'follow', signal: ctrl.signal,
+    });
+    if (!resp.ok) return null;
+    return await resp.text();
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+
+// 페이지에서 조직(최신순) 결과를 순서대로 추출 (title + 스니펫 text 포함). page.evaluate로 주입.
+function extractOrganicWithText(maxCount) {
+  const matched = Array.from(document.querySelectorAll('a[href*="blog.naver.com/"]'))
+    .filter((a) => /blog\.naver\.com\/[a-zA-Z0-9_]+\/\d{10,}/.test(a.href || ''));
+  const total = matched.length;
+  const NON_ORGANIC = /(인기글|인플루언서|파워링크|비즈사이트|광고|스폰서|추천)/;
+  const badRoots = [];
+  document.querySelectorAll('h2, h3').forEach((h) => {
+    const t = (h.textContent || '').replace(/\s+/g, ' ').trim();
+    if (t.length > 30 || !NON_ORGANIC.test(t)) return;
+    let root = h;
+    for (let i = 0; i < 4 && root.parentElement; i++) {
+      root = root.parentElement;
+      if (/api_subject_bx|sds-comps-vertical-layout|sc_new|_svp_/i.test((root.className || '').toString())) break;
+    }
+    const covered = matched.filter((a) => root.contains(a)).length;
+    if (root !== document.body && covered > 0 && covered <= total / 2) badRoots.push(root);
+  });
+  const inNonOrganic = (a) => badRoots.some((r) => r.contains(a));
+  const seen = new Set();
+  const out = [];
+  for (const a of matched) {
+    const href = a.href || '';
+    const m = href.match(/blog\.naver\.com\/([a-zA-Z0-9_]+)\/(\d{10,})/);
+    if (!m) continue;
+    if (inNonOrganic(a)) continue;
+    const key = `${m[1]}/${m[2]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let title = (a.textContent || '').replace(/\s+/g, ' ').trim();
+    const card = a.closest('li, div, article') || a.parentElement;
+    let text = '';
+    if (card) text = (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+    if (!title || title.length < 5) {
+      if (card) {
+        const te = card.querySelector('[class*="title"], [class*="Title"], strong, h3, h2');
+        if (te) title = (te.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+    }
+    out.push({ rank: out.length + 1, link: `https://blog.naver.com/${m[1]}/${m[2]}`, title: title.slice(0, 200), text, blogId: m[1], postId: m[2] });
+    if (out.length >= maxCount) break;
+  }
+  return out;
+}
+
+export async function scrapeBlogRank(keyword, opts = {}) {
+  const placeId = (opts.placeId || '').toString();
+  const storeName = (opts.storeName || '').toString();
+  const maxRank = Math.min(300, Math.max(1, parseInt(opts.maxRank, 10) || 300));
+  const tokens = rankNameTokens(storeName);
+  const b = await initBrowser();
+  const context = await b.newContext({
+    userAgent: RANK_UA, locale: 'ko-KR', timezoneId: 'Asia/Seoul',
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  try {
+    const url = `https://m.search.naver.com/search.naver?ssc=tab.m_blog.all&query=${encodeURIComponent(keyword)}&sort=date`;
+    await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
+    await page.waitForSelector('a[href*="blog.naver.com/"]', { timeout: 30000 }).catch(() => {});
+
+    const t0 = Date.now();
+    const budgetMs = Math.min(120000, Math.max(10000, parseInt(opts.budgetMs, 10) || 55000));
+    const checked = new Set();
+    let scanned = 0, lastLen = 0, stable = 0;
+    const maxScrolls = Math.ceil(maxRank / 7) + 12;
+
+    for (let s = 0; s <= maxScrolls; s++) {
+      if (Date.now() - t0 > budgetMs) break; // 시간 예산 초과 → 여기까지 스캔한 선에서 종료
+      const list = await page.evaluate(extractOrganicWithText, maxRank);
+
+      for (const item of list) {
+        if (item.rank > maxRank) break;
+        const key = `${item.blogId}/${item.postId}`;
+        if (checked.has(key)) continue;
+        checked.add(key);
+        if (item.rank > scanned) scanned = item.rank;
+
+        const hay = `${item.title} ${item.text || ''}`;
+        let hit = tokens.length > 0 && tokens.some((t) => hay.includes(t));
+        if (!hit && placeId && item.rank <= BODY_CHECK_LIMIT) {
+          const body = await fetchBlogBodyNode(item.blogId, item.postId);
+          if (body && (body.includes(placeId) || tokens.some((t) => body.includes(t)))) hit = true;
+        }
+        if (hit) {
+          return {
+            matched: true, rank: item.rank, scanned,
+            items: [{ rank: item.rank, link: item.link, title: item.title, blogId: item.blogId, postId: item.postId }],
+          };
+        }
+      }
+
+      if (list.length >= maxRank) break;
+      if (list.length === lastLen) { stable++; if (stable >= 2) break; } else stable = 0;
+      lastLen = list.length;
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(RANK_SCROLL_WAIT);
+    }
+    return { matched: false, rank: null, scanned, items: [] };
+  } finally {
+    await page.close().catch(() => {});
+    await context.close().catch(() => {});
+  }
+}

@@ -251,6 +251,28 @@ async function searchNaverApi(keyword, count = 30) {
  * @param {number} [count=30]
  * @returns {Promise<{items: Array, total: number, method: string}>}
  */
+// 매장 순위 딜스캔: NCP 스크래이퍼 /blog-rank 호출(매칭+조기종료를 서버가 수행).
+// 반환: { matched, rank, scanned, items }
+export async function getStoreRank(keyword, opts = {}) {
+  const baseUrl = process.env.KOREAN_SCRAPER_URL;
+  const apiKey = process.env.KOREAN_SCRAPER_KEY;
+  if (!baseUrl || !apiKey) {
+    throw new Error('KOREAN_SCRAPER_URL / KOREAN_SCRAPER_KEY 환경변수가 설정되지 않았습니다');
+  }
+  const maxRank = Math.min(300, Math.max(1, parseInt(opts.maxRank, 10) || 300));
+  const ep = `${baseUrl.replace(/\/$/, '')}/blog-rank` +
+    `?keyword=${encodeURIComponent(keyword)}&count=${maxRank}` +
+    `&placeId=${encodeURIComponent(opts.placeId || '')}` +
+    `&storeName=${encodeURIComponent(opts.storeName || '')}`;
+  const resp = await fetch(ep, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`스크래이퍼 blog-rank 실패 (status=${resp.status}): ${text.substring(0, 300)}`);
+  }
+  const data = await resp.json();
+  return { matched: !!data.matched, rank: data.rank ?? null, scanned: data.scanned || 0, items: data.items || [] };
+}
+
 export async function getBlogRankings(keyword, count = 30, sort = 'date') {
   const method = (process.env.SEARCH_METHOD || 'korean').toLowerCase();
 

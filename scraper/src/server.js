@@ -1,6 +1,6 @@
 // Express 진입점. 인증 + /scrape + /place-search 라우트.
 import express from 'express';
-import { scrapeBlogTab, initBrowser, closeBrowser } from './scraper.js';
+import { scrapeBlogTab, scrapeBlogRank, initBrowser, closeBrowser } from './scraper.js';
 import { scrapePlaceSearch } from './placeSearch.js';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -34,8 +34,8 @@ app.get('/scrape', async (req, res) => {
   const sort = (req.query.sort || 'date').toString() === 'rel' ? 'rel' : 'date';
 
   if (!keyword) return res.status(400).json({ error: 'keyword required' });
-  if (!Number.isFinite(count) || count < 1 || count > 30) {
-    return res.status(400).json({ error: 'count must be 1~30' });
+  if (!Number.isFinite(count) || count < 1 || count > 300) {
+    return res.status(400).json({ error: 'count must be 1~300' });
   }
 
   const t0 = Date.now();
@@ -54,6 +54,29 @@ app.get('/scrape', async (req, res) => {
       error: e.message || 'scrape failed',
       elapsedMs: Date.now() - t0,
     });
+  }
+});
+
+// 매장 블로그 순위 딜스캔(최대 300위) + 매칭 조기종료. 매칭은 여기(NCP)에서 수행.
+app.get('/blog-rank', async (req, res) => {
+  const keyword = (req.query.keyword || '').toString().trim();
+  const placeId = (req.query.placeId || '').toString().trim();
+  const storeName = (req.query.storeName || '').toString().trim();
+  const count = parseInt(req.query.count || '300', 10);
+
+  if (!keyword) return res.status(400).json({ error: 'keyword required' });
+  if (!placeId && !storeName) return res.status(400).json({ error: 'placeId or storeName required' });
+  if (!Number.isFinite(count) || count < 1 || count > 300) {
+    return res.status(400).json({ error: 'count must be 1~300' });
+  }
+
+  const t0 = Date.now();
+  try {
+    const r = await scrapeBlogRank(keyword, { placeId, storeName, maxRank: count });
+    res.json({ ...r, method: 'playwright', elapsedMs: Date.now() - t0, scrapedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error('[blog-rank error]', e);
+    res.status(500).json({ error: e.message || 'blog-rank failed', elapsedMs: Date.now() - t0 });
   }
 });
 

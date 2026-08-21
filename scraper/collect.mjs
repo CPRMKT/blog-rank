@@ -14,7 +14,7 @@ const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.ap
 const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
 const LOCK = '/tmp/blog-rank-collect.lock';
 const KEYWORD_DELAY_MS = 3000; // store-rank 는 무겁다(스크래퍼+본문). 호출 간 여유.
-const STORE_RANK_TIMEOUT_MS = 90000;
+const STORE_RANK_TIMEOUT_MS = 70000; // 딜스캔(최대 300위) 감안 상향(Vercel maxDuration 60초 + 여유)
 
 function log(msg) {
   const ts = new Intl.DateTimeFormat('sv-SE', {
@@ -133,7 +133,7 @@ async function main() {
             keyword,
             placeId: store.place_id || '',
             storeName: store.name || '',
-            count: '30',
+            count: '300', // 딜스캔: 최대 300위까지 탐지(매칭 즉시 조기종료)
           });
           const data = await api(`/api/store-rank?${params.toString()}`, {}, STORE_RANK_TIMEOUT_MS);
 

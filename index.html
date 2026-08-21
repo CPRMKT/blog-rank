@@ -2534,7 +2534,7 @@ async function checkKeywordRank(storeId,keyword){
     keyword,
     placeId:store.place_id||'',
     storeName:store.name||'',
-    count:'30',
+    count:'300',
   });
   const searchRes=await fetch(`/api/store-rank?${params}`);
   const searchData=await searchRes.json();
