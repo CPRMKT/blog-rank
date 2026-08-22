@@ -322,6 +322,22 @@ tr:hover td{background:var(--surface-3)}
 .pt-more:hover{color:var(--brand)}
 .pt-more svg{width:18px;height:18px;transition:transform .18s}
 .pt-more.expanded svg{transform:rotate(180deg)}
+  /* 플레이스 카드 옆 블로그 순위 미니 패널 (기존 배지 스타일 재사용) */
+  .pt-row{display:flex;gap:12px;align-items:stretch;margin-bottom:12px}
+  .pt-row .pt-kwcard{margin-bottom:0}
+  .pt-blogpanel{flex:1;min-width:0;max-width:480px;position:relative;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;box-shadow:var(--sh);overflow:hidden}
+  .pt-blogpanel-inner{position:absolute;inset:0;overflow:hidden;padding:14px 16px}
+  .pt-blogpanel-h{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px}
+  .pt-blogpanel-h small{font-weight:500;color:var(--faint);font-size:10.5px;margin-left:5px}
+  .pt-bloglist{display:flex;flex-direction:column}
+  .pt-blogitem{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line-2);min-width:0}
+  .pt-blogitem .t{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .pt-blogmiss{font-size:12px;color:var(--faint);padding:6px 0}
+  @media(max-width:820px){
+    .pt-row{flex-direction:column}
+    .pt-blogpanel{max-width:none;position:static}
+    .pt-blogpanel-inner{position:static;inset:auto}
+  }
 @media(max-width:640px){
   .pt-kwcard{padding:12px 12px;max-width:none}
   .pt-day{padding:5px 1px}
@@ -3016,6 +3032,7 @@ async function ptLoad(){
     const rr=await dbCall('get_store_place_rankings',{place_id:st.place_id,keywords:ptKeywords,days:PT_DAYS_EXPANDED+1});
     ptRows=(rr&&rr.result)?rr.result:[];
   }else{ ptRows=[]; }
+  await ptEnsureBlogData(ptStoreId);   // 같은 매장 블로그 순위 저장분 로드(옆 패널용)
   ptRenderCards();
   loadPtVolumes(ptKeywords);   // 월검색량 비동기 로드 후 재렌더
 }
@@ -3154,6 +3171,62 @@ function ptDelta(cur,prev){
 }
 
 // 키워드 카드형 렌더. 지표상세(detail)와 더보기(expand)는 서로 독립.
+// 최근 n일 MM/DD 키(블로그 rankings 키 포맷) — 최신순
+function ptRecentBlogDates(n){ const out=[]; const now=new Date(); for(let i=0;i<n;i++){ const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i); out.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`); } return out; }
+
+// 블로그 매칭 배지 목록 — 매장 블로그 순위 탭과 동일 스타일(.badge/.chg-*/region-amb) 재사용
+function ptBlogItemsHTML(data,prior){
+  const curRaw=Array.isArray(data.matches)?data.matches:(data.rank>0?[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}]:[]);
+  const priRaw=(prior&&Array.isArray(prior.matches))?prior.matches:[];
+  const cur=curRaw.filter(m=>regionVerdictOf(m&&m.url)!=='excluded');
+  const pri=priRaw.filter(m=>regionVerdictOf(m&&m.url)!=='excluded');
+  const priRank={}; pri.forEach(m=>{ priRank[blogKey(m.url)]=m.rank; });
+  if(cur.length===0) return '<div class="pt-blogmiss">블로그 미노출</div>';
+  return cur.slice().sort((a,b)=>a.rank-b.rank).map(m=>{
+    const cls=rankBadgeClass(m.rank);
+    const pr=priRank[blogKey(m.url)];
+    let chg='';
+    if(prior){ if(pr===undefined) chg='<span class="chg-new">NEW</span>'; else { const df=pr-m.rank; chg=df>0?`<span class="chg-up">▲${df}</span>`:df<0?`<span class="chg-down">▼${-df}</span>`:'<span class="chg-flat">-</span>'; } }
+    const amb=regionVerdictOf(m.url)==='ambiguous';
+    const t=m.title?escapeHtml(m.title):'';
+    const o=m.url?`<a href="${m.url}" target="_blank" style="text-decoration:none;min-width:0;flex:1;display:flex">`:'<span style="min-width:0;flex:1;display:flex">';
+    const c=m.url?'</a>':'</span>';
+    return `<div class="pt-blogitem${amb?' region-amb':''}"${amb?' title="지역 확인 필요"':''}><span class="badge ${cls}" style="font-size:11px;padding:2px 8px">${m.rank}위</span>${chg}${o}<span class="t" title="${t}">${t||'-'}</span>${c}</div>`;
+  }).join('');
+}
+
+// 플레이스 카드 옆 블로그 미니 패널 — 같은 키워드가 블로그 탭에 등록·수집돼 있을 때만.
+function ptBlogPanelHTML(kw){
+  const sid=ptStoreId;
+  const bkws=storeKeywords[sid]||[];
+  if(!bkws.includes(kw)) return '';            // 블로그 탭 미등록 → 패널 자체 없음
+  const rk=(storeRankings[sid]||{})[kw];
+  if(!rk) return '';
+  const dates=ptRecentBlogDates(PT_DAYS_EXPANDED+1);
+  let li=-1; for(let i=0;i<dates.length;i++){ if(rk[dates[i]]){ li=i; break; } }
+  if(li<0) return '';                          // 수집된 데이터 없음 → 패널 없음
+  const data=rk[dates[li]]; let prior=null;
+  for(let j=li+1;j<dates.length;j++){ if(rk[dates[j]]){ prior=rk[dates[j]]; break; } }
+  return `<div class="pt-blogpanel"><div class="pt-blogpanel-inner"><div class="pt-blogpanel-h">블로그 순위<small>같은 키워드</small></div><div class="pt-bloglist">${ptBlogItemsHTML(data,prior)}</div></div></div>`;
+}
+
+// 플레이스 매장의 블로그 순위 저장분 로드(재사용, 매장 블로그 순위 탭과 동일 구조)
+async function ptEnsureBlogData(storeId){
+  if(storeId==null) return;
+  try{
+    const kwRes=await dbCall('list_store_keywords',{store_id:storeId});
+    storeKeywords[storeId]=((kwRes&&kwRes.result)||[]).map(r=>r.keyword);
+    const rankRes=await dbCall('get_store_rankings',{store_id:storeId,days:31});
+    storeRankings[storeId]={};
+    for(const r of ((rankRes&&rankRes.result)||[])){
+      if(!storeRankings[storeId][r.keyword])storeRankings[storeId][r.keyword]={};
+      const mmdd=toDateKey(new Date(r.checked_date));
+      const matches=Array.isArray(r.matches)&&r.matches.length?r.matches:(r.rank>0?[{rank:r.rank,url:r.matched_blog_url,title:r.matched_title}]:[]);
+      storeRankings[storeId][r.keyword][mmdd]={rank:r.rank,matched_blog_url:r.matched_blog_url,matched_title:r.matched_title,matches};
+    }
+  }catch(e){ if(!storeKeywords[storeId])storeKeywords[storeId]=[]; }
+}
+
 function ptRenderCards(){
   const cards=document.getElementById('ptCards');
   const detail=document.getElementById('ptDetail').checked;
@@ -3193,7 +3266,7 @@ function ptRenderCards(){
     const vol=storeKwVolumes[kw];
     const volHtml=(vol!=null)?`<span class="pt-kwvol">월 ${vol.toLocaleString()}</span>`:'';
     const jkw=ptJs(kw);
-    return `<div class="pt-kwcard">
+    return `<div class="pt-row"><div class="pt-kwcard">
       <div class="pt-kwhead">
         <div class="pt-badge">${PT_PIN_SVG}</div>
         <div class="pt-kwmeta">
@@ -3210,7 +3283,7 @@ function ptRenderCards(){
       </div>
       <div class="pt-grid">${cells}</div>
       <button class="pt-more${expanded?' expanded':''}" title="${expanded?'접기':'더보기(최근 30일)'}" onclick="ptToggleExpand('${jkw}')">${PT_CHEV_SVG}</button>
-    </div>`;
+    </div>${ptBlogPanelHTML(kw)}</div>`;
   }).join('');
 }
 </script>
