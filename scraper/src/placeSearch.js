@@ -71,35 +71,57 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       }
     }
   };
-  page.on('response', async (resp) => {
-    if (!resp.url().includes('api.place.naver.com/graphql')) return;
-    try {
-      const j = await resp.json();
-      walk(j, '');
-    } catch {}
+  // GraphQL 요청 템플릿(쿼리·헤더·쿠키) 캡처 → 이후 start 오프셋만 바꿔 직접 호출.
+  // 모바일 스크롤 UI는 ~110위에서 자동로딩을 멈추지만, GraphQL은 start로 300위까지 페이지네이션됨.
+  let cap = null;
+  page.on('request', (req) => {
+    if (req.url().includes('api.place.naver.com/graphql') && req.method() === 'POST' && !cap) {
+      const pd = req.postData();
+      if (pd && /PlaceList|business/i.test(pd)) cap = { url: req.url(), headers: req.headers(), body: pd };
+    }
   });
+  const findInput = (v) =>
+    (v && (v.input || v.restaurantListInput || v.businessListInput || v.hairShopListInput || v.hospitalListInput || v.cafeListInput)) || null;
 
   try {
     const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
     await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
     await page.waitForTimeout(2500);
-    // 스크롤로 추가 로딩. 단, 2회 연속 새 항목이 없으면 조기 종료해
-    // 결과가 적거나 없는 키워드에서 12회를 모두 도느라 ~20초 걸리던 것을 방지.
-    const t0 = Date.now();
-    const maxScrolls = Math.max(12, Math.ceil(count / 6) + 10);
-    let prevLen = 0;
-    let stable = 0;
-    for (let i = 0; i < maxScrolls && items.length < count; i++) {
-      if (Date.now() - t0 > budgetMs) break; // 시간예산 초과 → 여기까지 로드된 선에서 종료
+    // 요청 캡처 보장(안 잡히면 스크롤 몇 번으로 유도)
+    for (let i = 0; i < 4 && !cap; i++) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(1200);
-      if (items.length === prevLen) {
-        if (++stable >= 2) break; // 2회 연속 증가 없음 = 네이버 실질 한계 → 종료
-      } else {
-        stable = 0;
-      }
-      prevLen = items.length;
     }
+    if (!cap) return []; // 캡처 실패 → 빈 결과(호출부는 items:[]로 처리)
+
+    // start=1,51,101…로 올리며 GraphQL 직접 호출. count 도달 or 2회 연속 신규 없음 → 종료.
+    const t0 = Date.now();
+    const PAGE = 50;
+    let empties = 0;
+    for (let start = 1; items.length < count && start <= count + 50 && empties < 2; start += PAGE) {
+      if (Date.now() - t0 > budgetMs) break; // 시간예산 초과 → 여기까지 수집한 선에서 종료
+      const body = JSON.parse(cap.body);
+      const arr = Array.isArray(body) ? body : [body];
+      const idx = arr.findIndex((op) => op && op.variables && findInput(op.variables));
+      if (idx < 0) break;
+      const inp = findInput(arr[idx].variables);
+      inp.start = start;
+      inp.display = PAGE;
+      let j = null;
+      try {
+        const res = await context.request.post(cap.url, {
+          headers: cap.headers,
+          data: Array.isArray(body) ? arr : arr[0],
+          timeout: 15000,
+        });
+        if (res.ok()) j = await res.json();
+      } catch { /* 네트워크 오류 → 빈 페이지 취급 */ }
+      const before = items.length;
+      if (j) walk(j, '');
+      if (items.length === before) empties++; else empties = 0;
+      await page.waitForTimeout(350); // 차단 방지용 요청 간 딜레이
+    }
+
     return items.slice(0, count).map((it, i) => ({
       rank: i + 1,
       placeId: it.placeId,
