@@ -59,7 +59,7 @@ async function main() {
     for (const [keyword, owners] of byKeyword) {
       summary.keywords++;
       try {
-        const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=50`;
+        const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=300`;
         const resp = await fetch(endpoint, { headers: { Authorization: `Bearer ${SCRAPER_KEY}` } });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);

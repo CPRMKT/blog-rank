@@ -1,6 +1,9 @@
 // api/place-search.js
-// 플레이스 키워드 검색 순위(1~50위)를 한국 스크래퍼(NCP)에서 가져온다.
-//   GET /api/place-search?keyword=<키워드>&count=50
+// 플레이스 키워드 검색 순위(1~300위)를 한국 스크래퍼(NCP)에서 가져온다.
+//   GET /api/place-search?keyword=<키워드>&count=300
+// 깊은 스크롤(최대 ~50초)을 스크래퍼가 수행하므로 함수 실행시간을 60초로 늘린다.
+
+export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,7 +12,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const keyword = (req.query.keyword || '').toString().trim();
-  const count = parseInt(req.query.count || '50', 10);
+  const count = Math.min(300, Math.max(1, parseInt(req.query.count, 10) || 300));
   if (!keyword) return res.status(400).json({ ok: false, error: 'keyword required' });
 
   const base = process.env.KOREAN_SCRAPER_URL;
