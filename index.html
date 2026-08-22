@@ -326,7 +326,7 @@ tr:hover td{background:var(--surface-3)}
   .pt-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
   .pt-row .pt-kwcard{margin-bottom:0;flex:0 0 420px}
   .pt-grid.detail .pt-day{min-height:111px}
-  .pt-blogpanel{flex:1;min-width:0;max-width:480px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;box-shadow:var(--sh)}
+  .pt-blogpanel{flex:0 0 420px;min-width:0;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;box-shadow:var(--sh)}
   .pt-blogpanel-inner{padding:14px 16px}
   .pt-blogpanel-h{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px}
   .pt-blogpanel-h small{font-weight:500;color:var(--faint);font-size:10.5px;margin-left:5px}
@@ -340,10 +340,11 @@ tr:hover td{background:var(--surface-3)}
   .pt-blogrank{display:flex;flex-direction:column;align-items:center;line-height:1.15}
   .pt-blogrank .badge{font-size:10.5px;padding:1px 6px;min-width:auto}
   .pt-blogrank .chg-up,.pt-blogrank .chg-down,.pt-blogrank .chg-new{font-size:8.5px;margin-top:1px}
-  @media(max-width:820px){
+  /* 카드(420)+패널(420)이 한 줄에 안 들어가는 폭에선 세로 스택 → 가로 넘침 방지 */
+  @media(max-width:1140px){
     .pt-row{flex-direction:column}
     .pt-row .pt-kwcard{flex:0 0 auto;width:100%}
-    .pt-blogpanel{max-width:none}
+    .pt-blogpanel{flex:0 0 auto;width:100%;max-width:420px}
   }
 @media(max-width:640px){
   .pt-kwcard{padding:12px 12px;max-width:none}
