@@ -21,7 +21,7 @@ function listPath(keyword) {
   return 'restaurant';
 }
 
-export async function scrapePlaceSearch(keyword, count = 50) {
+export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   const b = await initBrowser();
   const context = await b.newContext({
     userAgent: MOBILE_UA,
@@ -85,13 +85,16 @@ export async function scrapePlaceSearch(keyword, count = 50) {
     await page.waitForTimeout(2500);
     // 스크롤로 추가 로딩. 단, 2회 연속 새 항목이 없으면 조기 종료해
     // 결과가 적거나 없는 키워드에서 12회를 모두 도느라 ~20초 걸리던 것을 방지.
+    const t0 = Date.now();
+    const maxScrolls = Math.max(12, Math.ceil(count / 6) + 10);
     let prevLen = 0;
     let stable = 0;
-    for (let i = 0; i < 12 && items.length < count; i++) {
+    for (let i = 0; i < maxScrolls && items.length < count; i++) {
+      if (Date.now() - t0 > budgetMs) break; // 시간예산 초과 → 여기까지 로드된 선에서 종료
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(1400);
+      await page.waitForTimeout(1200);
       if (items.length === prevLen) {
-        if (++stable >= 2) break;
+        if (++stable >= 2) break; // 2회 연속 증가 없음 = 네이버 실질 한계 → 종료
       } else {
         stable = 0;
       }

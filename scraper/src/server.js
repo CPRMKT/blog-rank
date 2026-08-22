@@ -86,8 +86,8 @@ app.get('/place-search', async (req, res) => {
   const count = parseInt(req.query.count || '50', 10);
 
   if (!keyword) return res.status(400).json({ error: 'keyword required' });
-  if (!Number.isFinite(count) || count < 1 || count > 100) {
-    return res.status(400).json({ error: 'count must be 1~100' });
+  if (!Number.isFinite(count) || count < 1 || count > 300) {
+    return res.status(400).json({ error: 'count must be 1~300' });
   }
 
   const t0 = Date.now();
