@@ -326,25 +326,19 @@ tr:hover td{background:var(--surface-3)}
   .pt-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
   .pt-row .pt-kwcard{margin-bottom:0;flex:0 0 420px}
   .pt-grid.detail .pt-day{min-height:111px}
-  .pt-blogpanel{flex:0 0 420px;min-width:0;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;box-shadow:var(--sh)}
+  .pt-blogpanel{flex:1;min-width:0;max-width:720px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;box-shadow:var(--sh)}
   .pt-blogpanel-inner{padding:14px 16px}
   .pt-blogpanel-h{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px}
   .pt-blogpanel-h small{font-weight:500;color:var(--faint);font-size:10.5px;margin-left:5px}
-  /* 블로그 패널: 플레이스 카드와 동일한 날짜 가로 그리드(6열). 날짜 열 안에서 순위 세로 스택. */
-  .pt-bloggrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0}
-  .pt-blogday{padding:6px 2px;text-align:center;background:var(--surface);border-bottom:1px solid var(--line-2);min-width:0}
-  .pt-blogday.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
-  .pt-blogday.today .pt-day-date{color:var(--brand-ink)}
-  .pt-blogday-body{display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:3px}
-  .pt-blogday-body .pt-rank.none{color:var(--faint);font-weight:600;font-size:12px}
-  .pt-blogrank{display:flex;flex-direction:column;align-items:center;line-height:1.15}
-  .pt-blogrank .badge{font-size:10.5px;padding:1px 6px;min-width:auto}
-  .pt-blogrank .chg-up,.pt-blogrank .chg-down,.pt-blogrank .chg-new{font-size:8.5px;margin-top:1px}
-  /* 카드(420)+패널(420)이 한 줄에 안 들어가는 폭에선 세로 스택 → 가로 넘침 방지 */
-  @media(max-width:1140px){
+  /* 블로그 패널: "매장 블로그 순위" 탭 표를 그대로 축소. 날짜 한 줄 가로 나열 + 가로 스크롤(줄바꿈 없음). */
+  .pt-blogscroll{overflow-x:auto}
+  .pt-blogtable{border-collapse:collapse;font-size:11px;width:auto}
+  .pt-blogtable th{padding:4px 8px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600;font-size:10px;background:var(--surface-2);white-space:nowrap;text-align:center;min-width:88px}
+  .pt-blogtable td{padding:5px 8px;border-bottom:none;vertical-align:top;text-align:center;min-width:88px}
+  @media(max-width:820px){
     .pt-row{flex-direction:column}
     .pt-row .pt-kwcard{flex:0 0 auto;width:100%}
-    .pt-blogpanel{flex:0 0 auto;width:100%;max-width:420px}
+    .pt-blogpanel{flex:0 0 auto;width:100%;max-width:none}
   }
 @media(max-width:640px){
   .pt-kwcard{padding:12px 12px;max-width:none}
@@ -3183,26 +3177,8 @@ function ptDelta(cur,prev){
 function ptRecentBlogDates(n){ const out=[]; const now=new Date(); for(let i=0;i<n;i++){ const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i); out.push(`${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`); } return out; }
 
 // 블로그 매칭 배지 목록 — 매장 블로그 순위 탭과 동일 스타일(.badge/.chg-*/region-amb) 재사용
-function ptBlogCellBadges(data,prior){
-  if(!data) return '<span class="pt-rank none">-</span>';
-  const curRaw=Array.isArray(data.matches)?data.matches:(data.rank>0?[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}]:[]);
-  const priRaw=(prior&&Array.isArray(prior.matches))?prior.matches:[];
-  const cur=curRaw.filter(m=>regionVerdictOf(m&&m.url)!=='excluded');
-  const pri=priRaw.filter(m=>regionVerdictOf(m&&m.url)!=='excluded');
-  const priRank={}; pri.forEach(m=>{ priRank[blogKey(m.url)]=m.rank; });
-  if(cur.length===0) return '<span class="pt-rank none">-</span>';
-  return cur.slice().sort((a,b)=>a.rank-b.rank).map(m=>{
-    const cls=rankBadgeClass(m.rank);
-    const pr=priRank[blogKey(m.url)];
-    let chg='';
-    if(prior){ if(pr===undefined) chg='<span class="chg-new">NEW</span>'; else { const df=pr-m.rank; chg=df>0?`<span class="chg-up">▲${df}</span>`:df<0?`<span class="chg-down">▼${-df}</span>`:''; } }
-    const amb=regionVerdictOf(m.url)==='ambiguous';
-    return `<div class="pt-blogrank${amb?' region-amb':''}"${amb?' title="지역 확인 필요"':''}><span class="badge ${cls}">${m.rank}</span>${chg}</div>`;
-  }).join('');
-}
-
-// 플레이스 카드 옆 블로그 미니 패널 — 플레이스 카드와 동일한 날짜 열(가로) 구조.
-// 열=날짜(카드와 같은 범위·개수), 행=그 날짜의 매칭 순위(여러 개면 세로 스택), 없으면 "-".
+// 플레이스 카드 옆 블로그 미니 패널 — "매장 블로그 순위" 탭(renderRankCell)을 그대로 축소.
+// 날짜를 한 줄로 가로 나열(6열 강제 없음), 폭 넘치면 가로 스크롤. 열 구조·배지·헤더는 블로그 탭과 동일.
 function ptBlogPanelHTML(kw, allDatesISO, shownCount){
   const sid=ptStoreId;
   const bkws=storeKeywords[sid]||[];
@@ -3211,13 +3187,14 @@ function ptBlogPanelHTML(kw, allDatesISO, shownCount){
   if(!rk || !Object.keys(rk).length) return ''; // 수집된 데이터 없음 → 패널 없음
   const isoToMMDD=(iso)=>iso.slice(5).replace('-','/'); // "2026-08-23" → "08/23"(blog 키 포맷)
   const shown=allDatesISO.slice(0, shownCount);
-  const cells=shown.map((iso,idx)=>{
+  const head=shown.map(iso=>`<th>${ptDateHeaderHTML(iso)}</th>`).join('');
+  const body=shown.map((iso,idx)=>{
     const data=rk[isoToMMDD(iso)];
     let prior=null;
     for(let j=idx+1;j<allDatesISO.length;j++){ const pd=rk[isoToMMDD(allDatesISO[j])]; if(pd){ prior=pd; break; } }
-    return `<div class="pt-blogday${idx===0?' today':''}"><div class="pt-day-date">${ptDateHeaderHTML(iso)}</div><div class="pt-blogday-body">${ptBlogCellBadges(data,prior)}</div></div>`;
+    return renderRankCell(data, prior);        // 매장 블로그 순위 탭과 동일한 셀 렌더를 그대로 재사용
   }).join('');
-  return `<div class="pt-blogpanel"><div class="pt-blogpanel-inner"><div class="pt-blogpanel-h">블로그 순위<small>같은 키워드</small></div><div class="pt-bloggrid">${cells}</div></div></div>`;
+  return `<div class="pt-blogpanel"><div class="pt-blogpanel-inner"><div class="pt-blogpanel-h">블로그 순위<small>같은 키워드</small></div><div class="pt-blogscroll"><table class="pt-blogtable"><thead><tr>${head}</tr></thead><tbody><tr>${body}</tr></tbody></table></div></div></div>`;
 }
 
 // 플레이스 매장의 블로그 순위 저장분 로드(재사용, 매장 블로그 순위 탭과 동일 구조)
