@@ -3184,8 +3184,12 @@ function ptRecentBlogDates(n){ const out=[]; const now=new Date(); for(let i=0;i
 function ptBlogPanelHTML(kw, allDatesISO, shownCount){
   const sid=ptStoreId;
   const bkws=storeKeywords[sid]||[];
-  if(!bkws.includes(kw)) return '';            // 블로그 탭 미등록 → 패널 자체 없음
-  const rk=(storeRankings[sid]||{})[kw];
+  // 공백 차이 무시(정규화)하고 같은 키워드의 블로그 등록 여부 판단 — "울산삼산밥집" ↔ "울산 삼산 밥집"
+  const ptNormKw=(x)=>String(x||'').replace(/\s+/g,'');
+  const nkw=ptNormKw(kw);
+  const blogKw=bkws.find(b=>ptNormKw(b)===nkw);
+  if(!blogKw) return '';                         // 블로그 탭에 (정규화상) 없음 → 패널 자체 없음
+  const rk=(storeRankings[sid]||{})[blogKw];     // storeRankings 키는 블로그 키워드 원문
   if(!rk || !Object.keys(rk).length) return ''; // 수집된 데이터 없음 → 패널 없음
   const isoToMMDD=(iso)=>iso.slice(5).replace('-','/'); // "2026-08-23" → "08/23"(blog 키 포맷)
   const shown=allDatesISO.slice(0, shownCount);
