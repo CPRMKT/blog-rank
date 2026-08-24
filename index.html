@@ -861,7 +861,7 @@ tr:hover td{background:var(--surface-3)}
 
         <div class="card">
           <div class="card-title">플레이스 순위 확인할 키워드 등록</div>
-          <div class="card-sub">키워드별 네이버 플레이스 검색 순위를 매일 추적합니다 (최대 20개)</div>
+          <div class="card-sub">키워드별 네이버 플레이스 검색 순위를 매일 추적합니다 (최대 40개)</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <input type="text" id="ptKwInput" placeholder="키워드 입력 (지역+업종 / 예: 강남 맛집, 수영역 칼국수)" style="flex:1;min-width:220px" onkeydown="if(event.key==='Enter')ptAddKeyword()">
             <button class="btn primary" id="ptAddBtn" onclick="ptAddKeyword()">등록</button>
@@ -2876,7 +2876,7 @@ function prRenderCompare(daysAgo){
 // ============================================================
 // 플레이스 순위 추적 (매장 중심)
 // ============================================================
-const PT_MAX_KW=20;
+const PT_MAX_KW=40;
 const PT_COLS=6;              // 한 줄 6일 고정
 const PT_DAYS_COLLAPSED=12;   // 기본 2줄 = 12일
 const PT_DAYS_EXPANDED=30;    // 펼침 5줄 = 30일
