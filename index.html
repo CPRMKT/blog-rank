@@ -528,6 +528,13 @@ tr:hover td{background:var(--surface-3)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/><path d="M9.2 12l1.9 1.9 3.7-3.8"/></svg> 주문 관리
       </div>
     </div>
+
+    <div class="menu-group">
+      <div class="menu-label">도구</div>
+      <div class="menu-item" id="menu-kwtool" onclick="showPage('kwtool')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L3 18v3h3l6.5-6.5a4 4 0 0 0 5.2-5.2l-2.5 2.5-2-2 2.5-2.5Z"/></svg> 키워드 도구
+      </div>
+    </div>
   </div>
   <div class="menu-logout" id="menuLogout" style="display:none">
     <div class="who" id="logoutWho"></div>
@@ -940,6 +947,100 @@ tr:hover td{background:var(--surface-3)}
           <th style="width:48px">순위</th><th>매장명</th><th>업종</th>
           <th style="text-align:right">방문자리뷰</th><th style="text-align:right">블로그</th><th style="width:70px">변동</th>
         </tr></thead><tbody id="prCmpBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- 키워드 도구 (조합기 + 대량조회)                 -->
+  <!-- ============================================= -->
+  <style>
+  #page-kwtool{padding:0}
+  #page-kwtool .kt-title{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+  #page-kwtool .kt-sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+  #page-kwtool .kt-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-2);margin-top:var(--sp-2);box-shadow:var(--sh)}
+  #page-kwtool .kt-card-t{font-size:14px;font-weight:800;color:var(--ink)}
+  #page-kwtool .kt-card-s{font-size:12px;color:var(--muted);margin:3px 0 14px}
+  #page-kwtool .kt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  #page-kwtool .kt-g label{display:block;font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:5px}
+  #page-kwtool textarea{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:8px 10px;font-size:13px;outline:none;font-family:inherit;resize:vertical;line-height:1.5}
+  #page-kwtool textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  #page-kwtool .kt-opts{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  #page-kwtool .kt-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;font-weight:600}
+  #page-kwtool .kt-chk input{width:16px;height:16px;cursor:pointer;accent-color:var(--brand)}
+  #page-kwtool .kt-actions{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap}
+  #page-kwtool .kt-btn{background:var(--brand);color:#fff;border:none;border-radius:var(--r-btn);height:40px;padding:0 18px;font-weight:700;cursor:pointer;font-size:13.5px}
+  #page-kwtool .kt-btn:hover{background:var(--brand-ink)}
+  #page-kwtool .kt-btn:disabled{opacity:.5;cursor:default}
+  #page-kwtool .kt-btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+  #page-kwtool .kt-btn.ghost:hover{background:var(--surface-3)}
+  #page-kwtool .kt-cnt{font-size:12.5px;color:var(--muted);font-weight:600}
+  #page-kwtool .kt-result{margin-top:12px}
+  #page-kwtool .kt-out{width:100%;min-height:120px;max-height:320px;overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-input);padding:10px 12px;font-size:12.5px;color:var(--text);white-space:pre-wrap;line-height:1.7;font-variant-numeric:tabular-nums}
+  #page-kwtool .kt-progwrap{flex:1;min-width:160px;height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:none}
+  #page-kwtool .kt-progwrap.on{display:block}
+  #page-kwtool .kt-prog{height:100%;background:var(--brand);width:0;transition:width .2s}
+  #page-kwtool .kt-progtxt{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+  #page-kwtool .kt-summary{font-size:12.5px;color:var(--muted);margin:12px 0 8px}
+  #page-kwtool .kt-summary b{color:var(--ink)}
+  #page-kwtool .kt-tblwrap{overflow-x:auto;overflow-y:auto;max-height:520px;border:1px solid var(--line);border-radius:var(--r-card)}
+  #page-kwtool table{width:100%;border-collapse:collapse;font-size:12.5px;color:var(--text);min-width:420px}
+  #page-kwtool thead th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);text-align:right;padding:9px 12px;font-weight:700;font-size:11px;border-bottom:1px solid var(--line);white-space:nowrap}
+  #page-kwtool thead th:first-child{text-align:left}
+  #page-kwtool tbody td{padding:8px 12px;border-top:1px solid var(--line-2);text-align:right;font-variant-numeric:tabular-nums}
+  #page-kwtool tbody td:first-child{text-align:left;color:var(--ink);font-weight:600}
+  #page-kwtool tbody tr:hover td{background:var(--surface-3)}
+  #page-kwtool tr.fail td{color:var(--faint)}
+  #page-kwtool tr.fail td:first-child{color:var(--muted)}
+  #page-kwtool .kt-total{color:var(--brand-ink);font-weight:800}
+  @media(max-width:720px){ #page-kwtool .kt-grid{grid-template-columns:repeat(2,1fr)} }
+  </style>
+  <div id="page-kwtool" style="display:none">
+    <div class="kt-title">🛠️ 키워드 도구</div>
+    <div class="kt-sub">키워드 조합 생성 + 네이버 검색광고 API 기반 월 검색량(PC/모바일) 대량조회</div>
+
+    <!-- ── 1. 키워드 조합기 ── -->
+    <div class="kt-card">
+      <div class="kt-card-t">키워드 조합기</div>
+      <div class="kt-card-s">그룹별로 단어를 줄바꿈으로 입력하고, 조합 방식을 선택하면 모든 조합을 만들어 줍니다. (외부 조회 없음)</div>
+      <div class="kt-grid">
+        <div class="kt-g"><label>그룹 1</label><textarea id="kcG1" rows="7" placeholder="예)&#10;강남&#10;서초&#10;역삼"></textarea></div>
+        <div class="kt-g"><label>그룹 2</label><textarea id="kcG2" rows="7" placeholder="예)&#10;맛집&#10;카페&#10;술집"></textarea></div>
+        <div class="kt-g"><label>그룹 3</label><textarea id="kcG3" rows="7" placeholder="(선택)"></textarea></div>
+        <div class="kt-g"><label>그룹 4</label><textarea id="kcG4" rows="7" placeholder="(선택)"></textarea></div>
+      </div>
+      <div class="kt-opts">
+        <span style="font-size:12px;font-weight:700;color:var(--muted)">조합:</span>
+        <label class="kt-chk"><input type="checkbox" id="kcC2" checked>2개 조합</label>
+        <label class="kt-chk"><input type="checkbox" id="kcC3">3개 조합</label>
+        <label class="kt-chk"><input type="checkbox" id="kcC4">4개 조합</label>
+        <label class="kt-chk" style="margin-left:12px"><input type="checkbox" id="kcSpace" checked>키워드 사이 공백 추가</label>
+      </div>
+      <div class="kt-actions">
+        <button class="kt-btn" onclick="kcGenerate()">조합 생성</button>
+        <span class="kt-cnt" id="kcCount"></span>
+        <button class="kt-btn ghost" id="kcCsvBtn" onclick="kcDownloadCsv()" style="display:none;margin-left:auto">CSV 다운로드</button>
+        <button class="kt-btn ghost" id="kcToLookupBtn" onclick="kcToLookup()" style="display:none">↓ 대량조회로 보내기</button>
+      </div>
+      <div class="kt-result"><div class="kt-out" id="kcOut" style="display:none"></div></div>
+    </div>
+
+    <!-- ── 2. 키워드 대량조회 ── -->
+    <div class="kt-card">
+      <div class="kt-card-t">키워드 대량조회 <span style="font-weight:500;color:var(--faint);font-size:11.5px">· 네이버 검색광고 월 검색량</span></div>
+      <div class="kt-card-s">한 줄에 키워드 하나씩 붙여넣으세요. 개수 제한 없이 자동으로 나눠 조회합니다(배치 5개/요청).</div>
+      <textarea id="klInput" rows="8" placeholder="강남 맛집&#10;서초 카페&#10;역삼 술집&#10;..."></textarea>
+      <div class="kt-actions">
+        <button class="kt-btn" id="klRunBtn" onclick="klRun()">검색량 조회</button>
+        <div class="kt-progwrap" id="klProgWrap"><div class="kt-prog" id="klProg"></div></div>
+        <span class="kt-progtxt" id="klProgTxt"></span>
+      </div>
+      <div id="klResultBox" style="display:none">
+        <div class="kt-summary" id="klSummary"></div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="kt-btn ghost" onclick="klDownloadXlsx()">엑셀(.xlsx) 다운로드</button></div>
+        <div class="kt-tblwrap">
+          <table><thead><tr><th style="min-width:160px">키워드</th><th>PC</th><th>M</th><th>합계</th></tr></thead><tbody id="klBody"></tbody></table>
+        </div>
       </div>
     </div>
   </div>
@@ -1362,7 +1463,7 @@ async function initAuth(){
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','placetrack','placerank','charge','order','admin'].forEach(p=>{
+  ['home','post','store','suggest','placetrack','placerank','charge','order','admin','kwtool'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
@@ -1372,6 +1473,7 @@ function showPage(page){
   if(page==='charge') initCharge();
   if(page==='order') initOrder();
   if(page==='admin') initAdmin();
+  if(page==='kwtool') initKwTool();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
 }
 
@@ -1693,6 +1795,87 @@ async function adChangeStatus(orderId,status,el){
     alert('상태 변경 실패: '+((r&&r.error)||'다시 시도해 주세요.'));
     el.value=prev; // 롤백
   }
+}
+
+// ============ 키워드 도구 (조합기 + 대량조회) ============
+function initKwTool(){ /* 별도 초기화 불필요 */ }
+
+// --- 조합기 ---
+let kcList=[];
+function kcParseGroup(id){ return (document.getElementById(id).value||'').split('\n').map(x=>x.trim()).filter(Boolean); }
+function kcCombosOfSize(arr,k){ const res=[]; (function go(start,acc){ if(acc.length===k){res.push(acc.slice());return;} for(let i=start;i<arr.length;i++){acc.push(arr[i]);go(i+1,acc);acc.pop();} })(0,[]); return res; }
+function kcGenerate(){
+  const groups=[kcParseGroup('kcG1'),kcParseGroup('kcG2'),kcParseGroup('kcG3'),kcParseGroup('kcG4')];
+  const nonEmpty=[0,1,2,3].filter(i=>groups[i].length);
+  const sizes=[]; if(document.getElementById('kcC2').checked)sizes.push(2); if(document.getElementById('kcC3').checked)sizes.push(3); if(document.getElementById('kcC4').checked)sizes.push(4);
+  const sep=document.getElementById('kcSpace').checked?' ':'';
+  const out=new Set();
+  const cartesian=(idxs)=>{ let acc=['']; for(const gi of idxs){ const nx=[]; for(const a of acc) for(const w of groups[gi]) nx.push(a?a+sep+w:w); acc=nx; } return acc; };
+  for(const k of sizes){ if(k>nonEmpty.length) continue; for(const subset of kcCombosOfSize(nonEmpty,k)){ for(const c of cartesian(subset)) out.add(c); } }
+  kcList=[...out];
+  const cntEl=document.getElementById('kcCount');
+  if(!kcList.length){ cntEl.textContent=nonEmpty.length<2?'단어를 2개 이상 그룹에 입력하세요.':'조합 방식을 선택하세요.'; document.getElementById('kcOut').style.display='none'; document.getElementById('kcCsvBtn').style.display='none'; document.getElementById('kcToLookupBtn').style.display='none'; return; }
+  cntEl.textContent='총 '+kcList.length.toLocaleString()+'개 조합';
+  const o=document.getElementById('kcOut'); o.style.display=''; o.textContent=kcList.join('\n');
+  document.getElementById('kcCsvBtn').style.display=''; document.getElementById('kcToLookupBtn').style.display='';
+}
+function kcDownloadCsv(){
+  if(!kcList.length) return;
+  const csv='키워드\n'+kcList.map(k=>'"'+k.replace(/"/g,'""')+'"').join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='키워드조합.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+function kcToLookup(){ if(!kcList.length) return; document.getElementById('klInput').value=kcList.join('\n'); document.getElementById('klInput').scrollIntoView({behavior:'smooth',block:'center'}); }
+
+// --- 대량조회 (네이버 검색광고 API, /api/search-volume 재사용) ---
+let klRows=[]; // [{keyword, pc, mobile, total, ok}]
+function klSetProgress(done,total){
+  const w=document.getElementById('klProgWrap'), p=document.getElementById('klProg'), t=document.getElementById('klProgTxt');
+  if(total>0){ w.classList.add('on'); p.style.width=Math.round(done/total*100)+'%'; t.textContent=done+' / '+total; }
+  else { w.classList.remove('on'); t.textContent=''; }
+}
+async function klRun(){
+  const kws=[...new Set((document.getElementById('klInput').value||'').split('\n').map(x=>x.trim()).filter(Boolean))];
+  if(!kws.length){ alert('키워드를 한 줄에 하나씩 입력하세요.'); return; }
+  const btn=document.getElementById('klRunBtn'); btn.disabled=true; btn.textContent='조회 중…';
+  document.getElementById('klResultBox').style.display='none';
+  const CHUNK=20; const chunks=[]; for(let i=0;i<kws.length;i+=CHUNK) chunks.push(kws.slice(i,i+CHUNK));
+  const vol={};
+  klSetProgress(0,kws.length); let done=0;
+  for(const chunk of chunks){
+    try{
+      const r=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:chunk})}).then(x=>x.json());
+      if(r&&r.ok&&r.volumes){ for(const k of chunk) vol[k]=r.volumes[k]||null; }
+      else { for(const k of chunk) vol[k]=null; }
+    }catch(e){ for(const k of chunk) vol[k]=null; }
+    done+=chunk.length; klSetProgress(done,kws.length);
+    await new Promise(res=>setTimeout(res,300)); // 배치 간 딜레이(차단 방지)
+  }
+  klRows=kws.map(k=>{ const v=vol[k]; return v?{keyword:k,pc:v.pc||0,mobile:v.mobile||0,total:v.total||0,ok:true}:{keyword:k,pc:0,mobile:0,total:0,ok:false}; });
+  klRender();
+  klSetProgress(0,0);
+  btn.disabled=false; btn.textContent='검색량 조회';
+}
+function klRender(){
+  const ok=klRows.filter(r=>r.ok), fail=klRows.filter(r=>!r.ok);
+  document.getElementById('klResultBox').style.display='';
+  document.getElementById('klSummary').innerHTML='총 <b>'+klRows.length+'</b>개 · 조회 성공 <b>'+ok.length+'</b>개'+(fail.length?' · <span style="color:var(--bad)">실패/데이터없음 '+fail.length+'개</span>':'');
+  const fmt=n=>Number(n||0).toLocaleString();
+  document.getElementById('klBody').innerHTML=klRows.map(r=>
+    '<tr class="'+(r.ok?'':'fail')+'"><td>'+escapeHtml(r.keyword)+'</td><td>'+(r.ok?fmt(r.pc):'-')+'</td><td>'+(r.ok?fmt(r.mobile):'-')+'</td><td class="'+(r.ok?'kt-total':'')+'">'+(r.ok?fmt(r.total):'-')+'</td></tr>'
+  ).join('');
+}
+let _xlsxPromise=null;
+function ensureXLSX(){ if(window.XLSX) return Promise.resolve(); if(_xlsxPromise) return _xlsxPromise; _xlsxPromise=new Promise((res,rej)=>{ const sc=document.createElement('script'); sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; sc.onload=()=>res(); sc.onerror=()=>rej(new Error('xlsx 로드 실패')); document.head.appendChild(sc); }); return _xlsxPromise; }
+async function klDownloadXlsx(){
+  if(!klRows.length) return;
+  try{ await ensureXLSX(); }catch(e){ alert('엑셀 모듈 로드 실패(네트워크 확인)'); return; }
+  const aoa=[['키워드','PC','M','합계']];
+  for(const r of klRows) aoa.push([r.keyword, r.ok?r.pc:'', r.ok?r.mobile:'', r.ok?r.total:'']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:28},{wch:10},{wch:10},{wch:12}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '검색량');
+  XLSX.writeFile(wb, '키워드_검색량.xlsx');
 }
 
 function toggleDropdown(){
