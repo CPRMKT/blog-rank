@@ -287,6 +287,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // 키워드의 가장 최근 수집일 전체 스냅샷(상위 300 목록) — SEO 분석용
+    if (action === 'get_place_snapshot') {
+      const enc = encodeURIComponent(data.keyword);
+      const last = await supaFetch(`/place_rankings?keyword=eq.${enc}&select=checked_date&order=checked_date.desc&limit=1`);
+      if (!Array.isArray(last) || !last.length) return res.status(200).json({ ok: true, result: [], checked_date: null });
+      const d = last[0].checked_date;
+      const rows = await supaFetch(`/place_rankings?keyword=eq.${enc}&checked_date=eq.${d}&order=rank.asc&limit=300`);
+      return res.status(200).json({ ok: true, result: Array.isArray(rows) ? rows : [], checked_date: d });
+    }
+
     // ===== 포인트(발주) =====
     // 내 포인트 잔액(원장 합산) — RLS로 본인 것만
     if (action === 'get_point_balance') {

@@ -505,6 +505,9 @@ tr:hover td{background:var(--surface-3)}
 
     <div class="menu-group">
       <div class="menu-label">플레이스</div>
+      <div class="menu-item" id="menu-seoreport" onclick="showPage('seoreport')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/></svg> 플레이스 SEO 분석
+      </div>
       <div class="menu-item" id="menu-placetrack" onclick="showPage('placetrack')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6.5-5 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 16 12 21 12 21Z"/><circle cx="12" cy="10.3" r="2.4"/><path d="M4 20.5h16"/></svg> 플레이스 순위 추적
       </div>
@@ -811,6 +814,79 @@ tr:hover td{background:var(--surface-3)}
         </div>
         <div style="font-size:11px;color:#777;margin-top:10px">※ 월 검색량 = 네이버 검색광고 기준 PC+모바일 월간 검색수. 기본으로 검색량 상위 10개가 선택돼 있습니다.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- 플레이스 SEO 분석 (매장 종합 리포트)            -->
+  <!-- ============================================= -->
+  <style>
+  /* 리포트 시트: 옅은 회색 바탕 위 흰 시트 1장, 번호 섹션 한 흐름. 테두리·그라데이션·띠 없음 */
+  #page-seoreport{padding:0}
+  #page-seoreport .sr-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:860px}
+  #page-seoreport .sr-top select{flex:1;min-width:220px;height:40px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:0 12px;font-size:13.5px;outline:none;cursor:pointer}
+  #page-seoreport .sr-top select:focus{border-color:var(--line-strong)}
+  #page-seoreport .sr-btn{background:var(--brand);color:#fff;border:none;border-radius:8px;height:40px;padding:0 20px;font-weight:700;cursor:pointer;font-size:13.5px}
+  #page-seoreport .sr-btn:hover{background:var(--brand-ink)}
+  #page-seoreport .sr-btn:disabled{opacity:.5;cursor:default}
+  #page-seoreport .sr-sheet{display:none;background:var(--surface);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.05);padding:40px;margin-top:20px;max-width:860px}
+  /* 글자 6단계: eyebrow / 큰제목 / 설명 / 소제목 / 라벨 / 수치 */
+  #page-seoreport .sr-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  #page-seoreport .sr-h1{font-size:26px;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-top:8px}
+  #page-seoreport .sr-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-top:8px}
+  #page-seoreport .sr-h2{font-size:15px;font-weight:800;color:var(--ink)}
+  #page-seoreport .sr-label{font-size:12px;font-weight:600;color:var(--muted)}
+  #page-seoreport .sr-num{font-size:13.5px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  #page-seoreport .sr-sec{margin-top:40px}
+  #page-seoreport .sr-sec .sr-desc{margin-top:8px;margin-bottom:20px}
+  #page-seoreport .sr-wait{font-size:12px;font-weight:600;color:var(--faint);padding:8px 0}
+  /* 수치 표: 라벨 왼쪽, 숫자 오른쪽 끝 */
+  #page-seoreport table.sr-tbl{width:100%;border-collapse:collapse}
+  #page-seoreport .sr-tbl th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:6px 0 6px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  #page-seoreport .sr-tbl th:first-child{text-align:left;padding-left:0}
+  #page-seoreport .sr-tbl td{font-size:13.5px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;padding:8px 0 8px 12px;border-bottom:1px solid var(--line-2)}
+  #page-seoreport .sr-tbl td:first-child{text-align:left;padding-left:0;font-weight:600;color:var(--text)}
+  #page-seoreport .sr-tbl tr:last-child td{border-bottom:none}
+  #page-seoreport .sr-tbl tr.sr-ours td{background:var(--surface-3)}
+  #page-seoreport .sr-tbl tr.sr-ours td:first-child{border-radius:6px 0 0 6px;padding-left:8px;font-weight:800;color:var(--ink)}
+  #page-seoreport .sr-tbl tr.sr-ours td:last-child{border-radius:0 6px 6px 0;padding-right:8px}
+  /* 판정 수치에만 색 허용 */
+  #page-seoreport .sr-good{color:var(--brand-ink)}
+  #page-seoreport .sr-badv{color:#c2410c}
+  #page-seoreport .sr-mutev{color:var(--faint);font-weight:600}
+  /* 점검표·진단 줄 */
+  #page-seoreport .sr-row{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:8px 0;border-bottom:1px solid var(--line-2)}
+  #page-seoreport .sr-row:last-child{border-bottom:none}
+  #page-seoreport .sr-row .l{font-size:13.5px;font-weight:600;color:var(--text)}
+  #page-seoreport .sr-row .l small{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
+  #page-seoreport .sr-row .v{font-size:13.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  /* 액션 우선순위: 첫 항목에만 세로바 1개(화면 전체에서 유일) */
+  #page-seoreport .sr-act{padding:8px 0 8px 0;font-size:13.5px;font-weight:600;color:var(--text);line-height:1.6}
+  #page-seoreport .sr-act.first{border-left:3px solid var(--ink);padding-left:14px;font-weight:700;color:var(--ink)}
+  #page-seoreport .sr-act b{color:var(--ink)}
+  #page-seoreport .sr-foot{margin-top:40px;font-size:12px;color:var(--faint);line-height:1.7}
+  @media(max-width:720px){ #page-seoreport .sr-sheet{padding:20px} }
+  </style>
+  <div id="page-seoreport" style="display:none">
+    <div class="sr-top">
+      <select id="srStoreSel"></select>
+      <button class="sr-btn" id="srRunBtn" onclick="srRun()">분석하기</button>
+    </div>
+    <div class="sr-sheet" id="srSheet">
+      <div class="sr-eyebrow">Place SEO Report</div>
+      <div class="sr-h1" id="srTitle"></div>
+      <div class="sr-desc" id="srMeta"></div>
+
+      <div class="sr-sec"><div class="sr-h2">1. 상호와 업종부터 확인했습니다</div><div id="srS1" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">2. 대표 키워드 5개를 추천합니다</div><div id="srS2" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">3. 등록하면 노출 가능성이 높은 키워드</div><div id="srS3" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">4. 현재 추적 키워드 진단</div><div id="srS4" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">5. 우리 가게 플레이스 점검표</div><div id="srS5" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">6. 리뷰 분석</div><div id="srS6" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">7. 같은 키워드로 손님이 비교하는 매장</div><div id="srS7" class="sr-wait">분석 중…</div></div>
+      <div class="sr-sec"><div class="sr-h2">8. 지금 해야 할 일</div><div id="srS8" class="sr-wait">분석 중…</div></div>
+
+      <div class="sr-foot">월 검색량은 네이버 검색광고(PC+모바일) 기준, 순위·리뷰·저장은 자체 일일 수집 데이터 기준입니다. 진단은 수집된 수치에 따른 규칙 판정이며, 실제 노출은 네이버 정책에 따라 달라질 수 있습니다.</div>
     </div>
   </div>
 
@@ -1489,11 +1565,12 @@ async function initAuth(){
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','placetrack','placerank','charge','order','admin','kwtool'].forEach(p=>{
+  ['home','post','store','suggest','seoreport','placetrack','placerank','charge','order','admin','kwtool'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
   if(page==='store') loadStores();
+  if(page==='seoreport') initSeoReport();
   if(page==='placetrack') initPlaceTrack();
   if(page==='placerank') initPlaceRank();
   if(page==='charge') initCharge();
@@ -1820,6 +1897,311 @@ async function adChangeStatus(orderId,status,el){
   } else {
     alert('상태 변경 실패: '+((r&&r.error)||'다시 시도해 주세요.'));
     el.value=prev; // 롤백
+  }
+}
+
+// ============ 플레이스 SEO 분석 (매장 종합 리포트) ============
+// 데이터: stores(기본정보) + /api/search-volume(월검색량) + place_rankings(순위·리뷰·저장, db액션)
+//         + /api/place-search(미수집 키워드 실측). 진단은 전부 룰 기반(외부 AI 없음).
+let srRunSeq=0;            // 실행 토큰(매장 바꿔 재실행 시 이전 렌더 무효화)
+const srSnapCache={};      // keyword -> {rows:[{rank,place_id,name,category,visitor_reviews,blog_reviews,saves}], src}
+const srFmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+
+async function initSeoReport(){
+  if(!Array.isArray(stores)||stores.length===0){
+    try{ const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result; }catch(e){}
+  }
+  const sel=document.getElementById('srStoreSel');
+  const cur=sel.value;
+  const inPlace=stores.filter(s=>s.in_place), rest=stores.filter(s=>!s.in_place);
+  const opt=(s)=>`<option value="${s.id}">${escapeHtml(s.name||('매장 '+s.id))}</option>`;
+  sel.innerHTML='<option value="">매장을 선택하세요</option>'+inPlace.map(opt).join('')+rest.map(opt).join('');
+  if(cur) sel.value=cur;
+}
+
+// ── 후보 키워드: 주소에서 지역명(동/구/시), 업종에서 카테고리어 추출해 조합 ──
+function srRegions(store){
+  const toks=String(store.address||'').split(/\s+/);
+  const out=[];
+  const push=(v)=>{ if(v&&v.length>=2&&v.length<=6&&!out.includes(v)) out.push(v); };
+  for(const t of toks){
+    let m=t.match(/^([가-힣]{1,4}동)\d*$/); if(m){ push(m[1]); continue; }
+    m=t.match(/^([가-힣]{1,4}(읍|면|가))$/); if(m){ push(m[1]); continue; }
+  }
+  for(const t of toks){ const m=t.match(/^([가-힣]{1,4}구)$/); if(m) push(m[1]); }
+  for(const t of toks){ const m=t.match(/^([가-힣]{2,4})시$/); if(m) push(m[1]); }
+  return out.slice(0,3); // 동 → 구 → 시 순
+}
+function srCatWords(store){
+  const cat=String(store.category||'').split(/[>\/,·]/).pop().trim();
+  const words=[];
+  if(cat&&cat.length<=8) words.push(cat);
+  const base=cat+' '+String(store.name||'');
+  if(/카페|커피|디저트|베이커리|빵|브런치/.test(base)){ if(!words.includes('카페')) words.push('카페'); }
+  else if(/식당|음식|한식|중식|일식|양식|분식|고기|구이|횟집|회|수산|국밥|찌개|족발|보쌈|치킨|피자|버거|돈까스|초밥|스시|냉면|칼국수|국수|샤브|뷔페|요리|주점|술집|포차|맛집/.test(base)) words.push('맛집');
+  return [...new Set(words)].slice(0,3);
+}
+function srCandidates(store){
+  const regions=srRegions(store), words=srCatWords(store);
+  const out=[];
+  for(const r of regions) for(const w of words){ const k=r+' '+w; if(!out.includes(k)) out.push(k); }
+  return out.slice(0,12);
+}
+
+// ── 월 검색량 일괄 조회 ──
+async function srVolumes(keywords){
+  const vols={};
+  for(let i=0;i<keywords.length;i+=20){
+    const chunk=keywords.slice(i,i+20);
+    try{
+      const r=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:chunk})}).then(x=>x.json());
+      if(r&&r.ok&&r.volumes) for(const k of chunk) vols[k]=r.volumes[k]||null;
+    }catch(e){ for(const k of chunk) vols[k]=null; }
+  }
+  return vols;
+}
+
+// ── 키워드 스냅샷: 저장된 300위 데이터 재사용, 없으면 실측 1회 ──
+async function srSnap(keyword,allowLive){
+  if(srSnapCache[keyword]) return srSnapCache[keyword];
+  try{
+    const r=await dbCall('get_place_snapshot',{keyword});
+    if(r&&r.ok&&Array.isArray(r.result)&&r.result.length){
+      const v={rows:r.result,src:'수집'};
+      srSnapCache[keyword]=v; return v;
+    }
+  }catch(e){}
+  if(!allowLive) return null;
+  try{
+    const r=await fetch('/api/place-search?keyword='+encodeURIComponent(keyword)+'&count=300').then(x=>x.json());
+    if(r&&r.ok&&Array.isArray(r.items)){
+      const rows=r.items.map((it,i)=>({rank:i+1,place_id:String(it.placeId||''),name:it.name,category:it.category,visitor_reviews:it.visitorReviews,blog_reviews:it.blogReviews,saves:it.saves}));
+      const v={rows,src:'실측'};
+      srSnapCache[keyword]=v; return v;
+    }
+  }catch(e){}
+  return null;
+}
+
+// 경쟁 강도 룰: 검색량 대비 노출 매장 수 비율 (300개 상한이므로 비율은 보수적 판정)
+function srCompetition(vol,places){
+  if(!vol) return {lv:'-',verdict:'수요 낮음',cls:'sr-mutev'};
+  const ratio=places/vol;
+  if(places<80||ratio<0.02) return {lv:'하',verdict:'노출 쉬움',cls:'sr-good'};
+  if(places<200||ratio<0.1) return {lv:'중',verdict:'보통',cls:''};
+  return {lv:'상',verdict:'경쟁 치열',cls:'sr-badv'};
+}
+
+async function srRun(){
+  const sel=document.getElementById('srStoreSel');
+  const sid=parseInt(sel.value,10);
+  if(!sid){ alert('매장을 선택하세요.'); return; }
+  const store=stores.find(s=>s.id===sid);
+  if(!store) return;
+  const seq=++srRunSeq;
+  const btn=document.getElementById('srRunBtn'); btn.disabled=true; btn.textContent='분석 중…';
+  const alive=()=>seq===srRunSeq;
+  const set=(id,html)=>{ if(alive()) document.getElementById(id).innerHTML=html; };
+  const wait=(id,msg)=>set(id,'<div class="sr-wait">'+msg+'</div>');
+
+  // 시트 헤더 + 전 섹션 초기화
+  document.getElementById('srSheet').style.display='block';
+  document.getElementById('srTitle').textContent=store.name||'';
+  document.getElementById('srMeta').textContent=[store.category,store.address].filter(Boolean).join(' · ')+' · 기준일 '+new Date().toISOString().slice(0,10);
+  ['srS1','srS2','srS3','srS4','srS5','srS6','srS7','srS8'].forEach(x=>wait(x,'분석 중…'));
+
+  const acts=[];   // 액션 우선순위 수집 {p:우선순위(낮을수록 먼저), t:문구}
+  let ourVisitor=null, ourBlog=null, ourSaves=null;   // 우리 매장 리뷰 수(스냅샷에서 발견 시 채움)
+
+  try{
+    // ── A. 추적 키워드 + 우리 순위 이력(31일) ──
+    const kwR=await dbCall('list_store_place_keywords',{store_id:sid});
+    const kws=(kwR&&kwR.result||[]).map(r=>r.keyword);
+    let ourHist=[];
+    if(kws.length&&store.place_id){
+      const hR=await dbCall('get_store_place_rankings',{place_id:String(store.place_id),keywords:kws,days:31});
+      ourHist=(hR&&hR.result)||[];
+    }
+    if(!alive()) return;
+    // 키워드별 최신 순위
+    const latestByKw={};
+    for(const row of ourHist){ if(!latestByKw[row.keyword]||row.checked_date>latestByKw[row.keyword].checked_date) latestByKw[row.keyword]=row; }
+    // 우리 리뷰 수(가장 최근 이력 행)
+    const newest=ourHist.slice().sort((a,b)=>b.checked_date<a.checked_date?-1:1)[0];
+    if(newest){ ourVisitor=newest.visitor_reviews; ourBlog=newest.blog_reviews; ourSaves=newest.saves; }
+
+    // ── B. 후보 키워드 + 월 검색량 → 섹션 2 ──
+    const cands=srCandidates(store);
+    const volKws=[...new Set([...cands,...kws])];
+    const vols=volKws.length?await srVolumes(volKws):{};
+    if(!alive()) return;
+    const volOf=(k)=>{ const v=vols[k]; return v?(v.total||0):0; };
+    const top5=cands.slice().sort((a,b)=>volOf(b)-volOf(a)).slice(0,5);
+    const sumVol=top5.reduce((s,k)=>s+volOf(k),0);
+    if(!cands.length){
+      set('srS2','<div class="sr-desc">주소·업종 정보가 부족해 후보 키워드를 만들지 못했습니다. 매장 정보를 확인해 주세요.</div>');
+    }else{
+      set('srS2',
+        '<div class="sr-desc">주소에서 지역명('+escapeHtml(srRegions(store).join(', ')||'-')+'), 업종에서 카테고리어('+escapeHtml(srCatWords(store).join(', ')||'-')+')를 뽑아 조합한 뒤 월 검색량 상위 5개를 골랐습니다.</div>'
+        +'<table class="sr-tbl"><tr><th>추천 키워드</th><th>월 검색량</th></tr>'
+        +top5.map(k=>'<tr><td>'+escapeHtml(k)+'</td><td>'+(volOf(k)?srFmt(volOf(k)):'<span class="sr-mutev">10 미만</span>')+'</td></tr>').join('')
+        +'</table><div style="height:8px"></div><div class="sr-row" style="border-bottom:none"><span class="l">제안 키워드 합산 월 검색량</span><span class="v sr-num">'+srFmt(sumVol)+'회</span></div>');
+    }
+
+    // ── 섹션 1: 기본 정보(리뷰 수는 스냅샷에서 발견되는 대로 갱신) ──
+    const renderS1=()=>{
+      set('srS1','<table class="sr-tbl">'
+        +'<tr><td>상호</td><td>'+escapeHtml(store.name||'-')+'</td></tr>'
+        +'<tr><td>업종</td><td>'+escapeHtml(store.category||'-')+'</td></tr>'
+        +'<tr><td>주소</td><td style="font-weight:600">'+escapeHtml(store.address||'-')+'</td></tr>'
+        +'<tr><td>방문자리뷰</td><td>'+(ourVisitor==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourVisitor)+'개')+'</td></tr>'
+        +'<tr><td>블로그리뷰</td><td>'+(ourBlog==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourBlog)+'개')+'</td></tr>'
+        +(ourSaves!=null?'<tr><td>저장수</td><td>'+srFmt(ourSaves)+'개</td></tr>':'')
+        +'</table>');
+    };
+    renderS1();
+
+    // ── C. 섹션 4: 추적 키워드 진단(룰) ──
+    if(!kws.length){
+      set('srS4','<div class="sr-desc">아직 추적 키워드가 없습니다. <b>플레이스 순위 추적</b> 탭에서 키워드를 등록하면 다음날부터 순위가 수집되고, 이 리포트의 진단도 채워집니다.</div>');
+      acts.push({p:2,t:'<b>추적 키워드 등록</b> — 아래 추천 키워드부터 플레이스 순위 추적 탭에 등록하세요.'});
+    }else{
+      const rows=kws.map(k=>{
+        const row=latestByKw[k]; const rank=row?row.rank:null; const v=volOf(k);
+        let verdict,cls;
+        if(rank==null){ verdict='미노출 — 교체 검토'; cls='sr-badv'; }
+        else if(rank>50){ verdict='순위 낮음 — 보강 필요'; cls='sr-badv'; }
+        else if(rank>10){ verdict='중위권 — 상승 여지'; cls=''; }
+        else { verdict='상위권 — 유지'; cls='sr-good'; }
+        if(v===0&&rank==null){ verdict='미노출·수요 낮음 — 교체 검토'; }
+        return {k,rank,v,verdict,cls};
+      });
+      const bad=rows.filter(r=>r.rank==null).length, low=rows.filter(r=>r.rank!=null&&r.rank>50).length;
+      if(bad) acts.push({p:3,t:'<b>미노출 키워드 '+bad+'개 교체 검토</b> — 검색량 있는 추천 키워드로 바꿔 등록하세요.'});
+      if(low) acts.push({p:4,t:'<b>50위 밖 키워드 '+low+'개</b> — 플레이스 정보(사진·메뉴·소식)와 리뷰를 보강하세요.'});
+      set('srS4','<table class="sr-tbl"><tr><th>키워드</th><th>월 검색량</th><th>현재 순위</th><th>진단</th></tr>'
+        +rows.map(r=>'<tr><td>'+escapeHtml(r.k)+'</td><td>'+(r.v?srFmt(r.v):'<span class="sr-mutev">10 미만</span>')+'</td><td>'+(r.rank==null?'<span class="sr-mutev">300위 밖</span>':r.rank+'위')+'</td><td class="'+r.cls+'">'+r.verdict+'</td></tr>').join('')
+        +'</table>');
+    }
+
+    // ── D. 섹션 3: 노출 가능성(저장 데이터 재사용, 없으면 실측·순차) ──
+    const s3Rows={};
+    const renderS3=()=>{
+      if(!top5.length){ set('srS3','<div class="sr-desc">후보 키워드가 없어 판정을 건너뜁니다.</div>'); return; }
+      set('srS3','<div class="sr-desc">노출 매장 수는 검색 시 플레이스 목록에 실제로 잡히는 매장 수(최대 300)입니다. 검색량 대비 매장 수 비율로 경쟁 강도를 판정합니다.</div>'
+        +'<table class="sr-tbl"><tr><th>키워드</th><th>월 검색량</th><th>노출 매장 수</th><th>경쟁</th><th>판정</th></tr>'
+        +top5.map(k=>{
+          const r=s3Rows[k];
+          if(!r) return '<tr><td>'+escapeHtml(k)+'</td><td>'+(volOf(k)?srFmt(volOf(k)):'<span class="sr-mutev">10 미만</span>')+'</td><td colspan="3"><span class="sr-mutev">조회 중…</span></td></tr>';
+          if(r.fail) return '<tr><td>'+escapeHtml(k)+'</td><td>'+(volOf(k)?srFmt(volOf(k)):'-')+'</td><td colspan="3"><span class="sr-mutev">조회 실패</span></td></tr>';
+          return '<tr><td>'+escapeHtml(k)+'</td><td>'+(volOf(k)?srFmt(volOf(k)):'<span class="sr-mutev">10 미만</span>')+'</td><td>'+r.placesTxt+'</td><td>'+r.comp.lv+'</td><td class="'+r.comp.cls+'">'+r.comp.verdict+'</td></tr>';
+        }).join('')+'</table>');
+    };
+    renderS3();
+
+    // ── E. 무거운 조회(스냅샷)는 순차 배치: top5 → 대표 추적 키워드 ──
+    (async()=>{
+      let easy=0;
+      for(const k of top5){
+        if(!alive()) return;
+        const snap=await srSnap(k,true);
+        if(!alive()) return;
+        if(!snap){ s3Rows[k]={fail:true}; renderS3(); continue; }
+        const places=snap.rows.length;
+        const comp=srCompetition(volOf(k),places);
+        s3Rows[k]={placesTxt:places>=300?'300+':String(places),comp};
+        // 우리 매장이 이 목록에 있으면 리뷰 수 확보(신규 매장 대비)
+        const mine=snap.rows.find(r=>String(r.place_id)===String(store.place_id));
+        if(mine&&(ourVisitor==null)){ ourVisitor=mine.visitor_reviews; ourBlog=mine.blog_reviews; ourSaves=mine.saves; renderS1(); }
+        if(comp.lv==='하'&&volOf(k)>0&&!kws.includes(k)) easy++;
+        renderS3();
+      }
+      if(easy) acts.push({p:1,t:'<b>노출 쉬움 키워드 '+easy+'개 등록</b> — 3번 섹션의 경쟁 "하" 키워드를 추적에 추가하고 플레이스 정보에 반영하세요.'});
+
+      // ── F. 대표 키워드 스냅샷 → 섹션 6·7 ──
+      const ranked=kws.filter(k=>latestByKw[k]&&latestByKw[k].rank!=null).sort((a,b)=>latestByKw[a].rank-latestByKw[b].rank);
+      const mainKw=ranked[0]||kws[0]||top5[0]||null;
+      let snap=null;
+      if(mainKw) snap=srSnapCache[mainKw]||await srSnap(mainKw,false)||(top5[0]?srSnapCache[top5[0]]:null);
+      if(!alive()) return;
+
+      // 섹션 6: 리뷰 분석
+      {
+        const hist=ourHist.filter(r=>r.visitor_reviews!=null).sort((a,b)=>a.checked_date<b.checked_date?-1:1);
+        const byDate={}; for(const r of hist) byDate[r.checked_date]=r;
+        const dates=Object.keys(byDate).sort();
+        const latest=dates.length?byDate[dates[dates.length-1]]:null;
+        const at=(daysAgo)=>{ const lim=new Date(Date.now()-daysAgo*86400000).toISOString().slice(0,10); const past=dates.filter(d=>d<=lim); return past.length?byDate[past[past.length-1]]:null; };
+        const d7=at(7), d30=at(30);
+        const inc=(a,b)=>(a&&b&&a.visitor_reviews!=null&&b.visitor_reviews!=null)?(a.visitor_reviews-b.visitor_reviews):null;
+        const inc7=inc(latest,d7), inc30=inc(latest,d30);
+        let cmp='';
+        if(snap){
+          const top10=snap.rows.filter(r=>r.rank<=10&&r.visitor_reviews!=null);
+          if(top10.length){
+            const avg=Math.round(top10.reduce((s,r)=>s+r.visitor_reviews,0)/top10.length);
+            const our=ourVisitor==null?0:ourVisitor;
+            const gap=avg-our;
+            cmp='<div class="sr-row"><span class="l">'+escapeHtml(mainKw)+' 상위 10위 평균 방문자리뷰</span><span class="v sr-num">'+srFmt(avg)+'개</span></div>'
+               +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(our)+'개')+'</span></div>'
+               +(gap>0?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-badv">'+srFmt(gap)+'개 부족</span></div>':'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-good">평균 이상</span></div>');
+            if(gap>0) acts.push({p:5,t:'<b>방문자리뷰 격차 '+srFmt(gap)+'개</b> — 방문 손님 리뷰 요청·영수증 리뷰 이벤트로 리뷰 수를 늘리세요.'});
+          }
+        }
+        const trend=(ourVisitor==null&&!dates.length)
+          ?'<div class="sr-desc">아직 리뷰 수집 데이터가 없습니다. 추적 키워드를 등록하면 매일 리뷰 수가 함께 수집됩니다.</div>'
+          :'<div class="sr-row"><span class="l">총 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(ourVisitor)+'개')+'</span></div>'
+          +'<div class="sr-row"><span class="l">최근 7일 증가</span><span class="v sr-num">'+(inc7==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc7)+'개')+'</span></div>'
+          +'<div class="sr-row"><span class="l">최근 30일 증가</span><span class="v sr-num">'+(inc30==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc30)+'개')+'</span></div>';
+        set('srS6',trend+cmp);
+      }
+
+      // 섹션 7: 경쟁 매장 비교
+      if(!snap){
+        set('srS7','<div class="sr-desc">비교할 키워드 수집 데이터가 아직 없습니다. 추적 키워드 등록 다음날부터 표시됩니다.</div>');
+      }else{
+        const comp=snap.rows.filter(r=>String(r.place_id)!==String(store.place_id)).slice(0,8);
+        const mine=snap.rows.find(r=>String(r.place_id)===String(store.place_id));
+        const rowH=(r,ours)=>'<tr class="'+(ours?'sr-ours':'')+'"><td>'+(r.rank!=null?r.rank+'위 ':'')+escapeHtml(r.name||'')+(ours?' (우리)':'')+'</td><td style="font-weight:600;color:var(--muted);font-size:12px">'+escapeHtml(r.category||'-')+'</td><td>'+(r.visitor_reviews==null?'-':srFmt(r.visitor_reviews))+'</td><td>'+(r.blog_reviews==null?'-':srFmt(r.blog_reviews))+'</td><td>'+(r.saves==null?'-':srFmt(r.saves))+'</td></tr>';
+        set('srS7','<div class="sr-desc">「'+escapeHtml(mainKw)+'」 검색 시 함께 노출되는 상위 매장입니다. 손님은 이 목록 안에서 비교하고 고릅니다.</div>'
+          +'<table class="sr-tbl"><tr><th>매장</th><th>카테고리</th><th>방문자리뷰</th><th>블로그리뷰</th><th>저장수</th></tr>'
+          +comp.map(r=>rowH(r,false)).join('')+(mine?rowH(mine,true):'')
+          +'</table>'+(mine?'':'<div class="sr-desc" style="margin-top:8px">우리 매장은 이 키워드 300위 안에 없습니다.</div>'));
+      }
+
+      // ── G. 섹션 5: 점검표(룰) ──
+      {
+        const regions=srRegions(store), cats=srCatWords(store);
+        const nameHasRegion=regions.some(r=>String(store.name||'').includes(r.replace(/(동|구|읍|면|가)$/,'')));
+        const kwHasCat=cats.length>0&&[...kws,...top5].some(k=>cats.some(c=>k.includes(c)));
+        const checks=[
+          {l:'상호명에 지역명 포함',ok:nameHasRegion,fix:'상호에 지역명이 없습니다. 플레이스 소개글·대표키워드에 지역명을 넣어 보완하세요.'},
+          {l:'카테고리와 키워드 일치',ok:kwHasCat,fix:'업종 카테고리어가 들어간 키워드를 추적에 추가하세요.'},
+          {l:'방문자리뷰 30개 이상',ok:ourVisitor!=null&&ourVisitor>=30,unknown:ourVisitor==null,fix:'방문 손님에게 영수증 리뷰를 요청해 최소 30개를 만드세요.'},
+          {l:'블로그리뷰 10개 이상',ok:ourBlog!=null&&ourBlog>=10,unknown:ourBlog==null,fix:'체험단·이웃 블로거 협업으로 블로그 리뷰를 확보하세요.'},
+          {l:'추적 키워드 등록',ok:kws.length>0,fix:'플레이스 순위 추적 탭에서 키워드를 등록하세요.'},
+        ];
+        set('srS5',checks.map(c=>{
+          const v=c.unknown?'<span class="sr-mutev">데이터 없음</span>':(c.ok?'<span class="sr-good">통과</span>':'<span class="sr-badv">미통과</span>');
+          return '<div class="sr-row"><span class="l">'+c.l+(!c.ok&&!c.unknown?'<small>'+c.fix+'</small>':'')+'</span><span class="v">'+v+'</span></div>';
+        }).join(''));
+        for(const c of checks){ if(!c.ok&&!c.unknown&&c.l!=='추적 키워드 등록') acts.push({p:6,t:'<b>'+c.l+' 미통과</b> — '+c.fix}); }
+      }
+
+      // ── H. 섹션 8: 액션 우선순위(걸린 항목만) ──
+      if(!alive()) return;
+      if(!acts.length){
+        set('srS8','<div class="sr-desc">진단에서 걸린 항목이 없습니다. 현재 상태를 유지하면서 순위 변동만 지켜보세요.</div>');
+      }else{
+        const sorted=acts.sort((a,b)=>a.p-b.p).slice(0,6);
+        set('srS8',sorted.map((a,i)=>'<div class="sr-act'+(i===0?' first':'')+'">'+(i+1)+'. '+a.t+'</div>').join(''));
+      }
+    })();
+  }catch(e){
+    if(alive()) set('srS8','<div class="sr-desc">분석 중 오류가 발생했습니다: '+escapeHtml(e.message||'')+'</div>');
+  }finally{
+    const done=()=>{ if(alive()){ btn.disabled=false; btn.textContent='분석하기'; } };
+    setTimeout(done,400);
   }
 }
 
