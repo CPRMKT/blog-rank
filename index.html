@@ -1045,7 +1045,7 @@ tr:hover td{background:var(--surface-3)}
         <button class="kt-btn ghost" id="kcCsvBtn" onclick="kcDownloadCsv()" style="display:none;margin-left:auto">CSV 다운로드</button>
         <button class="kt-btn ghost" id="kcToLookupBtn" onclick="kcToLookup()" style="display:none">↓ 대량조회로 보내기</button>
       </div>
-      <div class="kt-result"><div class="kt-out" id="kcOut" style="display:none"></div></div>
+      <div class="kt-result"><textarea class="kt-out" id="kcOut" readonly style="display:none" placeholder="조합 결과 (박스 클릭 후 Ctrl+A 전체 선택)"></textarea></div>
     </div>
 
     <!-- ── 2. 키워드 대량조회 ── -->
@@ -1060,7 +1060,10 @@ tr:hover td{background:var(--surface-3)}
       </div>
       <div id="klResultBox" style="display:none">
         <div class="kt-summary" id="klSummary"></div>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="kt-btn ghost" onclick="klDownloadXlsx()">엑셀(.xlsx) 다운로드</button></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+          <button class="kt-btn ghost" id="klSortBtn" onclick="klToggleSort()">↓ 합계 내림차순 정렬</button>
+          <button class="kt-btn ghost" onclick="klDownloadXlsx()">엑셀(.xlsx) 다운로드</button>
+        </div>
         <div class="kt-tblwrap">
           <table><thead><tr><th style="min-width:160px">키워드</th><th>PC</th><th>M</th><th>합계</th></tr></thead><tbody id="klBody"></tbody></table>
         </div>
@@ -1882,7 +1885,7 @@ function kcGenerate(){
   kcList=[...out];
   if(!kcList.length){ cntEl.textContent='선택한 조합의 그룹이 비어 있습니다.'; hide(); return; }
   cntEl.textContent='총 '+kcList.length.toLocaleString()+'개 조합';
-  const o=document.getElementById('kcOut'); o.style.display=''; o.textContent=kcList.join('\n');
+  const o=document.getElementById('kcOut'); o.style.display=''; o.value=kcList.join('\n');
   document.getElementById('kcCsvBtn').style.display=''; document.getElementById('kcToLookupBtn').style.display='';
 }
 function kcDownloadCsv(){
@@ -1894,7 +1897,10 @@ function kcDownloadCsv(){
 function kcToLookup(){ if(!kcList.length) return; document.getElementById('klInput').value=kcList.join('\n'); document.getElementById('klInput').scrollIntoView({behavior:'smooth',block:'center'}); }
 
 // --- 대량조회 (네이버 검색광고 API, /api/search-volume 재사용) ---
-let klRows=[]; // [{keyword, pc, mobile, total, ok}]
+let klRows=[]; // [{keyword, pc, mobile, total, ok}] — 조회 순서(원본)
+let klView=[]; // 화면/엑셀에 실제 반영되는 순서
+let klSort='none'; // 'none'(조회순) | 'desc'(합계 내림차순)
+function klToggleSort(){ klSort = (klSort==='desc') ? 'none' : 'desc'; klRender(); }
 function klSetProgress(done,total){
   const w=document.getElementById('klProgWrap'), p=document.getElementById('klProg'), t=document.getElementById('klProgTxt');
   if(total>0){ w.classList.add('on'); p.style.width=Math.round(done/total*100)+'%'; t.textContent=done+' / '+total; }
@@ -1918,6 +1924,7 @@ async function klRun(){
     await new Promise(res=>setTimeout(res,300)); // 배치 간 딜레이(차단 방지)
   }
   klRows=kws.map(k=>{ const v=vol[k]; return v?{keyword:k,pc:v.pc||0,mobile:v.mobile||0,total:v.total||0,ok:true}:{keyword:k,pc:0,mobile:0,total:0,ok:false}; });
+  klSort='none';
   klRender();
   klSetProgress(0,0);
   btn.disabled=false; btn.textContent='검색량 조회';
@@ -1926,8 +1933,16 @@ function klRender(){
   const ok=klRows.filter(r=>r.ok), fail=klRows.filter(r=>!r.ok);
   document.getElementById('klResultBox').style.display='';
   document.getElementById('klSummary').innerHTML='총 <b>'+klRows.length+'</b>개 · 조회 성공 <b>'+ok.length+'</b>개'+(fail.length?' · <span style="color:var(--bad)">실패/데이터없음 '+fail.length+'개</span>':'');
+  // 정렬: 합계 내림차순, 실패/데이터없음은 항상 맨 아래(원래 순서 유지)
+  if(klSort==='desc'){
+    klView=klRows.slice().sort((a,b)=>{ if(a.ok!==b.ok) return a.ok?-1:1; return (b.total||0)-(a.total||0); });
+  } else {
+    klView=klRows.slice();
+  }
+  const sortBtn=document.getElementById('klSortBtn');
+  if(sortBtn) sortBtn.textContent = (klSort==='desc') ? '↕ 조회 순서로' : '↓ 합계 내림차순 정렬';
   const fmt=n=>Number(n||0).toLocaleString();
-  document.getElementById('klBody').innerHTML=klRows.map(r=>
+  document.getElementById('klBody').innerHTML=klView.map(r=>
     '<tr class="'+(r.ok?'':'fail')+'"><td>'+escapeHtml(r.keyword)+'</td><td>'+(r.ok?fmt(r.pc):'-')+'</td><td>'+(r.ok?fmt(r.mobile):'-')+'</td><td class="'+(r.ok?'kt-total':'')+'">'+(r.ok?fmt(r.total):'-')+'</td></tr>'
   ).join('');
 }
@@ -1936,8 +1951,9 @@ function ensureXLSX(){ if(window.XLSX) return Promise.resolve(); if(_xlsxPromise
 async function klDownloadXlsx(){
   if(!klRows.length) return;
   try{ await ensureXLSX(); }catch(e){ alert('엑셀 모듈 로드 실패(네트워크 확인)'); return; }
+  const rows=(klView&&klView.length)?klView:klRows; // 화면에 보이는 순서 그대로
   const aoa=[['키워드','PC','M','합계']];
-  for(const r of klRows) aoa.push([r.keyword, r.ok?r.pc:'', r.ok?r.mobile:'', r.ok?r.total:'']);
+  for(const r of rows) aoa.push([r.keyword, r.ok?r.pc:'', r.ok?r.mobile:'', r.ok?r.total:'']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols']=[{wch:28},{wch:10},{wch:10},{wch:12}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '검색량');
