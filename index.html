@@ -993,6 +993,18 @@ tr:hover td{background:var(--surface-3)}
   #page-kwtool tr.fail td{color:var(--faint)}
   #page-kwtool tr.fail td:first-child{color:var(--muted)}
   #page-kwtool .kt-total{color:var(--brand-ink);font-weight:800}
+  #page-kwtool .kt-combos{margin-top:14px;display:flex;flex-direction:column;gap:12px}
+  #page-kwtool .kt-comborow{border-top:1px solid var(--line-2);padding-top:12px}
+  #page-kwtool .kt-comborow:first-child{border-top:none;padding-top:0}
+  #page-kwtool .kt-combohead{font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:12px}
+  #page-kwtool .kt-combohead b{color:var(--ink)}
+  #page-kwtool .kt-combolist{display:flex;flex-wrap:wrap;gap:6px 8px}
+  #page-kwtool .kt-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text);cursor:pointer;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-weight:600;font-variant-numeric:tabular-nums;user-select:none}
+  #page-kwtool .kt-pill:hover{border-color:var(--brand)}
+  #page-kwtool .kt-pill input{width:14px;height:14px;accent-color:var(--brand);cursor:pointer;margin:0}
+  #page-kwtool .kt-pill.off{opacity:.32;cursor:not-allowed}
+  #page-kwtool .kt-pill.off:hover{border-color:var(--line)}
+  #page-kwtool .kt-chk.sm{font-size:12px;font-weight:600;color:var(--text)}
   @media(max-width:720px){ #page-kwtool .kt-grid{grid-template-columns:repeat(2,1fr)} }
   </style>
   <div id="page-kwtool" style="display:none">
@@ -1009,12 +1021,23 @@ tr:hover td{background:var(--surface-3)}
         <div class="kt-g"><label>그룹 3</label><textarea id="kcG3" rows="7" placeholder="(선택)"></textarea></div>
         <div class="kt-g"><label>그룹 4</label><textarea id="kcG4" rows="7" placeholder="(선택)"></textarea></div>
       </div>
+      <div class="kt-combos" id="kcCombos">
+        <div class="kt-comborow">
+          <div class="kt-combohead"><b>2개 조합</b><span style="font-weight:500;color:var(--faint);font-size:11px">순서가 다르면 다른 조합 (예: 1+2 ≠ 2+1)</span><label class="kt-chk sm" style="margin-left:auto"><input type="checkbox" class="kc-all" data-size="2" onchange="kcToggleAll(2,this.checked)">전체선택</label></div>
+          <div class="kt-combolist" id="kcList2"></div>
+        </div>
+        <div class="kt-comborow">
+          <div class="kt-combohead"><b>3개 조합</b><label class="kt-chk sm" style="margin-left:auto"><input type="checkbox" class="kc-all" data-size="3" onchange="kcToggleAll(3,this.checked)">전체선택</label></div>
+          <div class="kt-combolist" id="kcList3"></div>
+        </div>
+        <div class="kt-comborow">
+          <div class="kt-combohead"><b>4개 조합</b><label class="kt-chk sm" style="margin-left:auto"><input type="checkbox" class="kc-all" data-size="4" onchange="kcToggleAll(4,this.checked)">전체선택</label></div>
+          <div class="kt-combolist" id="kcList4"></div>
+        </div>
+      </div>
       <div class="kt-opts">
-        <span style="font-size:12px;font-weight:700;color:var(--muted)">조합:</span>
-        <label class="kt-chk"><input type="checkbox" id="kcC2" checked>2개 조합</label>
-        <label class="kt-chk"><input type="checkbox" id="kcC3">3개 조합</label>
-        <label class="kt-chk"><input type="checkbox" id="kcC4">4개 조합</label>
-        <label class="kt-chk" style="margin-left:12px"><input type="checkbox" id="kcSpace" checked>키워드 사이 공백 추가</label>
+        <label class="kt-chk"><input type="checkbox" id="kcSpace" checked>키워드 사이 공백 추가</label>
+        <button class="kt-btn ghost" type="button" onclick="kcCheckAll(false)" style="height:32px;padding:0 12px;font-size:12px;margin-left:auto">전체 해제</button>
       </div>
       <div class="kt-actions">
         <button class="kt-btn" onclick="kcGenerate()">조합 생성</button>
@@ -1798,23 +1821,66 @@ async function adChangeStatus(orderId,status,el){
 }
 
 // ============ 키워드 도구 (조합기 + 대량조회) ============
-function initKwTool(){ /* 별도 초기화 불필요 */ }
+function initKwTool(){ kcBuildCombos(); }
 
-// --- 조합기 ---
+// --- 조합기 (순열 방식: 그룹 순서까지 각각 선택) ---
 let kcList=[];
+let kcBuilt=false;
 function kcParseGroup(id){ return (document.getElementById(id).value||'').split('\n').map(x=>x.trim()).filter(Boolean); }
-function kcCombosOfSize(arr,k){ const res=[]; (function go(start,acc){ if(acc.length===k){res.push(acc.slice());return;} for(let i=start;i<arr.length;i++){acc.push(arr[i]);go(i+1,acc);acc.pop();} })(0,[]); return res; }
+// [1,2,3,4]에서 k개를 뽑는 모든 순열(순서 구분)
+function kcPerms(arr,k){ const res=[]; (function go(cur,rest){ if(cur.length===k){res.push(cur.slice());return;} for(let i=0;i<rest.length;i++){ cur.push(rest[i]); go(cur,rest.slice(0,i).concat(rest.slice(i+1))); cur.pop(); } })([],arr); return res; }
+// 2개=12, 3개=24, 4개=24 체크박스를 최초 1회 생성
+function kcBuildCombos(){
+  if(kcBuilt) return;
+  for(const k of [2,3,4]){
+    const el=document.getElementById('kcList'+k); if(!el) continue;
+    el.innerHTML=kcPerms([1,2,3,4],k).map(pat=>{
+      const key=pat.join('-'), lab=pat.join('+');
+      return '<label class="kt-pill" data-groups="'+key+'"><input type="checkbox" class="kc-p" value="'+key+'" onchange="kcSyncAll('+k+')">'+lab+'</label>';
+    }).join('');
+  }
+  ['kcG1','kcG2','kcG3','kcG4'].forEach(id=>{ const t=document.getElementById(id); if(t) t.addEventListener('input',kcUpdateEnabled); });
+  kcUpdateEnabled();
+  kcBuilt=true;
+}
+// 비어있는 그룹을 참조하는 조합은 비활성(회색)
+function kcUpdateEnabled(){
+  const filled=new Set([1,2,3,4].filter(i=>kcParseGroup('kcG'+i).length));
+  document.querySelectorAll('#kcCombos .kt-pill').forEach(pill=>{
+    const groups=pill.getAttribute('data-groups').split('-').map(Number);
+    const ok=groups.every(g=>filled.has(g));
+    const cb=pill.querySelector('input.kc-p');
+    cb.disabled=!ok; pill.classList.toggle('off',!ok);
+    if(!ok) cb.checked=false;
+  });
+  [2,3,4].forEach(kcSyncAll);
+}
+// 사이즈별 전체선택 토글(비활성 제외)
+function kcToggleAll(k,on){ document.querySelectorAll('#kcList'+k+' input.kc-p:not(:disabled)').forEach(cb=>cb.checked=on); }
+// 개별 체크 -> 전체선택 체크박스 동기화
+function kcSyncAll(k){
+  const boxes=[...document.querySelectorAll('#kcList'+k+' input.kc-p:not(:disabled)')];
+  const all=document.querySelector('.kc-all[data-size="'+k+'"]');
+  if(all) all.checked = boxes.length>0 && boxes.every(cb=>cb.checked);
+}
+// 전체 해제/선택
+function kcCheckAll(on){ document.querySelectorAll('#kcCombos input.kc-p:not(:disabled),.kc-all').forEach(cb=>cb.checked=on); }
 function kcGenerate(){
-  const groups=[kcParseGroup('kcG1'),kcParseGroup('kcG2'),kcParseGroup('kcG3'),kcParseGroup('kcG4')];
-  const nonEmpty=[0,1,2,3].filter(i=>groups[i].length);
-  const sizes=[]; if(document.getElementById('kcC2').checked)sizes.push(2); if(document.getElementById('kcC3').checked)sizes.push(3); if(document.getElementById('kcC4').checked)sizes.push(4);
+  kcBuildCombos();
+  const groups={1:kcParseGroup('kcG1'),2:kcParseGroup('kcG2'),3:kcParseGroup('kcG3'),4:kcParseGroup('kcG4')};
   const sep=document.getElementById('kcSpace').checked?' ':'';
-  const out=new Set();
-  const cartesian=(idxs)=>{ let acc=['']; for(const gi of idxs){ const nx=[]; for(const a of acc) for(const w of groups[gi]) nx.push(a?a+sep+w:w); acc=nx; } return acc; };
-  for(const k of sizes){ if(k>nonEmpty.length) continue; for(const subset of kcCombosOfSize(nonEmpty,k)){ for(const c of cartesian(subset)) out.add(c); } }
-  kcList=[...out];
+  const patterns=[...document.querySelectorAll('#kcCombos input.kc-p:checked')].map(cb=>cb.value.split('-').map(Number));
   const cntEl=document.getElementById('kcCount');
-  if(!kcList.length){ cntEl.textContent=nonEmpty.length<2?'단어를 2개 이상 그룹에 입력하세요.':'조합 방식을 선택하세요.'; document.getElementById('kcOut').style.display='none'; document.getElementById('kcCsvBtn').style.display='none'; document.getElementById('kcToLookupBtn').style.display='none'; return; }
+  const hide=()=>{ document.getElementById('kcOut').style.display='none'; document.getElementById('kcCsvBtn').style.display='none'; document.getElementById('kcToLookupBtn').style.display='none'; };
+  if(!patterns.length){ kcList=[]; cntEl.textContent='조합 방식을 하나 이상 선택하세요.'; hide(); return; }
+  const out=new Set();
+  for(const pat of patterns){
+    let acc=[''], bad=false;
+    for(const gi of pat){ const words=groups[gi]; if(!words.length){ bad=true; break; } const nx=[]; for(const a of acc) for(const w of words) nx.push(a?a+sep+w:w); acc=nx; }
+    if(!bad) for(const c of acc) out.add(c);
+  }
+  kcList=[...out];
+  if(!kcList.length){ cntEl.textContent='선택한 조합의 그룹이 비어 있습니다.'; hide(); return; }
   cntEl.textContent='총 '+kcList.length.toLocaleString()+'개 조합';
   const o=document.getElementById('kcOut'); o.style.display=''; o.textContent=kcList.join('\n');
   document.getElementById('kcCsvBtn').style.display=''; document.getElementById('kcToLookupBtn').style.display='';
