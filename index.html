@@ -3845,8 +3845,10 @@ function ptBlogPanelHTML(kw, allDatesISO, shownCount){
   const nkw=ptNormKw(kw);
   const blogKw=bkws.find(b=>ptNormKw(b)===nkw);
   if(!blogKw) return '';                         // 블로그 탭에 (정규화상) 없음 → 패널 자체 없음
-  const rk=(storeRankings[sid]||{})[blogKw];     // storeRankings 키는 블로그 키워드 원문
-  if(!rk || !Object.keys(rk).length) return ''; // 수집된 데이터 없음 → 패널 없음
+  // 등록만 돼 있으면 패널 표시. 데이터 유무로 숨기면 블로그를 나중에 등록한 매장이
+  // 첫 수집(등록 직후 자동조회 or 새벽 크론) 전까지 연동 안 되는 것처럼 보인다.
+  const rk=(storeRankings[sid]||{})[blogKw]||{}; // storeRankings 키는 블로그 키워드 원문
+  const hasData=Object.keys(rk).length>0;        // 수집 전이면 전체 '-' 셀 + 라벨 표시
   const isoToMMDD=(iso)=>iso.slice(5).replace('-','/'); // "2026-08-23" → "08/23"(blog 키 포맷)
   const shown=allDatesISO.slice(0, shownCount);
   const head=shown.map(iso=>`<th>${ptDateHeaderHTML(iso)}</th>`).join('');
@@ -3856,7 +3858,7 @@ function ptBlogPanelHTML(kw, allDatesISO, shownCount){
     for(let j=idx+1;j<allDatesISO.length;j++){ const pd=rk[isoToMMDD(allDatesISO[j])]; if(pd){ prior=pd; break; } }
     return renderRankCell(data, prior);        // 매장 블로그 순위 탭과 동일한 셀 렌더를 그대로 재사용
   }).join('');
-  return `<div class="pt-blogpanel"><div class="pt-blogpanel-inner"><div class="pt-blogpanel-h">블로그 순위<small>같은 키워드</small></div><div class="pt-blogscroll"><table class="pt-blogtable"><thead><tr>${head}</tr></thead><tbody><tr>${body}</tr></tbody></table></div></div></div>`;
+  return `<div class="pt-blogpanel"><div class="pt-blogpanel-inner"><div class="pt-blogpanel-h">블로그 순위<small>${hasData?'같은 키워드':'같은 키워드 · 수집 전'}</small></div><div class="pt-blogscroll"><table class="pt-blogtable"><thead><tr>${head}</tr></thead><tbody><tr>${body}</tr></tbody></table></div></div></div>`;
 }
 
 // 플레이스 매장의 블로그 순위 저장분 로드(재사용, 매장 블로그 순위 탭과 동일 구조)
