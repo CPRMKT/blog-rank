@@ -1,5 +1,6 @@
-// Express 진입점. 인증 + /scrape + /place-search 라우트.
+// Express 진입점. 인증 + /scrape + /place-search + /failures 라우트.
 import express from 'express';
+import fs from 'fs';
 import { scrapeBlogTab, scrapeBlogRank, initBrowser, closeBrowser } from './scraper.js';
 import { scrapePlaceSearch } from './placeSearch.js';
 
@@ -106,6 +107,39 @@ app.get('/place-search', async (req, res) => {
       error: e.message || 'place-search failed',
       elapsedMs: Date.now() - t0,
     });
+  }
+});
+
+// 수집 실패 현황: failures.log 최근분 + 두 배치의 마지막 "완료" 요약 라인.
+// 대시보드 배너용 — 서버에 직접 안 들어가도 실패를 볼 수 있게.
+app.get('/failures', (req, res) => {
+  const LOG_DIR = '/var/log/blog-rank-scraper';
+  // 큰 로그는 꼬리만 읽는다(최대 64KB)
+  const readTail = (p, max = 65536) => {
+    try {
+      const st = fs.statSync(p);
+      const len = Math.min(max, st.size);
+      const buf = Buffer.alloc(len);
+      const fd = fs.openSync(p, 'r');
+      fs.readSync(fd, buf, 0, len, st.size - len);
+      fs.closeSync(fd);
+      return buf.toString('utf8');
+    } catch { return ''; }
+  };
+  const lastMatch = (txt, pat) => {
+    const ls = txt.split('\n').filter((l) => l.includes(pat));
+    return ls.length ? ls[ls.length - 1] : null;
+  };
+  try {
+    const failures = readTail(`${LOG_DIR}/failures.log`).split('\n').filter(Boolean).slice(-80);
+    res.json({
+      ok: true,
+      failures,
+      lastPlace: lastMatch(readTail(`${LOG_DIR}/place-collect.log`), '완료 —'),
+      lastBlog: lastMatch(readTail(`${LOG_DIR}/collect.log`), '완료 —'),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

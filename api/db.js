@@ -287,6 +287,17 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // 수집 실패 현황(NCP failures.log 프록시) — 대시보드 배너용. 스크래퍼 키는 서버에만.
+    if (action === 'get_collect_failures') {
+      const base = process.env.KOREAN_SCRAPER_URL;
+      const key = process.env.KOREAN_SCRAPER_KEY;
+      if (!base || !key) return res.status(200).json({ ok: false, error: '스크래퍼 미설정' });
+      const r = await fetch(`${base.replace(/\/$/, '')}/failures`, { headers: { Authorization: `Bearer ${key}` } });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) return res.status(200).json({ ok: false, error: `스크래퍼 ${r.status}` });
+      return res.status(200).json({ ok: true, failures: j.failures || [], lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
+    }
+
     // 키워드의 가장 최근 수집일 전체 스냅샷(상위 300 목록) — SEO 분석용
     if (action === 'get_place_snapshot') {
       const enc = encodeURIComponent(data.keyword);

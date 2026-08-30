@@ -292,6 +292,11 @@ tr:hover td{background:var(--surface-3)}
 .pt-day.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
 /* 키워드 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영으로 구분 */
 .pt-day.pre{background:var(--surface-2);opacity:.55}
+/* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
+.pt-failbanner{background:#fef3cd;border:1px solid #f0d58c;color:#7a5b0f;border-radius:10px;padding:10px 14px;margin-bottom:var(--sp-2);font-size:12.5px;font-weight:600;line-height:1.6}
+.pt-failbanner a{color:#7a5b0f;text-decoration:underline;cursor:pointer;font-weight:700}
+.pt-failbanner .fb-detail{display:none;margin-top:8px;max-height:180px;overflow:auto;background:rgba(255,255,255,.6);border-radius:6px;padding:8px 10px;font-weight:500;font-size:12px;white-space:pre-wrap;font-variant-numeric:tabular-nums}
+.pt-failbanner .fb-detail.show{display:block}
 .pt-day-date{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:2px}
 .pt-day.today .pt-day-date{color:var(--brand-ink)}
 .pt-day-date .wd-sat{color:var(--brand)}
@@ -900,6 +905,8 @@ tr:hover td{background:var(--surface-3)}
   <!-- ============================================= -->
   <div id="page-placetrack" style="display:none">
     <div class="main">
+      <!-- 최근 배치 수집 실패 배너: 실패 0건이면 숨김(평소엔 조용히) -->
+      <div class="pt-failbanner" id="ptFailBanner" style="display:none"></div>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <div>
           <div class="h-lg">📍 플레이스 순위 추적</div>
@@ -3551,8 +3558,37 @@ async function initPlaceTrack(){
   if(!Array.isArray(stores)||stores.length===0){
     const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result;
   }
+  ptLoadFailBanner();   // 수집 실패 배너(비동기, 화면 로드 안 막음)
   await ptApplyStoreState();
 }
+
+// ── 최근 배치 수집 실패 배너 ──
+// failures.log + 두 배치의 마지막 "완료 — ..." 요약(get_collect_failures)에서
+// 최근 실행의 에러 건수를 읽어, 실패가 있을 때만 배너를 띄운다.
+async function ptLoadFailBanner(){
+  const el=document.getElementById('ptFailBanner');
+  if(!el) return;
+  try{
+    const r=await dbCall('get_collect_failures',{});
+    if(!r||!r.ok){ el.style.display='none'; return; }
+    // "완료 — [매장 N,] 키워드 T, ..., 에러 E" → {total, errors}
+    const parse=(line)=>{ if(!line) return null; const m=line.match(/키워드 ([\d,]+).*에러 ([\d,]+)/); return m?{total:+m[1].replace(/,/g,''),errors:+m[2].replace(/,/g,'')}:null; };
+    const p=parse(r.lastPlace), b=parse(r.lastBlog);
+    const errors=(p?p.errors:0)+(b?b.errors:0);
+    const total=(p?p.total:0)+(b?b.total:0);
+    if(!errors||!total){ el.style.display='none'; return; }   // 평소(실패 0)엔 조용히
+    const rate=Math.round(errors/total*100);
+    const parts=[];
+    if(p&&p.errors) parts.push('플레이스 '+p.errors+'/'+p.total);
+    if(b&&b.errors) parts.push('블로그 '+b.errors+'/'+b.total);
+    const details=(r.failures||[]).filter(l=>l.indexOf('[요약]')<0&&l.indexOf('[테스트]')<0).slice(-30);
+    el.innerHTML='⚠️ 최근 수집 실패 <b>'+errors.toLocaleString()+'건</b> (실패율 '+rate+'% · '+parts.join(' · ')+') — '
+      +'<a onclick="ptToggleFailDetail()">상세 보기</a>'
+      +'<div class="fb-detail" id="ptFailDetail">'+(details.length?details.map(escapeHtml).join('\n'):'개별 실패 기록이 없습니다. 다음 배치부터 키워드별 사유가 기록됩니다.')+'</div>';
+    el.style.display='';
+  }catch(e){ el.style.display='none'; }
+}
+function ptToggleFailDetail(){ const d=document.getElementById('ptFailDetail'); if(d) d.classList.toggle('show'); }
 
 // stores(전역) 기준으로 플레이스 탭 매장 상태 반영(진입·등록·삭제 후 공통 호출)
 async function ptApplyStoreState(){
