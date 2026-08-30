@@ -12,10 +12,17 @@ const SCRAPER = 'http://127.0.0.1:8080';
 const SCRAPER_KEY = process.env.SCRAPER_API_KEY;
 const LOCK = '/tmp/blog-rank-place-collect.lock';
 const KEYWORD_DELAY_MS = 4000; // 플레이스 스크래핑은 무겁다(브라우저). 간격 여유.
+const RETRY_DELAY_MS = 8000;   // 키워드 실패 시 1회 재시도 전 대기
+const FAIL_LOG = '/var/log/blog-rank-scraper/failures.log'; // 실패 전용 로그(스크립트 공통)
 
 function log(msg) {
   const ts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
   console.log(`[${ts} KST] ${msg}`);
+}
+// 실패 전용 로그: 나중에 "이 매장/키워드만 계속 안 됨"을 사람이 스크린샷 없이 파악하는 용도
+function logFail(script, keyword, reason) {
+  const ts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
+  try { fs.appendFileSync(FAIL_LOG, `[${ts} KST] ${script} ✗ "${keyword}" ${String(reason).replace(/\n[\s\S]*/, '')}\n`); } catch {}
 }
 function kstDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
@@ -39,7 +46,7 @@ async function main() {
   if (fs.existsSync(LOCK)) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
   fs.writeFileSync(LOCK, String(process.pid));
 
-  const summary = { keywords: 0, saved: 0, errors: 0 };
+  const summary = { keywords: 0, saved: 0, errors: 0, failed: [] };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
     // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
@@ -56,14 +63,25 @@ async function main() {
     log(`추적 키워드 ${byKeyword.size}개 / 계정×키워드 ${pairs.length}건`);
 
     const today = kstDate();
+    const scrapeOnce = async (keyword) => {
+      const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=300`;
+      const resp = await fetch(endpoint, { headers: { Authorization: `Bearer ${SCRAPER_KEY}` } });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);
+      return data.items || [];
+    };
     for (const [keyword, owners] of byKeyword) {
       summary.keywords++;
       try {
-        const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=300`;
-        const resp = await fetch(endpoint, { headers: { Authorization: `Bearer ${SCRAPER_KEY}` } });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);
-        const items = data.items || [];
+        let items;
+        try {
+          items = await scrapeOnce(keyword);
+        } catch (e1) {
+          // 1회 재시도: 일시 오류(브라우저 재기동 직후·네트워크 순단)를 그 자리에서 흡수
+          log(`  ↻ "${keyword}" 1차 실패(${e1.message.slice(0, 80)}) → ${RETRY_DELAY_MS / 1000}초 후 재시도`);
+          await sleep(RETRY_DELAY_MS);
+          items = await scrapeOnce(keyword);
+        }
         // 이 키워드를 추적하는 각 계정에 대해 owner별로 저장
         for (const owner_id of owners) {
           await dbCall('save_place_rankings', { keyword, owner_id, checked_date: today, rows: items });
@@ -72,11 +90,20 @@ async function main() {
         log(`  • "${keyword}" → ${items.length}곳 × 계정 ${owners.length}개 저장`);
       } catch (e) {
         summary.errors++;
+        summary.failed.push(keyword);
         log(`  ✗ "${keyword}" 에러: ${e.message}`);
+        logFail('place', keyword, e.message);
       }
       await sleep(KEYWORD_DELAY_MS);
     }
     log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}`);
+    if (summary.errors > 0) {
+      log(`⚠ 실패 키워드(${summary.errors}): ${summary.failed.slice(0, 20).join(', ')}${summary.failed.length > 20 ? ' 외 ' + (summary.failed.length - 20) + '개' : ''}`);
+      logFail('place', `[요약]`, `실패 ${summary.errors}/${summary.keywords}건 (date=${today})`);
+    }
+    if (summary.keywords > 0 && summary.errors >= Math.max(5, summary.keywords * 0.3)) {
+      log(`🚨 실패율 ${Math.round((summary.errors / summary.keywords) * 100)}% — 스크래퍼/네트워크 점검 필요 (${FAIL_LOG} 참고)`);
+    }
   } catch (e) {
     log(`치명적 오류: ${e.message}`);
     process.exitCode = 1;

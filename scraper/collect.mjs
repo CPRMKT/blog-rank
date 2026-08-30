@@ -15,6 +15,8 @@ const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
 const LOCK = '/tmp/blog-rank-collect.lock';
 const KEYWORD_DELAY_MS = 3000; // store-rank 는 무겁다(스크래퍼+본문). 호출 간 여유.
 const STORE_RANK_TIMEOUT_MS = 70000; // 딜스캔(최대 300위) 감안 상향(Vercel maxDuration 60초 + 여유)
+const RETRY_DELAY_MS = 8000;   // 키워드 실패 시 1회 재시도 전 대기
+const FAIL_LOG = '/var/log/blog-rank-scraper/failures.log'; // 실패 전용 로그(스크립트 공통)
 
 function log(msg) {
   const ts = new Intl.DateTimeFormat('sv-SE', {
@@ -22,6 +24,12 @@ function log(msg) {
   }).format(new Date());
   const line = `[${ts} KST] ${msg}`;
   console.log(line);
+}
+
+// 실패 전용 로그: 어떤 매장/키워드가 왜 실패했는지 누적 기록(사람이 나중에 훑는 용도)
+function logFail(script, keyword, reason) {
+  const ts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
+  try { fs.appendFileSync(FAIL_LOG, `[${ts} KST] ${script} ✗ "${keyword}" ${String(reason).replace(/\n[\s\S]*/, '')}\n`); } catch {}
 }
 
 // Asia/Seoul 기준 오늘 날짜(YYYY-MM-DD) — 서버 TZ 와 무관하게 KST 달력 날짜.
@@ -111,7 +119,7 @@ async function main() {
   }
   fs.writeFileSync(LOCK, String(process.pid));
 
-  const summary = { stores: 0, keywords: 0, saved: 0, matched: 0, errors: 0 };
+  const summary = { stores: 0, keywords: 0, saved: 0, matched: 0, errors: 0, failed: [] };
   try {
     log(`수집 시작 (BASE=${BASE}, DRY_RUN=${DRY_RUN}, date=${kstDate()})`);
 
@@ -135,12 +143,19 @@ async function main() {
             storeName: store.name || '',
             count: '300', // 딜스캔: 최대 300위까지 탐지(매칭 즉시 조기종료)
           });
-          const data = await api(`/api/store-rank?${params.toString()}`, {}, STORE_RANK_TIMEOUT_MS);
-
-          if (!data || !data.ok) {
-            summary.errors++;
-            log(`  ✗ "${keyword}" 조회 실패: ${data && data.error}`);
-            continue;
+          const fetchRank = async () => {
+            const d = await api(`/api/store-rank?${params.toString()}`, {}, STORE_RANK_TIMEOUT_MS);
+            if (!d || !d.ok) throw new Error((d && d.error) || 'store-rank 응답 실패');
+            return d;
+          };
+          let data;
+          try {
+            data = await fetchRank();
+          } catch (e1) {
+            // 1회 재시도: 일시 오류(스크래퍼 재기동·타임아웃·순단)를 그 자리에서 흡수
+            log(`  ↻ "${keyword}" 1차 실패(${e1.message.slice(0, 80)}) → ${RETRY_DELAY_MS / 1000}초 후 재시도`);
+            await sleep(RETRY_DELAY_MS);
+            data = await fetchRank();
           }
 
           const matches = data.matches || [];
@@ -176,13 +191,22 @@ async function main() {
           }
         } catch (e) {
           summary.errors++;
+          summary.failed.push(`${store.name}/${keyword}`);
           log(`  ✗ "${keyword}" 에러: ${e.message}`);
+          logFail('blog', `${store.name}/${keyword}`, e.message);
         }
         await sleep(KEYWORD_DELAY_MS);
       }
     }
 
     log(`완료 — 매장 ${summary.stores}, 키워드 ${summary.keywords}, 매칭 ${summary.matched}, 저장 ${summary.saved}, 에러 ${summary.errors}${DRY_RUN ? ' (DRY_RUN: 저장 안 함)' : ''}`);
+    if (summary.errors > 0) {
+      log(`⚠ 실패(${summary.errors}): ${summary.failed.slice(0, 20).join(', ')}${summary.failed.length > 20 ? ' 외 ' + (summary.failed.length - 20) + '개' : ''}`);
+      logFail('blog', '[요약]', `실패 ${summary.errors}/${summary.keywords}건 (date=${kstDate()})`);
+    }
+    if (summary.keywords > 0 && summary.errors >= Math.max(5, summary.keywords * 0.3)) {
+      log(`🚨 실패율 ${Math.round((summary.errors / summary.keywords) * 100)}% — 스크래퍼/네트워크 점검 필요 (${FAIL_LOG} 참고)`);
+    }
   } catch (e) {
     log(`치명적 오류: ${e.message}`);
     process.exitCode = 1;

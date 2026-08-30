@@ -290,6 +290,8 @@ tr:hover td{background:var(--surface-3)}
 .pt-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0}
 .pt-day{padding:6px 2px;text-align:center;background:var(--surface);border-bottom:1px solid var(--line-2);min-width:0}
 .pt-day.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
+/* 키워드 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영으로 구분 */
+.pt-day.pre{background:var(--surface-2);opacity:.55}
 .pt-day-date{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:2px}
 .pt-day.today .pt-day-date{color:var(--brand-ink)}
 .pt-day-date .wd-sat{color:var(--brand)}
@@ -3539,6 +3541,7 @@ const PT_DAYS_EXPANDED=30;    // 펼침 5줄 = 30일
 const PT_PIN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10Z"/><circle cx="12" cy="11" r="2.2"/></svg>';
 const PT_CHEV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 let ptStoreId=null; let ptKeywords=[]; let ptRows=[]; let ptExpanded={};  // keyword -> bool (더보기 상태, 지표상세와 독립)
+let ptKwCreated={};  // keyword -> 등록일(KST 'YYYY-MM-DD') — 등록 전 날짜 칸 음영 처리용
 let ptCollecting=new Set();  // 현재 순위 수집(스크래핑) 중인 키워드 — 오늘 칸에 "조회 중…" 표시
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
 
@@ -3682,7 +3685,10 @@ async function ptRemoveStore(id,e){
 async function ptLoad(){
   // 키워드 목록
   const kr=await dbCall('list_store_place_keywords',{store_id:ptStoreId});
-  ptKeywords=(kr&&kr.result?kr.result:[]).map(k=>k.keyword);
+  const krRows=(kr&&kr.result)||[];
+  ptKeywords=krRows.map(k=>k.keyword);
+  ptKwCreated={};
+  for(const k of krRows){ if(k.created_at) ptKwCreated[k.keyword]=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date(k.created_at)); }
   ptUpdateCount(); ptRenderChips();
   // 매장 정보 영역(매장명·리뷰·플레이스 링크)
   const st=ptStore();
@@ -3781,14 +3787,24 @@ async function ptRemoveKeyword(kw){
 
 // 키워드 1개: 라이브 검색 → 오늘 스냅샷 저장(전 상위50, 저장수 포함)
 async function ptCollectKeyword(kw){
-  try{
+  const once=async()=>{
     const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=50`);
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'검색 실패');
     // checked_date를 로컬(KST) 오늘로 명시 — db 기본값(UTC)과 카드 날짜(ptDates, 로컬) 불일치 방지
     await dbCall('save_place_rankings',{keyword:kw,checked_date:ptDates(1)[0],rows:data.items||[]});
-    return true;
-  }catch(e){ console.warn('ptCollectKeyword',kw,e.message); return false; }
+  };
+  try{ await once(); return true; }
+  catch(e1){
+    // 스크래퍼 일시 오류(재기동 직후 등) 흡수: 3초 후 1회 재시도
+    await new Promise(r=>setTimeout(r,3000));
+    try{ await once(); return true; }
+    catch(e){
+      console.warn('ptCollectKeyword',kw,e.message);
+      ptErr(`"${kw}" 첫 수집 실패 — 다음 자동 수집(새벽/저녁)에서 다시 시도됩니다. 카드의 ⟳로 수동 재시도할 수도 있습니다.`);
+      return false;
+    }
+  }
 }
 
 // 카드 개별 새로고침(⟳). 오늘 칸 "조회 중…" 표시 → 수집 → 순위만 갱신.
@@ -3892,10 +3908,13 @@ function ptRenderCards(){
     const rowMap=map[kw];
     const expanded=!!ptExpanded[kw];
     const shown=allDates.slice(0, expanded?PT_DAYS_EXPANDED:PT_DAYS_COLLAPSED);
+    const created=ptKwCreated[kw]||null;
     const cells=shown.map((d)=>{
       const row=rowMap[d];
+      let pre=false;
       let inner;
       if(ptCollecting.has(kw) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">조회 중…</span></div>`; }
+      else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
       else{
         // 변동 기준: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날(prior)
@@ -3912,7 +3931,7 @@ function ptRenderCards(){
         inner=`<div class="pt-day-body"><span class="pt-rank ${ptRankTier(row.rank)}">${row.rank}</span>${chg}${metrics}</div>`;
       }
       const isToday=(d===allDates[0]);
-      return `<div class="pt-day${isToday?' today':''}"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
+      return `<div class="pt-day${isToday?' today':''}${pre?' pre':''}"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
     }).join('');
     const vol=storeKwVolumes[kw];
     const volHtml=(vol!=null)?`<span class="pt-kwvol">월 ${vol.toLocaleString()}</span>`:'';

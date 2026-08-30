@@ -3,20 +3,34 @@
 import { chromium } from 'playwright';
 
 let browser = null;
+let launching = null; // 동시 호출 시 중복 launch 방지
 
+// 크롬이 죽으면(크래시·강제종료) 죽은 싱글턴을 계속 돌려주며 전 요청이 실패하던 문제 →
+// isConnected() 헬스체크 후 죽어 있으면 즉시 재기동한다(자가복구).
 export async function initBrowser() {
-  if (browser) return browser;
-  browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process',
-    ],
-  });
-  console.log('Chromium launched');
-  return browser;
+  if (browser && browser.isConnected()) return browser;
+  if (launching) return launching;
+  launching = (async () => {
+    if (browser) {
+      console.log('Chromium dead — relaunching');
+      await browser.close().catch(() => {});
+      browser = null;
+    }
+    const b = await chromium.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+      ],
+    });
+    b.on('disconnected', () => { if (browser === b) browser = null; });
+    browser = b;
+    console.log('Chromium launched');
+    return b;
+  })();
+  try { return await launching; } finally { launching = null; }
 }
 
 export async function closeBrowser() {
