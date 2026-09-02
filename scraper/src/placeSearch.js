@@ -3,6 +3,7 @@
 // 실브라우저로 리스트 페이지를 열어 내부 GraphQL(placeList) 응답을 가로채
 // 조직(PlaceListBusinesses) 결과를 순위대로 수집한다. 광고(adBusinesses)는 제외.
 
+import fs from 'fs';
 import { initBrowser } from './scraper.js';
 
 const MOBILE_UA =
@@ -117,6 +118,23 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
         if (res.ok()) j = await res.json();
       } catch { /* 네트워크 오류 → 빈 페이지 취급 */ }
       const before = items.length;
+      // 진단용 원시 덤프: PLACE_DEBUG_FILE 지정 시 페이지별 raw 항목(광고 포함) 기록
+      if (process.env.PLACE_DEBUG_FILE && j) {
+        try {
+          const raw = [];
+          (function dig(o, pk) {
+            if (!o || typeof o !== 'object') return;
+            if (Array.isArray(o)) { for (const e of o) dig(e, pk); return; }
+            for (const k in o) {
+              const v = o[k];
+              if (k === 'items' && Array.isArray(v)) {
+                for (const it of v) raw.push({ c: pk, id: it && it.id, name: it && it.name, ad: !!(it && (it.isAd || it.adId)), adDup: !!(it && it.isAdDup), rv: !!(it && (it.visitorReviewCount !== undefined || it.blogCafeReviewCount !== undefined)) });
+              } else if (v && typeof v === 'object') dig(v, k);
+            }
+          })(j, '');
+          fs.appendFileSync(process.env.PLACE_DEBUG_FILE, JSON.stringify({ keyword, start, rawCount: raw.length, raw }) + '\n');
+        } catch {}
+      }
       if (j) walk(j, '');
       if (items.length === before) empties++; else empties = 0;
       await page.waitForTimeout(350); // 차단 방지용 요청 간 딜레이
