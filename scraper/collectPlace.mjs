@@ -82,6 +82,18 @@ async function main() {
           await sleep(RETRY_DELAY_MS);
           items = await scrapeOnce(keyword);
         }
+        // 자체점검: 결과가 비정상적으로 적으면(네이버가 가끔 축소 결과셋을 주는 변형 응답,
+        // "사직역 맛집" 64곳 사건) 1회 재수집해서 더 큰 쪽을 채택. 진짜 소도시 키워드는 재시도해도 같음.
+        if (items.length > 0 && items.length < 100) {
+          await sleep(RETRY_DELAY_MS);
+          try {
+            const again = await scrapeOnce(keyword);
+            if (again.length > items.length * 1.5) {
+              log(`  ⚠ "${keyword}" 결과 ${items.length}곳 → 재수집 ${again.length}곳 (축소 응답 감지, 큰 쪽 채택)`);
+              items = again;
+            }
+          } catch { /* 재수집 실패 시 1차 결과 유지 */ }
+        }
         // 이 키워드를 추적하는 각 계정에 대해 owner별로 저장
         for (const owner_id of owners) {
           await dbCall('save_place_rankings', { keyword, owner_id, checked_date: today, rows: items });

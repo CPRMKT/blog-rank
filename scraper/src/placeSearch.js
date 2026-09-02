@@ -148,6 +148,10 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       await page.waitForTimeout(350); // 차단 방지용 요청 간 딜레이
     }
 
+    // 자체점검: 300 요청에 100곳 미만이면 축소 변형 응답 가능성 — 서버 로그에 경고(조용한 누락 방지)
+    if (count >= 200 && items.length > 0 && items.length < 100) {
+      console.warn(`[place-search] "${keyword}" 결과 ${items.length}곳뿐 (count=${count}) — 축소 응답 의심`);
+    }
     return items.slice(0, count).map((it, i) => ({
       rank: i + 1,
       placeId: it.placeId,

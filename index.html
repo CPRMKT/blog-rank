@@ -3824,7 +3824,8 @@ async function ptRemoveKeyword(kw){
 // 키워드 1개: 라이브 검색 → 오늘 스냅샷 저장(전 상위50, 저장수 포함)
 async function ptCollectKeyword(kw){
   const once=async()=>{
-    const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=50`);
+    // count=300 필수: 50이면 ①50위 밖 매장이 미노출로 보이고 ②크론의 300곳 스냅샷을 50곳으로 덮어쓴다("사직역 맛집" 53위 미노출 사건)
+    const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=300`);
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'검색 실패');
     // checked_date를 로컬(KST) 오늘로 명시 — db 기본값(UTC)과 카드 날짜(ptDates, 로컬) 불일치 방지
