@@ -94,6 +94,14 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       await page.waitForTimeout(1200);
     }
     if (!cap) return []; // 캡처 실패 → 빈 결과(호출부는 items:[]로 처리)
+    // 진단용: 캡처된 GraphQL 요청 변수(쿼리 해석·좌표 등)를 1회 기록
+    if (process.env.PLACE_DEBUG_FILE) {
+      try {
+        const b = JSON.parse(cap.body);
+        const ops = (Array.isArray(b) ? b : [b]).map((op) => ({ op: op.operationName, vars: op.variables }));
+        fs.appendFileSync(process.env.PLACE_DEBUG_FILE, JSON.stringify({ type: 'cap', keyword, url: cap.url, ops }) + '\n');
+      } catch {}
+    }
 
     // start=1,51,101…로 올리며 GraphQL 직접 호출. count 도달 or 2회 연속 신규 없음 → 종료.
     const t0 = Date.now();
