@@ -81,7 +81,8 @@ app.get('/blog-rank', async (req, res) => {
   }
 });
 
-// 플레이스 키워드 검색 순위(1~50위)
+// 플레이스 키워드 검색 순위(1~300위)
+let placeQueue = Promise.resolve(); // /place-search 전용 직렬화 체인(동시 딥스캔 금지)
 app.get('/place-search', async (req, res) => {
   const keyword = (req.query.keyword || '').toString().trim();
   const count = parseInt(req.query.count || '50', 10);
@@ -93,7 +94,13 @@ app.get('/place-search', async (req, res) => {
 
   const t0 = Date.now();
   try {
-    const items = await scrapePlaceSearch(keyword, count);
+    // 직렬화 뮤텍스: 딥스캔(300)은 무겁다. 동시 요청이 오면 한 번에 하나씩 처리해
+    // 브라우저 경합으로 전부 느려져 다 같이 타임아웃 나는 연쇄(키워드 연속등록 사건)를 차단.
+    const job = () => scrapePlaceSearch(keyword, count);
+    const p = placeQueue.then(job, job);
+    placeQueue = p.then(() => {}, () => {});
+    const items = await p;
+    console.log(`[place-search] "${keyword}" count=${count} → ${items.length}곳 (${Date.now() - t0}ms, 대기포함)`);
     res.json({
       items,
       total: items.length,

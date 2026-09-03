@@ -292,6 +292,8 @@ tr:hover td{background:var(--surface-3)}
 .pt-day.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
 /* 키워드 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영으로 구분 */
 .pt-day.pre{background:var(--surface-2);opacity:.55}
+/* 즉시수집 실패(자동 재시도 예정): 미노출 '-'와 구분 */
+.pt-retrywait{font-size:10px;font-weight:700;color:#b45309;white-space:nowrap}
 /* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
 .pt-failbanner{background:#fef3cd;border:1px solid #f0d58c;color:#7a5b0f;border-radius:10px;padding:10px 14px;margin-bottom:var(--sp-2);font-size:12.5px;font-weight:600;line-height:1.6}
 .pt-failbanner a{color:#7a5b0f;text-decoration:underline;cursor:pointer;font-weight:700}
@@ -3549,7 +3551,11 @@ const PT_PIN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const PT_CHEV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 let ptStoreId=null; let ptKeywords=[]; let ptRows=[]; let ptExpanded={};  // keyword -> bool (더보기 상태, 지표상세와 독립)
 let ptKwCreated={};  // keyword -> 등록일(KST 'YYYY-MM-DD') — 등록 전 날짜 칸 음영 처리용
-let ptCollecting=new Set();  // 현재 순위 수집(스크래핑) 중인 키워드 — 오늘 칸에 "조회 중…" 표시
+let ptCollecting=new Set();  // 수집 대기/진행 중인 키워드 — 오늘 칸에 "조회 중…" 표시
+// ── 즉시수집 순차 큐: 연속 등록 시 동시 발사 금지(6개 병렬→전부 타임아웃 사건) ──
+const ptQueue=[]; let ptQBusy=false;
+const ptFailedKw=new Set();  // 수집 최종 실패(재시도 대기) — 오늘 칸에 '-' 대신 "재시도 대기" 표시
+const ptRetryCnt={};         // keyword -> 자동 재시도 횟수(최대 3회, 이후엔 새벽 크론이 채움)
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
 
 function placeStores(){ return (stores||[]).filter(s=>s.in_place!==false); }
@@ -3805,12 +3811,9 @@ async function ptAddKeyword(){
   if(!r||!r.ok){ ptErr('등록 실패: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='등록'; return; }
   inp.value='';
   ptKeywords.push(kw); ptUpdateCount(); ptRenderChips();
-  // 카드를 즉시 띄우고 오늘 칸에 "조회 중…" 표시(체감 속도 개선), 백그라운드로 수집
-  ptCollecting.add(kw); ptRenderCards();
+  // 카드를 즉시 띄우고 순차 수집 큐에 등록(연속 등록해도 동시 발사 없이 하나씩 처리)
+  ptEnqueueCollect(kw);
   btn.disabled=false; btn.textContent='등록';   // 버튼은 바로 풀어 다음 키워드 입력 가능
-  await ptCollectKeyword(kw);
-  ptCollecting.delete(kw);
-  await ptReloadRankings();
   loadPtVolumes([kw]);   // 신규 키워드 월검색량
 }
 
@@ -3823,42 +3826,73 @@ async function ptRemoveKeyword(kw){
 
 // 키워드 1개: 라이브 검색 → 오늘 스냅샷 저장(전 상위50, 저장수 포함)
 async function ptCollectKeyword(kw){
-  const once=async()=>{
+  const scan=async()=>{
     // count=300 필수: 50이면 ①50위 밖 매장이 미노출로 보이고 ②크론의 300곳 스냅샷을 50곳으로 덮어쓴다("사직역 맛집" 53위 미노출 사건)
     const res=await fetch(`/api/place-search?keyword=${encodeURIComponent(kw)}&count=300`);
     const data=await res.json();
     if(!data.ok) throw new Error(data.error||'검색 실패');
+    return data.items||[];
+  };
+  const once=async()=>{
+    let items=await scan();
+    // 축소 변형 응답(정상인데 결과가 확 적게 오는 경우) 감지: 1회 재수집해 큰 쪽 채택
+    if(items.length>0&&items.length<100){
+      try{ const again=await scan(); if(again.length>items.length*1.5) items=again; }catch(e){}
+    }
+    // 실패 시 여기 도달 안 함 → 스캔이 정상 완료된 경우에만 저장(실패를 '-'로 만들지 않음)
     // checked_date를 로컬(KST) 오늘로 명시 — db 기본값(UTC)과 카드 날짜(ptDates, 로컬) 불일치 방지
-    await dbCall('save_place_rankings',{keyword:kw,checked_date:ptDates(1)[0],rows:data.items||[]});
+    await dbCall('save_place_rankings',{keyword:kw,checked_date:ptDates(1)[0],rows:items});
   };
   try{ await once(); return true; }
   catch(e1){
     // 스크래퍼 일시 오류(재기동 직후 등) 흡수: 3초 후 1회 재시도
     await new Promise(r=>setTimeout(r,3000));
     try{ await once(); return true; }
-    catch(e){
-      console.warn('ptCollectKeyword',kw,e.message);
-      ptErr(`"${kw}" 첫 수집 실패 — 다음 자동 수집(새벽/저녁)에서 다시 시도됩니다. 카드의 ⟳로 수동 재시도할 수도 있습니다.`);
-      return false;
-    }
+    catch(e){ console.warn('ptCollectKeyword',kw,e.message); return false; }
   }
 }
 
-// 카드 개별 새로고침(⟳). 오늘 칸 "조회 중…" 표시 → 수집 → 순위만 갱신.
-async function ptRefreshOne(kw){
-  ptCollecting.add(kw); ptRenderCards();
-  await ptCollectKeyword(kw);
-  ptCollecting.delete(kw);
-  await ptReloadRankings();
+// ── 순차 수집 큐: 등록/새로고침/지금수집 전부 이 큐를 통해 한 번에 하나씩 처리 ──
+let ptQCurrent=null; // 지금 처리 중인 키워드(중복 큐잉 방지)
+function ptEnqueueCollect(kw){
+  if(!ptQueue.includes(kw)&&ptQCurrent!==kw) ptQueue.push(kw);
+  ptCollecting.add(kw); ptFailedKw.delete(kw);
+  ptRenderCards();
+  ptPumpQueue();
 }
+async function ptPumpQueue(){
+  if(ptQBusy) return; ptQBusy=true;
+  const btn=document.getElementById('ptRefreshBtn');
+  while(ptQueue.length){
+    const kw=ptQueue.shift();
+    ptQCurrent=kw;
+    if(btn){ btn.disabled=true; btn.textContent=`수집 중 (남은 ${ptQueue.length+1})`; }
+    const ok=await ptCollectKeyword(kw);
+    ptCollecting.delete(kw);
+    if(ok){ delete ptRetryCnt[kw]; ptFailedKw.delete(kw); }
+    else{
+      ptRetryCnt[kw]=(ptRetryCnt[kw]||0)+1;
+      ptFailedKw.add(kw);   // '-' 대신 "재시도 대기"로 표시
+      if(ptRetryCnt[kw]<=3){
+        // 2분 뒤 자동 재시도(페이지 열려 있는 동안). 3회 넘으면 새벽 크론이 채움.
+        setTimeout(()=>{ if(ptFailedKw.has(kw)) ptEnqueueCollect(kw); },120000);
+      }else{
+        ptErr(`"${kw}" 수집이 계속 실패합니다 — 새벽 자동 수집에서 다시 시도됩니다.`);
+      }
+    }
+    ptQCurrent=null;
+    await ptReloadRankings();   // 완료된 키워드 카드 자동 갱신(새로고침 불필요)
+  }
+  if(btn){ btn.disabled=false; btn.textContent='지금 수집'; }
+  ptQBusy=false;
+}
+
+// 카드 개별 새로고침(⟳). 오늘 칸 "조회 중…" 표시 → 수집 → 순위만 갱신.
+async function ptRefreshOne(kw){ ptEnqueueCollect(kw); }
 
 async function ptCollectNow(){
   if(!ptKeywords.length){ ptErr('먼저 키워드를 등록하세요.'); return; }
-  const btn=document.getElementById('ptRefreshBtn'); btn.disabled=true;
-  ptKeywords.forEach(k=>ptCollecting.add(k)); ptRenderCards();
-  let done=0;
-  for(const kw of ptKeywords){ btn.textContent=`수집 중 ${++done}/${ptKeywords.length}`; await ptCollectKeyword(kw); ptCollecting.delete(kw); await ptReloadRankings(); }
-  btn.disabled=false; btn.textContent='지금 수집';
+  ptKeywords.forEach(k=>ptEnqueueCollect(k));   // 전부 순차 큐로(동시 발사 금지)
 }
 
 function ptToggleExpand(kw){ ptExpanded[kw]=!ptExpanded[kw]; ptRenderCards(); }
@@ -3951,6 +3985,7 @@ function ptRenderCards(){
       let pre=false;
       let inner;
       if(ptCollecting.has(kw) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">조회 중…</span></div>`; }
+      else if(ptFailedKw.has(kw) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
       else{
