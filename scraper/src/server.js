@@ -75,11 +75,15 @@ app.get('/blog-rank', async (req, res) => {
   const t0 = Date.now();
   try {
     // 직렬화 뮤텍스: 블로그 딥스캔도 동시 요청 시 경합→전체 타임아웃 연쇄(키워드 연속등록 사건과 동일 패턴) 차단
-    const job = () => scrapeBlogRank(keyword, { placeId, storeName, maxRank: count });
+    // 하드 타임아웃(90초): 스크랩이 영원히 안 끝나는 병리 상황에서도 체인이 막히지 않게 보장
+    const job = () => Promise.race([
+      scrapeBlogRank(keyword, { placeId, storeName, maxRank: count }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('scan hard-timeout 90s')), 90000)),
+    ]);
     const p = blogRankQueue.then(job, job);
     blogRankQueue = p.then(() => {}, () => {});
     const r = await p;
-    console.log(`[blog-rank] "${keyword}" → ${r && r.matches ? r.matches.length + '건 매칭' : '결과없음'} (${Date.now() - t0}ms, 대기포함)`);
+    console.log(`[blog-rank] "${keyword}" → ${r && Array.isArray(r.matches) ? r.matches.length + '건 매칭' : '응답형식이상'} (${Date.now() - t0}ms, 대기포함)`);
     res.json({ ...r, method: 'playwright', elapsedMs: Date.now() - t0, scrapedAt: new Date().toISOString() });
   } catch (e) {
     console.error('[blog-rank error]', e);
@@ -102,7 +106,11 @@ app.get('/place-search', async (req, res) => {
   try {
     // 직렬화 뮤텍스: 딥스캔(300)은 무겁다. 동시 요청이 오면 한 번에 하나씩 처리해
     // 브라우저 경합으로 전부 느려져 다 같이 타임아웃 나는 연쇄(키워드 연속등록 사건)를 차단.
-    const job = () => scrapePlaceSearch(keyword, count);
+    // 하드 타임아웃(90초): 병리적 무한대기에도 체인이 막히지 않게.
+    const job = () => Promise.race([
+      scrapePlaceSearch(keyword, count),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('scan hard-timeout 90s')), 90000)),
+    ]);
     const p = placeQueue.then(job, job);
     placeQueue = p.then(() => {}, () => {});
     const items = await p;
