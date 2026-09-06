@@ -294,6 +294,8 @@ tr:hover td{background:var(--surface-3)}
 .pt-day.pre{background:var(--surface-2);opacity:.55}
 /* 즉시수집 실패(자동 재시도 예정): 미노출 '-'와 구분 */
 .pt-retrywait{font-size:10px;font-weight:700;color:#b45309;white-space:nowrap}
+/* 블로그 순위표: 키워드 등록일 이전 날짜 칸 음영(플레이스 탭 .pt-day.pre와 동일 규칙) */
+td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
 /* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
 .pt-failbanner{background:#fef3cd;border:1px solid #f0d58c;color:#7a5b0f;border-radius:10px;padding:10px 14px;margin-bottom:var(--sp-2);font-size:12.5px;font-weight:600;line-height:1.6}
 .pt-failbanner a{color:#7a5b0f;text-decoration:underline;cursor:pointer;font-weight:700}
@@ -2600,6 +2602,7 @@ let stores=[];                  // DB에서 로드한 매장 목록
 let curStoreId=null;             // 현재 선택된 매장 ID
 let storeKeywords={};            // storeId -> [keyword, ...]
 let storeKwVolumes={};           // keyword -> 월 검색량(PC+모바일 합계)
+let storeKwCreated={};           // storeId -> {keyword: 등록일 'YYYY-MM-DD'(KST)} — 등록 전 날짜 칸 음영용
 let storeRankings={};            // storeId -> {keyword: {date: {rank, matched_blog_url, matched_title}}}
 
 const MAX_KEYWORDS=30;
@@ -2810,6 +2813,8 @@ async function selectStore(id){
   // 키워드 로드
   const kwRes=await dbCall('list_store_keywords',{store_id:id});
   storeKeywords[id]=(kwRes.result||[]).map(r=>r.keyword);
+  storeKwCreated[id]={};
+  for(const r of (kwRes.result||[])){ if(r.created_at) storeKwCreated[id][r.keyword]=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date(r.created_at)); }
   document.getElementById('kwCount').textContent=`${storeKeywords[id].length}/${MAX_KEYWORDS}`;
   renderKeywords();
   loadKeywordVolumes(id,storeKeywords[id]); // 월 검색량 비동기 로드
@@ -2930,6 +2935,8 @@ async function loadKeywordVolumes(storeId,keywords){
 // ---------- 순위 테이블 렌더 ----------
 function renderRankTable(){
   const dates=getDates();
+  // dates(mmdd)와 나란한 ISO 날짜(등록일 비교용 — 연도 경계 안전)
+  const isoDates=(function(){ const out=[]; const now=new Date(); for(let i=0;i<14;i++){ const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i); out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); } return out; })();
   const keywords=curStoreId?(storeKeywords[curStoreId]||[]):[];
   const rankings=curStoreId?(storeRankings[curStoreId]||{}):{};
 
@@ -2965,6 +2972,9 @@ function renderRankTable(){
           if(btChecking.has(key)) return '<td style="text-align:center"><span class="pt-loading">조회 중…</span></td>';
           if(btFailedKw.has(key)) return '<td style="text-align:center"><span class="pt-retrywait" title="조회 실패 — 자동 재시도 예정">재시도 대기</span></td>';
         }
+        // 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영(플레이스 탭과 동일 규칙)
+        const cISO=(storeKwCreated[curStoreId]||{})[kw];
+        if(!kwRanks[d]&&cISO&&isoDates[i]<cISO) return '<td class="bt-pre" title="등록 전"></td>';
         // 이 날짜보다 오래된, 데이터가 있는 가장 가까운 날짜(변동 비교용)
         let prior=null;
         for(let j=i+1;j<dates.length;j++){ if(kwRanks[dates[j]]){ prior=kwRanks[dates[j]]; break; } }
@@ -3589,11 +3599,12 @@ const PT_PIN_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const PT_CHEV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 let ptStoreId=null; let ptKeywords=[]; let ptRows=[]; let ptExpanded={};  // keyword -> bool (더보기 상태, 지표상세와 독립)
 let ptKwCreated={};  // keyword -> 등록일(KST 'YYYY-MM-DD') — 등록 전 날짜 칸 음영 처리용
-let ptCollecting=new Set();  // 수집 대기/진행 중인 키워드 — 오늘 칸에 "조회 중…" 표시
+let ptCollecting=new Set();  // "storeId|키워드" — 수집 대기/진행 중(오늘 칸 "조회 중…"). 매장 단위 구분(동일 키워드 다매장 오표시 방지)
 // ── 즉시수집 순차 큐: 연속 등록 시 동시 발사 금지(6개 병렬→전부 타임아웃 사건) ──
 const ptQueue=[]; let ptQBusy=false;
-const ptFailedKw=new Set();  // 수집 최종 실패(재시도 대기) — 오늘 칸에 '-' 대신 "재시도 대기" 표시
-const ptRetryCnt={};         // keyword -> 자동 재시도 횟수(최대 3회, 이후엔 새벽 크론이 채움)
+const ptFailedKw=new Set();  // "storeId|키워드" — 수집 최종 실패(오늘 칸 "재시도 대기")
+const ptRetryCnt={};         // key -> 자동 재시도 횟수(최대 3회, 이후엔 새벽 크론이 채움)
+const ptKey=(sid,kw)=>sid+'|'+kw;
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
 
 function placeStores(){ return (stores||[]).filter(s=>s.in_place!==false); }
@@ -3615,18 +3626,19 @@ async function ptLoadFailBanner(){
   try{
     const r=await dbCall('get_collect_failures',{});
     if(!r||!r.ok){ el.style.display='none'; return; }
-    // "완료 — [매장 N,] 키워드 T, ..., 에러 E" → {total, errors}
-    const parse=(line)=>{ if(!line) return null; const m=line.match(/키워드 ([\d,]+).*에러 ([\d,]+)/); return m?{total:+m[1].replace(/,/g,''),errors:+m[2].replace(/,/g,'')}:null; };
+    // "완료 — [매장 N,] 키워드 T, ..., 에러 E[, 0곳보류 S]" → {total, errors, held}
+    const parse=(line)=>{ if(!line) return null; const m=line.match(/키워드 ([\d,]+).*에러 ([\d,]+)/); if(!m) return null; const h=line.match(/0곳보류 ([\d,]+)/); return {total:+m[1].replace(/,/g,''),errors:+m[2].replace(/,/g,''),held:h?+h[1].replace(/,/g,''):0}; };
     const p=parse(r.lastPlace), b=parse(r.lastBlog);
     const errors=(p?p.errors:0)+(b?b.errors:0);
+    const held=(p?p.held:0)+(b?b.held:0);   // 0곳 보류: 에러는 아니지만 데이터 공백 → 배너에 표시
     const total=(p?p.total:0)+(b?b.total:0);
-    if(!errors||!total){ el.style.display='none'; return; }   // 평소(실패 0)엔 조용히
-    const rate=Math.round(errors/total*100);
+    if((!errors&&!held)||!total){ el.style.display='none'; return; }   // 평소(실패·보류 0)엔 조용히
+    const rate=Math.round((errors+held)/total*100);
     const parts=[];
-    if(p&&p.errors) parts.push('플레이스 '+p.errors+'/'+p.total);
+    if(p&&(p.errors||p.held)) parts.push('플레이스 '+(p.errors+p.held)+'/'+p.total);
     if(b&&b.errors) parts.push('블로그 '+b.errors+'/'+b.total);
-    const details=(r.failures||[]).filter(l=>l.indexOf('[요약]')<0&&l.indexOf('[테스트]')<0).slice(-30);
-    el.innerHTML='⚠️ 최근 수집 실패 <b>'+errors.toLocaleString()+'건</b> (실패율 '+rate+'% · '+parts.join(' · ')+') — '
+    const details=(r.failures||[]).filter(l=>l.indexOf('[테스트]')<0).slice(-30);
+    el.innerHTML='⚠️ 최근 수집 문제 <b>'+(errors+held).toLocaleString()+'건</b> ('+(errors?'실패 '+errors:'')+(errors&&held?' · ':'')+(held?'0곳보류 '+held:'')+' · 비율 '+rate+'% · '+parts.join(' · ')+') — '
       +'<a onclick="ptToggleFailDetail()">상세 보기</a>'
       +'<div class="fb-detail" id="ptFailDetail">'+(details.length?details.map(escapeHtml).join('\n'):'개별 실패 기록이 없습니다. 다음 배치부터 키워드별 사유가 기록됩니다.')+'</div>';
     el.style.display='';
@@ -3786,7 +3798,7 @@ async function ptLoad(){
   if(ptKeywords.length){
     dbCall('get_place_collect_status',{keywords:ptKeywords}).then(r=>{
       if(!r||!r.ok||!r.result) return;
-      ptKeywords.filter(k=>!r.result[k]&&!ptCollecting.has(k)).forEach(k=>ptEnqueueCollect(k));
+      ptKeywords.filter(k=>!r.result[k]&&!ptCollecting.has(ptKey(ptStoreId,k))).forEach(k=>ptEnqueueCollect(k,ptStoreId));
     }).catch(()=>{});
   }
 }
@@ -3902,10 +3914,12 @@ async function ptCollectKeyword(kw){
 }
 
 // ── 순차 수집 큐: 등록/새로고침/지금수집 전부 이 큐를 통해 한 번에 하나씩 처리 ──
-let ptQCurrent=null; // 지금 처리 중인 키워드(중복 큐잉 방지)
-function ptEnqueueCollect(kw){
-  if(!ptQueue.includes(kw)&&ptQCurrent!==kw) ptQueue.push(kw);
-  ptCollecting.add(kw); ptFailedKw.delete(kw);
+let ptQCurrent=null; // 지금 처리 중인 key(중복 큐잉 방지)
+function ptEnqueueCollect(kw,sid){
+  sid=(sid!=null)?sid:ptStoreId;
+  const key=ptKey(sid,kw);
+  if(!ptQueue.some(q=>q.key===key)&&ptQCurrent!==key) ptQueue.push({key,sid,kw});
+  ptCollecting.add(key); ptFailedKw.delete(key);
   ptRenderCards();
   ptPumpQueue();
 }
@@ -3913,18 +3927,18 @@ async function ptPumpQueue(){
   if(ptQBusy) return; ptQBusy=true;
   const btn=document.getElementById('ptRefreshBtn');
   while(ptQueue.length){
-    const kw=ptQueue.shift();
-    ptQCurrent=kw;
+    const {key,sid,kw}=ptQueue.shift();
+    ptQCurrent=key;
     if(btn){ btn.disabled=true; btn.textContent=`수집 중 (남은 ${ptQueue.length+1})`; }
     const ok=await ptCollectKeyword(kw);
-    ptCollecting.delete(kw);
-    if(ok){ delete ptRetryCnt[kw]; ptFailedKw.delete(kw); }
+    ptCollecting.delete(key);
+    if(ok){ delete ptRetryCnt[key]; ptFailedKw.delete(key); }
     else{
-      ptRetryCnt[kw]=(ptRetryCnt[kw]||0)+1;
-      ptFailedKw.add(kw);   // '-' 대신 "재시도 대기"로 표시
-      if(ptRetryCnt[kw]<=3){
+      ptRetryCnt[key]=(ptRetryCnt[key]||0)+1;
+      ptFailedKw.add(key);   // '-' 대신 "재시도 대기"로 표시
+      if(ptRetryCnt[key]<=3){
         // 2분 뒤 자동 재시도(페이지 열려 있는 동안). 3회 넘으면 새벽 크론이 채움.
-        setTimeout(()=>{ if(ptFailedKw.has(kw)) ptEnqueueCollect(kw); },120000);
+        setTimeout(()=>{ if(ptFailedKw.has(key)) ptEnqueueCollect(kw,sid); },120000);
       }else{
         ptErr(`"${kw}" 수집이 계속 실패합니다 — 새벽 자동 수집에서 다시 시도됩니다.`);
       }
@@ -4033,8 +4047,8 @@ function ptRenderCards(){
       const row=rowMap[d];
       let pre=false;
       let inner;
-      if(ptCollecting.has(kw) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">조회 중…</span></div>`; }
-      else if(ptFailedKw.has(kw) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
+      if(ptCollecting.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">조회 중…</span></div>`; }
+      else if(ptFailedKw.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
       else{
