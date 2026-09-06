@@ -2881,8 +2881,8 @@ async function addKeyword(){
   document.getElementById('kwCount').textContent=`${keywords.length}/${MAX_KEYWORDS}`;
   renderKeywords();renderRankTable();
 
-  // 등록 즉시 순위 조회 + 월 검색량 로드 (비동기)
-  checkKeywordRank(curStoreId,kw);
+  // 등록 즉시 순위 조회(순차 큐 — 연속 등록해도 동시 발사 없음) + 월 검색량 로드
+  btEnqueueCheck(curStoreId,kw);
   loadKeywordVolumes(curStoreId,[kw]);
 }
 
@@ -2897,7 +2897,9 @@ async function removeKeyword(kw){
 
 function kwVolLabel(kw){
   const v=storeKwVolumes[kw];
-  return (v!=null)?` <span class="kw-vol">월 ${v.toLocaleString()}</span>`:'';
+  if(v!=null) return ` <span class="kw-vol">월 ${v.toLocaleString()}</span>`;
+  if(kw in storeKwVolumes) return ` <span class="kw-vol" title="네이버 검색광고 기준 월 10회 미만">월 10↓</span>`; // 조회됨·수치 미제공
+  return '';
 }
 
 function renderKeywords(){
@@ -2910,13 +2912,19 @@ function renderKeywords(){
 // 매장 키워드들의 월 검색량 로드(검색광고 API)
 async function loadKeywordVolumes(storeId,keywords){
   if(!keywords||!keywords.length)return;
-  try{
+  const once=async()=>{
     const res=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords})});
     const data=await res.json();
-    if(!data||!data.ok)return;
+    if(!data||!data.ok) throw new Error(data&&data.error||'검색량 조회 실패');
+    // v=null 포함 저장: null="조회했으나 월 10회 미만(API 미제공)" / 키 자체 없음="미조회"
     for(const [kw,v] of Object.entries(data.volumes||{})) storeKwVolumes[kw]=v?v.total:null;
     if(curStoreId===storeId){renderKeywords();renderRankTable();}
-  }catch(e){}
+  };
+  try{ await once(); }
+  catch(e1){ // 일시 실패(연속 등록 중 네트워크·광고API 순단) 흡수: 3초 후 1회 재시도
+    await new Promise(r=>setTimeout(r,3000));
+    try{ await once(); }catch(e){ console.warn('loadKeywordVolumes',e.message); }
+  }
 }
 
 // ---------- 순위 테이블 렌더 ----------
@@ -2947,9 +2955,16 @@ function renderRankTable(){
     return`<tr>
       <td>
         <div class="rank-kw-title">${escapeHtml(kw)}</div>
-        ${storeKwVolumes[kw]!=null?`<div class="rank-kw-vol">월 ${storeKwVolumes[kw].toLocaleString()}회</div>`:''}
+        ${storeKwVolumes[kw]!=null?`<div class="rank-kw-vol">월 ${storeKwVolumes[kw].toLocaleString()}회</div>`
+          :(kw in storeKwVolumes?`<div class="rank-kw-vol" title="네이버 검색광고 기준 월 10회 미만이라 수치가 제공되지 않는 키워드">월 10회 미만</div>`:'')}
       </td>
       ${dates.map((d,i)=>{
+        // 오늘 칸: 조회 중/재시도 대기 상태는 '-'로 위장하지 않고 명시(전포 사건)
+        if(i===0&&!kwRanks[d]){
+          const key=btKey(curStoreId,kw);
+          if(btChecking.has(key)) return '<td style="text-align:center"><span class="pt-loading">조회 중…</span></td>';
+          if(btFailedKw.has(key)) return '<td style="text-align:center"><span class="pt-retrywait" title="조회 실패 — 자동 재시도 예정">재시도 대기</span></td>';
+        }
         // 이 날짜보다 오래된, 데이터가 있는 가장 가까운 날짜(변동 비교용)
         let prior=null;
         for(let j=i+1;j<dates.length;j++){ if(kwRanks[dates[j]]){ prior=kwRanks[dates[j]]; break; } }
@@ -3111,9 +3126,9 @@ function rankBadgeClass(rank){
 }
 
 function renderRankCell(data,prior){
-  // 데이터가 없는 날
+  // 데이터가 없는 날: 아직 조회 안 됨(수집 전/실패) — 조회 후 미노출('없음')과 다른 상태
   if(!data||data.rank===null||data.rank===undefined){
-    return`<td style="text-align:center"><span class="rank-cell-miss">-</span></td>`;
+    return`<td style="text-align:center"><span class="rank-cell-miss" title="아직 조회되지 않은 날짜입니다">-</span></td>`;
   }
   const curMatchesRaw=Array.isArray(data.matches)?data.matches
     :(data.rank>0?[{rank:data.rank,url:data.matched_blog_url,title:data.matched_title}]:[]);
@@ -3128,7 +3143,7 @@ function renderRankCell(data,prior){
   const dropHtml=dropped.length?`<div class="chg-out">이탈 ${dropped.map(d=>d.rank+'위').join(', ')}</div>`:'';
 
   if(curMatches.length===0){
-    return`<td style="text-align:center"><span class="rank-cell-miss" title="30위 내 없음">없음</span>${dropHtml}</td>`;
+    return`<td style="text-align:center"><span class="rank-cell-miss" title="조회 완료 — 검색 상위 300위 내 우리 블로그 없음">없음</span>${dropHtml}</td>`;
   }
 
   const html=curMatches.slice().sort((a,b)=>a.rank-b.rank).map(m=>{
@@ -3212,9 +3227,45 @@ async function getCachedOrFreshBlogPosts(store){
 }
 
 // ---------- 키워드 순위 조회 (핵심 로직) ----------
+// ── 블로그 순위 즉시조회 순차 큐(플레이스 탭과 동일 원리: 동시 발사 금지) ──
+// 연속 등록 시 딥스캔이 병렬로 몰리면 전부 타임아웃 → 저장 0 → '-' 위장 (전포 사건)
+const btQueue=[]; let btQBusy=false, btQCurrent=null;
+const btChecking=new Set();   // storeId|kw — 조회 대기/진행 중(오늘 칸 "조회 중…")
+const btFailedKw=new Set();   // storeId|kw — 최종 실패(오늘 칸 "재시도 대기", '-' 아님)
+const btRetryCnt={};
+const btKey=(sid,kw)=>sid+'|'+kw;
+function btEnqueueCheck(sid,kw){
+  const key=btKey(sid,kw);
+  if(!btQueue.some(q=>q.key===key)&&btQCurrent!==key) btQueue.push({key,sid,kw});
+  btChecking.add(key); btFailedKw.delete(key);
+  if(curStoreId===sid) renderRankTable();
+  btPumpQueue();
+}
+async function btPumpQueue(){
+  if(btQBusy) return; btQBusy=true;
+  const btn=document.getElementById('refreshBtn');
+  while(btQueue.length){
+    const {key,sid,kw}=btQueue.shift(); btQCurrent=key;
+    if(btn&&btn.style.display!=='none'){ btn.disabled=true; btn.textContent=`조회 중 (남은 ${btQueue.length+1})`; }
+    let ok=false;
+    try{ ok=await checkKeywordRank(sid,kw); }catch(e){ console.warn('btPump',kw,e.message); }
+    btChecking.delete(key); btQCurrent=null;
+    if(ok){ delete btRetryCnt[key]; btFailedKw.delete(key); }
+    else{
+      btRetryCnt[key]=(btRetryCnt[key]||0)+1;
+      btFailedKw.add(key);
+      if(btRetryCnt[key]<=3) setTimeout(()=>{ if(btFailedKw.has(key)) btEnqueueCheck(sid,kw); },120000); // 2분 뒤 자동 재시도(최대 3회)
+    }
+    if(curStoreId===sid) renderRankTable();
+    await new Promise(r=>setTimeout(r,300));
+  }
+  if(btn){ btn.disabled=false; btn.textContent='전체 조회'; }
+  btQBusy=false;
+}
+
 async function checkKeywordRank(storeId,keyword){
   const store=stores.find(s=>s.id===storeId);
-  if(!store)return;
+  if(!store)return false;
 
   // 서버에서 검색 + 매칭을 한 번에 처리
   const params=new URLSearchParams({
@@ -3228,7 +3279,7 @@ async function checkKeywordRank(storeId,keyword){
 
   if(!searchData.ok){
     console.error('순위 조회 실패:',searchData.error);
-    return;
+    return false;   // 실패는 저장하지 않음 → 큐가 "재시도 대기"로 표시·자동 재시도
   }
 
   const matches=(searchData.matches||[]).map(m=>({
@@ -3268,6 +3319,7 @@ async function checkKeywordRank(storeId,keyword){
     matches:matches,
   };
   if(curStoreId===storeId)renderRankTable();
+  return true;
 }
 
 // 네이버 블로그 URL에서 blog_id, post_id 추출 (클라이언트 복제)
@@ -3311,10 +3363,7 @@ async function autoCheckAllKeywords(storeId){
   const needCheck=keywords.filter(kw=>!rankings[kw]||!rankings[kw][todayStr]);
   if(needCheck.length===0)return;
 
-  for(const kw of needCheck){
-    await checkKeywordRank(storeId,kw);
-    await new Promise(r=>setTimeout(r,300));
-  }
+  for(const kw of needCheck) btEnqueueCheck(storeId,kw);   // 순차 큐로 처리
 }
 
 // ---------- 전체 키워드 순위 갱신 (수동 호출용) ----------
@@ -3323,18 +3372,7 @@ async function refreshAllRankings(){
   const keywords=storeKeywords[curStoreId]||[];
   if(keywords.length===0)return;
 
-  const btn=document.getElementById('refreshBtn');
-  btn.disabled=true;btn.textContent='조회 중... (0/'+keywords.length+')';
-
-  try{
-    for(let i=0;i<keywords.length;i++){
-      btn.textContent=`조회 중... (${i+1}/${keywords.length})`;
-      await checkKeywordRank(curStoreId,keywords[i]);
-      await new Promise(r=>setTimeout(r,300));
-    }
-  }catch(e){alert('조회 오류: '+e.message);}
-
-  btn.disabled=false;btn.textContent='전체 조회';
+  keywords.forEach(kw=>btEnqueueCheck(curStoreId,kw));   // 전부 순차 큐로(버튼 상태는 큐가 관리)
 }
 
 // ---------- 초기화 ----------

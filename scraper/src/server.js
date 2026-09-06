@@ -59,6 +59,7 @@ app.get('/scrape', async (req, res) => {
 });
 
 // 매장 블로그 순위 딜스캔(최대 300위) + 매칭 조기종료. 매칭은 여기(NCP)에서 수행.
+let blogRankQueue = Promise.resolve(); // /blog-rank 전용 직렬화 체인(동시 딥스캔 금지)
 app.get('/blog-rank', async (req, res) => {
   const keyword = (req.query.keyword || '').toString().trim();
   const placeId = (req.query.placeId || '').toString().trim();
@@ -73,7 +74,12 @@ app.get('/blog-rank', async (req, res) => {
 
   const t0 = Date.now();
   try {
-    const r = await scrapeBlogRank(keyword, { placeId, storeName, maxRank: count });
+    // 직렬화 뮤텍스: 블로그 딥스캔도 동시 요청 시 경합→전체 타임아웃 연쇄(키워드 연속등록 사건과 동일 패턴) 차단
+    const job = () => scrapeBlogRank(keyword, { placeId, storeName, maxRank: count });
+    const p = blogRankQueue.then(job, job);
+    blogRankQueue = p.then(() => {}, () => {});
+    const r = await p;
+    console.log(`[blog-rank] "${keyword}" → ${r && r.matches ? r.matches.length + '건 매칭' : '결과없음'} (${Date.now() - t0}ms, 대기포함)`);
     res.json({ ...r, method: 'playwright', elapsedMs: Date.now() - t0, scrapedAt: new Date().toISOString() });
   } catch (e) {
     console.error('[blog-rank error]', e);
