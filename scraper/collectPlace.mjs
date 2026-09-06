@@ -46,7 +46,7 @@ async function main() {
   if (fs.existsSync(LOCK)) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
   fs.writeFileSync(LOCK, String(process.pid));
 
-  const summary = { keywords: 0, saved: 0, errors: 0, failed: [] };
+  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [] };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
     // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
@@ -82,8 +82,26 @@ async function main() {
           await sleep(RETRY_DELAY_MS);
           items = await scrapeOnce(keyword);
         }
-        // 자체점검: 결과가 비정상적으로 적으면(네이버가 가끔 축소 결과셋을 주는 변형 응답,
-        // "사직역 맛집" 64곳 사건) 1회 재수집해서 더 큰 쪽을 채택. 진짜 소도시 키워드는 재시도해도 같음.
+        // 자체점검①: 0곳은 "정상적 빈 결과"와 "조용한 스크랩 실패"가 섞인다 → 1회 재수집
+        if (items.length === 0) {
+          await sleep(RETRY_DELAY_MS);
+          try { const again = await scrapeOnce(keyword); if (again.length > 0) { log(`  ↻ "${keyword}" 0곳 → 재수집 ${again.length}곳(회복)`); items = again; } } catch { /* 유지 */ }
+        }
+        // 자체점검②: 재시도 후에도 0곳인데 과거에 정상 데이터가 있던 키워드면 의심 → 저장 보류(기존 스냅샷 보존).
+        // 과거에도 늘 0이던 키워드(동래배네스트cc류)만 진짜 0으로 인정하고 기존대로 처리.
+        if (items.length === 0) {
+          const prev = await dbCall('get_place_snapshot', { keyword }).catch(() => null);
+          const prevRows = (prev && prev.result) || [];
+          if (prevRows.length > 0) {
+            summary.zeroHeld++;
+            summary.heldKws.push(keyword);
+            log(`  ⚠ "${keyword}" 0곳 응답(기존 ${prev.checked_date} ${prevRows.length}곳 이력) → 저장 보류·스냅샷 보존`);
+            logFail('place', keyword, `0곳 응답 — 저장 보류(기존 ${prev.checked_date} ${prevRows.length}곳 보존)`);
+            await sleep(KEYWORD_DELAY_MS);
+            continue;
+          }
+        }
+        // 자체점검③: 결과가 비정상적으로 적으면(축소 변형 응답, "사직역 맛집" 64곳 사건) 1회 재수집해서 큰 쪽 채택
         if (items.length > 0 && items.length < 100) {
           await sleep(RETRY_DELAY_MS);
           try {
@@ -108,7 +126,11 @@ async function main() {
       }
       await sleep(KEYWORD_DELAY_MS);
     }
-    log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}`);
+    log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}, 0곳보류 ${summary.zeroHeld}`);
+    if (summary.zeroHeld > 0) {
+      log(`⚠ 0곳 보류(${summary.zeroHeld}): ${summary.heldKws.slice(0, 15).join(', ')}${summary.heldKws.length > 15 ? ' 외 ' + (summary.heldKws.length - 15) + '개' : ''} — 기존 스냅샷 보존됨`);
+      logFail('place', '[요약]', `0곳 보류 ${summary.zeroHeld}건 (date=${today}) — 연속 다발 시 차단 의심`);
+    }
     if (summary.errors > 0) {
       log(`⚠ 실패 키워드(${summary.errors}): ${summary.failed.slice(0, 20).join(', ')}${summary.failed.length > 20 ? ' 외 ' + (summary.failed.length - 20) + '개' : ''}`);
       logFail('place', `[요약]`, `실패 ${summary.errors}/${summary.keywords}건 (date=${today})`);

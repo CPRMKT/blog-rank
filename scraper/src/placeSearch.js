@@ -93,7 +93,9 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(1200);
     }
-    if (!cap) return []; // 캡처 실패 → 빈 결과(호출부는 items:[]로 처리)
+    // 캡처 실패 = 스크랩 실패다. 빈 배열(정상 0곳)로 위장하면 저장 로직이
+    // 기존 스냅샷을 0곳으로 덮어쓴다(9/6 저녁 37건 파괴 사건) → 명시적 에러로 승격.
+    if (!cap) throw new Error('GraphQL 캡처 실패(페이지 미로드·차단 의심)');
     // 진단용: 캡처된 GraphQL 요청 변수(쿼리 해석·좌표 등)를 1회 기록
     if (process.env.PLACE_DEBUG_FILE) {
       try {

@@ -3881,8 +3881,11 @@ async function ptCollectKeyword(kw){
   };
   const once=async()=>{
     let items=await scan();
+    // 0곳 = 조용한 스크랩 실패 가능성 → 저장하지 않고 실패 처리(기존 스냅샷 보존).
+    // 진짜 0곳 키워드는 크론이 이력 대조로 판별해 처리한다(9/6 0곳 파괴 사건 방지).
+    if(items.length===0) throw new Error('0곳 응답 — 저장 보류');
     // 축소 변형 응답(정상인데 결과가 확 적게 오는 경우) 감지: 1회 재수집해 큰 쪽 채택
-    if(items.length>0&&items.length<100){
+    if(items.length<100){
       try{ const again=await scan(); if(again.length>items.length*1.5) items=again; }catch(e){}
     }
     // 실패 시 여기 도달 안 함 → 스캔이 정상 완료된 경우에만 저장(실패를 '-'로 만들지 않음)
