@@ -298,6 +298,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, failures: j.failures || [], lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
     }
 
+    // 키워드별 최근 수집일(빠름) — "한 번도 수집 안 된" 키워드 판별용(재진입 이어하기).
+    // 미노출 키워드도 스냅샷 자체는 있으므로(우리 매장 행만 없음) 이 액션으로 구분한다.
+    if (action === 'get_place_collect_status') {
+      const kws = Array.isArray(data.keywords) ? data.keywords.slice(0, 60) : [];
+      const out = {};
+      await Promise.all(kws.map(async (k) => {
+        try {
+          const r = await supaFetch(`/place_rankings?keyword=eq.${encodeURIComponent(k)}&select=checked_date&order=checked_date.desc&limit=1`);
+          out[k] = Array.isArray(r) && r[0] ? r[0].checked_date : null;
+        } catch { out[k] = null; }
+      }));
+      return res.status(200).json({ ok: true, result: out });
+    }
+
     // 키워드의 가장 최근 수집일 전체 스냅샷(상위 300 목록) — SEO 분석용
     if (action === 'get_place_snapshot') {
       const enc = encodeURIComponent(data.keyword);

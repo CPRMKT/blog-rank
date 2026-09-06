@@ -3781,6 +3781,14 @@ async function ptLoad(){
   await ptEnsureBlogData(ptStoreId);   // 같은 매장 블로그 순위 저장분 로드(옆 패널용)
   ptRenderCards();
   loadPtVolumes(ptKeywords);   // 월검색량 비동기 로드 후 재렌더
+  // 재진입 이어하기: 한 번도 수집된 적 없는 키워드(등록 직후 실패 + 페이지 닫힘)를 자동 재큐.
+  // "미노출"은 스냅샷이 있어 여기 안 걸림 — 매 방문마다 미노출 키워드를 재스캔하지 않는다.
+  if(ptKeywords.length){
+    dbCall('get_place_collect_status',{keywords:ptKeywords}).then(r=>{
+      if(!r||!r.ok||!r.result) return;
+      ptKeywords.filter(k=>!r.result[k]&&!ptCollecting.has(k)).forEach(k=>ptEnqueueCollect(k));
+    }).catch(()=>{});
+  }
 }
 
 // 순위만 가볍게 재조회(키워드/매장정보/월검색량 재조회 생략) — 수집 직후 갱신용
