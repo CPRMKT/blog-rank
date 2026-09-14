@@ -32,6 +32,19 @@ function logFail(script, keyword, reason) {
   try { fs.appendFileSync(FAIL_LOG, `[${ts} KST] ${script} ✗ "${keyword}" ${String(reason).replace(/\n[\s\S]*/, '')}\n`); } catch {}
 }
 
+// DB 저장 재시도(경량): Supabase 게이트웨이 타임아웃 등 꼬리 지연 흡수. 재스캔 없이 저장만 5초·15초 후 재시도.
+async function dbSaveWithRetry(action, data, label) {
+  const delays = [5000, 15000];
+  for (let attempt = 0; ; attempt++) {
+    try { return await dbCall(action, data); }
+    catch (e) {
+      if (attempt >= delays.length) throw e;
+      log(`  ↻ ${label} 저장 실패(${String(e.message).slice(0, 60)}) → ${delays[attempt] / 1000}초 후 저장 재시도(${attempt + 1}/${delays.length})`);
+      await sleep(delays[attempt]);
+    }
+  }
+}
+
 // Asia/Seoul 기준 오늘 날짜(YYYY-MM-DD) — 서버 TZ 와 무관하게 KST 달력 날짜.
 function kstDate() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
@@ -167,7 +180,7 @@ async function main() {
           await fillRegionVerdicts(store, matches, rcCache);
 
           if (!DRY_RUN) {
-            await dbCall('save_store_ranking', {
+            await dbSaveWithRetry('save_store_ranking', {
               store_id: store.id,
               owner_id: store.owner_id || null,   // 크론: 매장 소유자 지정
               keyword,
@@ -186,7 +199,7 @@ async function main() {
                   verdict: rcCache.get(blogKey(url)) || null, // 판정 못 하면 null(프론트 폴백)
                 };
               }),
-            });
+            }, `"${store.name}/${keyword}"`);
             summary.saved++;
           }
         } catch (e) {

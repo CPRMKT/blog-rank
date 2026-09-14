@@ -34,11 +34,26 @@ async function dbCall(action, data = {}) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET || '' },
     body: JSON.stringify({ action, data }),
+    signal: AbortSignal.timeout(45000), // 저장 호출이 매달려 런 전체를 멈추지 않게
   });
   const t = await resp.text();
   let j; try { j = JSON.parse(t); } catch { j = null; }
   if (!resp.ok) throw new Error(`db ${action} HTTP ${resp.status}: ${t.slice(0, 150)}`);
   return j;
+}
+
+// DB 저장 재시도(경량): Supabase 게이트웨이 타임아웃 등 꼬리 지연을 흡수한다.
+// 스크랩 결과는 메모리에 있으므로 재스캔 없이 저장 호출만 5초·15초 간격으로 다시 시도.
+async function dbSaveWithRetry(action, data, label) {
+  const delays = [5000, 15000];
+  for (let attempt = 0; ; attempt++) {
+    try { return await dbCall(action, data); }
+    catch (e) {
+      if (attempt >= delays.length) throw e;
+      log(`  ↻ ${label} 저장 실패(${String(e.message).slice(0, 60)}) → ${delays[attempt] / 1000}초 후 저장 재시도(${attempt + 1}/${delays.length})`);
+      await sleep(delays[attempt]);
+    }
+  }
 }
 
 async function main() {
@@ -114,7 +129,7 @@ async function main() {
         }
         // 이 키워드를 추적하는 각 계정에 대해 owner별로 저장
         for (const owner_id of owners) {
-          await dbCall('save_place_rankings', { keyword, owner_id, checked_date: today, rows: items });
+          await dbSaveWithRetry('save_place_rankings', { keyword, owner_id, checked_date: today, rows: items }, `"${keyword}"`);
           summary.saved++;
         }
         log(`  • "${keyword}" → ${items.length}곳 × 계정 ${owners.length}개 저장`);
