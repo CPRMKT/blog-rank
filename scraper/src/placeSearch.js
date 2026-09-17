@@ -11,6 +11,8 @@ const MOBILE_UA =
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
+// 페이지(50건) 사이 딜레이. 기본 350ms 유지 — 낮추는 건 부하 테스트로 안전 확인 후에만.
+const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
 
 // 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
 // 업종 vertical 경로로 접근해야 검색 결과가 렌더된다. 기본은 restaurant.
@@ -87,7 +89,10 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   try {
     const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
     await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
-    await page.waitForTimeout(2500);
+    // 고정 2.5초 대기 대신 "캡처가 잡힐 때까지"만 기다린다(상한 2.5초 동일). 실측상 캡처는 보통 0.5~1초에 도착 →
+    // 매 키워드 1.5~2초 절약, 스캔 깊이·차단 위험과 무관. (PLACE_CAP_WAIT_MS로 상한 조정 가능)
+    const capWait = parseInt(process.env.PLACE_CAP_WAIT_MS || '2500', 10);
+    for (let w = 0; w < capWait && !cap; w += 100) await page.waitForTimeout(100);
     // 요청 캡처 보장(안 잡히면 스크롤 몇 번으로 유도)
     for (let i = 0; i < 4 && !cap; i++) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -147,7 +152,7 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       }
       if (j) walk(j, '');
       if (items.length === before) empties++; else empties = 0;
-      await page.waitForTimeout(350); // 차단 방지용 요청 간 딜레이
+      await page.waitForTimeout(PAGE_DELAY_MS); // 차단 방지용 요청 간 딜레이(기본 350ms, PLACE_PAGE_DELAY_MS로 조정)
     }
 
     // 자체점검: 300 요청에 100곳 미만이면 축소 변형 응답 가능성 — 서버 로그에 경고(조용한 누락 방지)
