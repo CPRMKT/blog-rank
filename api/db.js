@@ -162,14 +162,6 @@ export default async function handler(req, res) {
     }
 
     // 매장 순위
-    if (action === 'save_store_ranking') {
-      // matches: 이 키워드에 걸린 우리 매장 블로그 전부 [{rank,url,title}, ...]
-      const payload = { store_id: data.store_id, keyword: data.keyword, checked_date: data.checked_date || new Date().toISOString().slice(0, 10), rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null, matches: Array.isArray(data.matches) ? data.matches : null };
-      if (cronOwner) payload.owner_id = cronOwner; // 크론: 소유자 지정(사용자모드는 default auth.uid())
-      try { await supaFetch(`/store_rankings?store_id=eq.${payload.store_id}&keyword=eq.${encodeURIComponent(payload.keyword)}&checked_date=eq.${payload.checked_date}`, { method: 'DELETE' }); } catch {}
-      const result = await supaFetch('/store_rankings', { method: 'POST', body: JSON.stringify(payload) });
-      return res.status(200).json({ ok: true, result });
-    }
     if (action === 'get_store_rankings') {
       const days = data.days || 31;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
@@ -197,9 +189,10 @@ export default async function handler(req, res) {
     }
 
     // 플레이스 순위 스냅샷 저장(하루치, 키워드별) — 기존 같은 날짜 삭제 후 일괄 삽입
-    // ── 원자적 저장(v2): DB 함수 1회 호출 = 삭제+삽입 단일 트랜잭션(왕복 1회, 삽입 실패 시 삭제도 롤백) ──
-    // sql/2026-09-18_atomic_save.sql 적용 후 사용. 검증 완료되면 기존 액션 내부를 이 경로로 교체.
-    if (action === 'save_place_rankings_v2') {
+    // ── 원자적 저장: DB 함수 1회 호출 = 삭제+삽입 단일 트랜잭션(왕복 1회, 삽입 실패 시 삭제도 롤백) ──
+    // sql/2026-09-18_atomic_save.sql. 2026-09-18 속도·롤백·회귀 검증 후 기존 delete+insert 경로를 이걸로 교체.
+    // (_v2 이름은 호환용 별칭)
+    if (action === 'save_place_rankings' || action === 'save_place_rankings_v2') {
       const checkedDate = data.checked_date || new Date().toISOString().slice(0, 10);
       const rows = (data.rows || []).map((r) => ({
         rank: r.rank,
@@ -216,7 +209,7 @@ export default async function handler(req, res) {
       });
       return res.status(200).json({ ok: true, saved: typeof saved === 'number' ? saved : rows.length, atomic: true });
     }
-    if (action === 'save_store_ranking_v2') {
+    if (action === 'save_store_ranking' || action === 'save_store_ranking_v2') {
       const row = { rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null, matches: Array.isArray(data.matches) ? data.matches : null };
       await supaFetch('/rpc/save_store_ranking_atomic', {
         method: 'POST',
@@ -225,27 +218,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, atomic: true });
     }
 
-    if (action === 'save_place_rankings') {
-      const checkedDate = data.checked_date || new Date().toISOString().slice(0, 10);
-      const rows = (data.rows || []).map((r) => ({
-        keyword: data.keyword,
-        checked_date: checkedDate,
-        rank: r.rank,
-        place_id: String(r.placeId || r.place_id || ''),
-        name: r.name || null,
-        category: r.category || null,
-        visitor_reviews: r.visitorReviews ?? r.visitor_reviews ?? null,
-        blog_reviews: r.blogReviews ?? r.blog_reviews ?? null,
-        saves: r.saves ?? r.save ?? null,
-        ...(cronOwner ? { owner_id: cronOwner } : {}), // 크론: 소유자 지정(사용자모드는 default auth.uid())
-      }));
-      // 크론(service_role)은 owner 범위로 삭제, 사용자모드는 RLS가 자동 범위 제한
-      let delPath = `/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=eq.${checkedDate}`;
-      if (cronOwner) delPath += `&owner_id=eq.${cronOwner}`;
-      try { await supaFetch(delPath, { method: 'DELETE' }); } catch {}
-      if (rows.length) await supaFetch('/place_rankings', { method: 'POST', body: JSON.stringify(rows) });
-      return res.status(200).json({ ok: true, saved: rows.length });
-    }
     // ===== 매장 중심 플레이스 순위 추적 =====
     // 매장별 추적 키워드 목록
     if (action === 'list_store_place_keywords') {
