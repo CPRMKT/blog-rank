@@ -197,6 +197,34 @@ export default async function handler(req, res) {
     }
 
     // 플레이스 순위 스냅샷 저장(하루치, 키워드별) — 기존 같은 날짜 삭제 후 일괄 삽입
+    // ── 원자적 저장(v2): DB 함수 1회 호출 = 삭제+삽입 단일 트랜잭션(왕복 1회, 삽입 실패 시 삭제도 롤백) ──
+    // sql/2026-09-18_atomic_save.sql 적용 후 사용. 검증 완료되면 기존 액션 내부를 이 경로로 교체.
+    if (action === 'save_place_rankings_v2') {
+      const checkedDate = data.checked_date || new Date().toISOString().slice(0, 10);
+      const rows = (data.rows || []).map((r) => ({
+        rank: r.rank,
+        place_id: String(r.placeId || r.place_id || ''),
+        name: r.name || null,
+        category: r.category || null,
+        visitor_reviews: r.visitorReviews ?? r.visitor_reviews ?? null,
+        blog_reviews: r.blogReviews ?? r.blog_reviews ?? null,
+        saves: r.saves ?? r.save ?? null,
+      }));
+      const saved = await supaFetch('/rpc/save_place_rankings_atomic', {
+        method: 'POST',
+        body: JSON.stringify({ p_keyword: data.keyword, p_checked_date: checkedDate, p_owner: cronOwner || null, p_rows: rows }),
+      });
+      return res.status(200).json({ ok: true, saved: typeof saved === 'number' ? saved : rows.length, atomic: true });
+    }
+    if (action === 'save_store_ranking_v2') {
+      const row = { rank: data.rank, matched_blog_url: data.matched_blog_url || null, matched_title: data.matched_title || null, search_volume: data.search_volume || null, matches: Array.isArray(data.matches) ? data.matches : null };
+      await supaFetch('/rpc/save_store_ranking_atomic', {
+        method: 'POST',
+        body: JSON.stringify({ p_store_id: data.store_id, p_keyword: data.keyword, p_checked_date: data.checked_date || new Date().toISOString().slice(0, 10), p_owner: cronOwner || null, p_row: row }),
+      });
+      return res.status(200).json({ ok: true, atomic: true });
+    }
+
     if (action === 'save_place_rankings') {
       const checkedDate = data.checked_date || new Date().toISOString().slice(0, 10);
       const rows = (data.rows || []).map((r) => ({
