@@ -11,7 +11,7 @@ const MOBILE_UA =
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
-// 페이지(50건) 사이 딜레이. 기본 350ms 유지 — 낮추는 건 부하 테스트로 안전 확인 후에만.
+// 페이지(50건) 사이 딜레이. 9/17 A/B(12키워드×2, 실패·축소 0)로 150ms 안전 확인 후 350→150 조정.
 const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
 
 // 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
