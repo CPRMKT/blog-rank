@@ -83,7 +83,7 @@ app.get('/blog-rank', async (req, res) => {
     const p = blogRankQueue.then(job, job);
     blogRankQueue = p.then(() => {}, () => {});
     const r = await p;
-    console.log(`[blog-rank] "${keyword}" → ${r && Array.isArray(r.matches) ? r.matches.length + '건 매칭' : '응답형식이상'} (${Date.now() - t0}ms, 대기포함)`);
+    console.log(`[blog-rank] "${keyword}" → ${r && Array.isArray(r.items) ? r.items.length + '건 매칭' + (r.rank ? '(최고 ' + r.rank + '위)' : '') + ' / ' + r.scanned + '건 스캔' : '응답형식이상'} (${Date.now() - t0}ms, 대기포함)`);
     res.json({ ...r, method: 'playwright', elapsedMs: Date.now() - t0, scrapedAt: new Date().toISOString() });
   } catch (e) {
     console.error('[blog-rank error]', e);
