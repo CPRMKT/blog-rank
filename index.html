@@ -2969,7 +2969,7 @@ function renderRankTable(){
         // 오늘 칸: 조회 중/재시도 대기 상태는 '-'로 위장하지 않고 명시(전포 사건)
         if(i===0&&!kwRanks[d]){
           const key=btKey(curStoreId,kw);
-          if(btChecking.has(key)) return '<td style="text-align:center"><span class="pt-loading">조회 중…</span></td>';
+          if(btChecking.has(key)) return '<td style="text-align:center"><span class="pt-loading">'+btProgressLabel(key)+'</span></td>';
           if(btFailedKw.has(key)) return '<td style="text-align:center"><span class="pt-retrywait" title="조회 실패 — 자동 재시도 예정">재시도 대기</span></td>';
         }
         // 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영(플레이스 탭과 동일 규칙)
@@ -3240,6 +3240,15 @@ async function getCachedOrFreshBlogPosts(store){
 // ── 블로그 순위 즉시조회 순차 큐(플레이스 탭과 동일 원리: 동시 발사 금지) ──
 // 연속 등록 시 딥스캔이 병렬로 몰리면 전부 타임아웃 → 저장 0 → '-' 위장 (전포 사건)
 const btQueue=[]; let btQBusy=false, btQCurrent=null;
+let btAvgMs=0; // 최근 키워드당 소요(EMA) — 대기 예상시간(초기값 25초)
+function btProgressLabel(key){
+  if(key===btQCurrent) return '조회 중…';
+  const i=btQueue.findIndex(q=>q.key===key);
+  if(i<0) return '조회 중…';
+  const est=(i+2)*(btAvgMs||25000);
+  const t=est<60000?Math.round(est/1000)+'초':'약 '+Math.max(1,Math.round(est/60000))+'분';
+  return `대기 ${i+1}번째 · ${t}`;
+}
 const btChecking=new Set();   // storeId|kw — 조회 대기/진행 중(오늘 칸 "조회 중…")
 const btFailedKw=new Set();   // storeId|kw — 최종 실패(오늘 칸 "재시도 대기", '-' 아님)
 const btRetryCnt={};
@@ -3257,8 +3266,10 @@ async function btPumpQueue(){
   while(btQueue.length){
     const {key,sid,kw}=btQueue.shift(); btQCurrent=key;
     if(btn&&btn.style.display!=='none'){ btn.disabled=true; btn.textContent=`조회 중 (남은 ${btQueue.length+1})`; }
-    let ok=false;
+    if(curStoreId===sid) renderRankTable();   // 현재 항목 "조회 중…", 나머지 대기 순번 갱신
+    let ok=false; const t0=Date.now();
     try{ ok=await checkKeywordRank(sid,kw); }catch(e){ console.warn('btPump',kw,e.message); }
+    btAvgMs=btAvgMs?Math.round(btAvgMs*0.7+(Date.now()-t0)*0.3):(Date.now()-t0);
     btChecking.delete(key); btQCurrent=null;
     if(ok){ delete btRetryCnt[key]; btFailedKw.delete(key); }
     else{
@@ -3915,6 +3926,16 @@ async function ptCollectKeyword(kw){
 
 // ── 순차 수집 큐: 등록/새로고침/지금수집 전부 이 큐를 통해 한 번에 하나씩 처리 ──
 let ptQCurrent=null; // 지금 처리 중인 key(중복 큐잉 방지)
+let ptAvgMs=0;       // 최근 키워드당 소요(EMA) — 대기 예상시간 계산용(초기값 20초)
+// 오늘 칸 진행률 문구: 처리 중이면 "조회 중…", 대기 중이면 "대기 N번째 · 약 X분"(느려도 죽은 게 아님을 체감)
+function ptProgressLabel(key){
+  if(key===ptQCurrent) return '조회 중…';
+  const i=ptQueue.findIndex(q=>q.key===key);
+  if(i<0) return '조회 중…';
+  const est=(i+2)*(ptAvgMs||20000);
+  const t=est<60000?Math.round(est/1000)+'초':'약 '+Math.max(1,Math.round(est/60000))+'분';
+  return `대기 ${i+1}번째 · ${t}`;
+}
 function ptEnqueueCollect(kw,sid){
   sid=(sid!=null)?sid:ptStoreId;
   const key=ptKey(sid,kw);
@@ -3930,7 +3951,10 @@ async function ptPumpQueue(){
     const {key,sid,kw}=ptQueue.shift();
     ptQCurrent=key;
     if(btn){ btn.disabled=true; btn.textContent=`수집 중 (남은 ${ptQueue.length+1})`; }
+    ptRenderCards();   // 현재 항목 "조회 중…", 나머지 대기 순번 갱신
+    const t0=Date.now();
     const ok=await ptCollectKeyword(kw);
+    ptAvgMs=ptAvgMs?Math.round(ptAvgMs*0.7+(Date.now()-t0)*0.3):(Date.now()-t0);
     ptCollecting.delete(key);
     if(ok){ delete ptRetryCnt[key]; ptFailedKw.delete(key); }
     else{
@@ -4047,7 +4071,7 @@ function ptRenderCards(){
       const row=rowMap[d];
       let pre=false;
       let inner;
-      if(ptCollecting.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">조회 중…</span></div>`; }
+      if(ptCollecting.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">${ptProgressLabel(ptKey(ptStoreId,kw))}</span></div>`; }
       else if(ptFailedKw.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
