@@ -2041,7 +2041,7 @@ async function srRun(){
     if(!alive()) return;
     // 키워드별 최신 순위
     const latestByKw={};
-    for(const row of ourHist){ if(!latestByKw[row.keyword]||row.checked_date>latestByKw[row.keyword].checked_date) latestByKw[row.keyword]=row; }
+    for(const row of ourHist){ if(row.rank==null) continue; if(!latestByKw[row.keyword]||row.checked_date>latestByKw[row.keyword].checked_date) latestByKw[row.keyword]=row; }
     // 우리 리뷰 수(가장 최근 이력 행)
     const newest=ourHist.slice().sort((a,b)=>b.checked_date<a.checked_date?-1:1)[0];
     if(newest){ ourVisitor=newest.visitor_reviews; ourBlog=newest.blog_reviews; ourSaves=newest.saves; }
@@ -2153,7 +2153,7 @@ async function srRun(){
         const inc7=inc(latest,d7), inc30=inc(latest,d30);
         let cmp='';
         if(snap){
-          const top10=snap.rows.filter(r=>r.rank<=10&&r.visitor_reviews!=null);
+          const top10=snap.rows.filter(r=>r.rank!=null&&r.rank<=10&&r.visitor_reviews!=null); // null<=10은 true라 명시 제외
           if(top10.length){
             const avg=Math.round(top10.reduce((s,r)=>s+r.visitor_reviews,0)/top10.length);
             const our=ourVisitor==null?0:ourVisitor;
@@ -3568,7 +3568,8 @@ async function prLoadCompare(){
   if(!kw){ empty.style.display=''; table.style.display='none'; empty.textContent='추적 키워드가 없습니다. 실시간 랭킹에서 "추적에 추가"하세요.'; document.getElementById('prDateTabs').innerHTML=''; return; }
   const r=await dbCall('get_place_rankings',{keyword:kw,days:31});
   const rows=r&&r.result?r.result:[];
-  const byDate={}; for(const row of rows){ (byDate[row.checked_date]=byDate[row.checked_date]||[]).push(row); }
+  // rank NULL 행 제외: 표에 "null" 노출 방지, 그날 전부 NULL이면 날짜 자체가 비교 후보에서 빠짐
+  const byDate={}; for(const row of rows){ if(row.rank==null) continue; (byDate[row.checked_date]=byDate[row.checked_date]||[]).push(row); }
   prCmpData={kw,byDate,dates:Object.keys(byDate).sort().reverse()};
   renderPrDateTabs();
   if(prCmpData.dates.length===0){ empty.style.display=''; table.style.display='none'; empty.textContent='아직 수집된 데이터가 없습니다. 내일 새벽 6시 이후 다시 확인하세요.'; return; }
@@ -4061,7 +4062,8 @@ function ptRenderCards(){
   const ptStName=escapeHtml((ptStore()||{}).name||'');
   // keyword -> date -> row
   const map={}; for(const kw of ptKeywords) map[kw]={};
-  for(const r of ptRows){ if(r.keyword in map) map[r.keyword][r.checked_date]=r; }
+  // rank가 NULL인 행(손상 데이터)은 "데이터 없음"으로 취급 — 칸에 "null" 노출·잘못된 ▲▼ 계산 방지
+  for(const r of ptRows){ if(r.keyword in map && r.rank!=null) map[r.keyword][r.checked_date]=r; }
   cards.innerHTML=ptKeywords.map(kw=>{
     const rowMap=map[kw];
     const expanded=!!ptExpanded[kw];
