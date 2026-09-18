@@ -1,0 +1,22 @@
+# NCP 서버 크론탭 (blog-rank)
+
+서버의 `crontab -l` 원본. 변경 시 이 문서도 같이 갱신한다. 변경 전 백업: `/root/crontab.backup.*`
+
+```cron
+# blog-rank 순위 자동 수집 — 매일 06:00 KST
+MAILTO=""
+# 새벽: 블로그 → 끝나는 즉시 플레이스(체인). 두 수집이 같은 브라우저를 동시에 쓰던 겹침 제거(9/18 0곳 10건 사건).
+#   블로그가 실패해도(;) 플레이스는 실행. 블로그가 매달려도 3시간 뒤 강제 종료하고 플레이스로 넘어감.
+#   강제 종료(124)면 남은 락 파일 제거 — 안 치우면 다음 날 블로그 수집이 "이미 실행 중"으로 스스로 종료됨.
+0 6 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/timeout 3h /usr/bin/node collect.mjs >> /var/log/blog-rank-scraper/collect.log 2>&1; [ $? -eq 124 ] && rm -f /tmp/blog-rank-collect.lock; /usr/bin/node collectPlace.mjs >> /var/log/blog-rank-scraper/place-collect.log 2>&1
+# 저녁: 플레이스만(겹칠 상대 없음)
+30 18 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node collectPlace.mjs >> /var/log/blog-rank-scraper/place-collect.log 2>&1
+# 예방적 브라우저 재시작 — 장기 가동 크롬 크래시(8/30 전멸) 재발 방지
+50 5 * * * /usr/bin/pm2 restart blog-rank-scraper >/dev/null 2>&1
+```
+
+## 이력
+- 2026-09-18: 새벽 플레이스 크론을 06:30 고정 → 블로그 종료 직후 체인 실행으로 변경.
+  근거: 블로그 런이 키워드 증가로 06:00~07:35까지 늘어 06:30 플레이스와 겹쳤고,
+  겹친 구간(07:26~07:33)에서 네이버가 빈 목록을 반환해 0곳보류 10건 발생. 블로그 종료 직후 회복.
+- 2026-09-01: 05:50 예방적 pm2 재시작 추가.
