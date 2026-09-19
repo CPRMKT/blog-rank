@@ -11,7 +11,11 @@ const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.ap
 const SCRAPER = 'http://127.0.0.1:8080';
 const SCRAPER_KEY = process.env.SCRAPER_API_KEY;
 const LOCK = '/tmp/blog-rank-place-collect.lock';
-const KEYWORD_DELAY_MS = 4000; // 플레이스 스크래핑은 무겁다(브라우저). 간격 여유.
+// 키워드 사이 대기 11초. 네이버는 키워드당 간격이 ~17초 이하로 30분 넘게 이어지면 빈 목록을 돌려준다
+// (9/13~17 간격 19.5~24.4초 → 0곳보류 0건 / 9/18~19 16~17초 → 10~56건). 9/17까지는 DB 저장이
+// 10초씩 걸려 자연 간격이 됐지만 인덱스 추가로 1초가 되면서 간격이 사라졌다 → 그 몫을 여기서 명시적으로 준다.
+// 목표: 키워드당 ~24초(9/17 검증값). 줄이려면 전체 크론 1회분 규모로 검증할 것.
+const KEYWORD_DELAY_MS = 11000;
 const RETRY_DELAY_MS = 8000;   // 키워드 실패 시 1회 재시도 전 대기
 const FAIL_LOG = '/var/log/blog-rank-scraper/failures.log'; // 실패 전용 로그(스크립트 공통)
 
