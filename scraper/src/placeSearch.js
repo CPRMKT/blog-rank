@@ -11,8 +11,10 @@ const MOBILE_UA =
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
-// 페이지(50건) 사이 딜레이. 9/17 A/B(12키워드×2, 실패·축소 0)로 150ms 안전 확인 후 350→150 조정.
-const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '150', 10);
+// 페이지(50건) 사이 딜레이 350ms. 150ms로 줄였던 9/18~19에 수집 45분차부터 약 35분간 네이버가 빈 목록을
+// 연속 반환(0곳보류 10→55→56건, 이전 5회 연속 0건). 짧은 A/B로는 누적 속도 제한이 재현되지 않으므로
+// 낮추려면 전체 크론 1회분(300여 키워드) 규모로 검증할 것.
+const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
 
 // 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
 // 업종 vertical 경로로 접근해야 검색 결과가 렌더된다. 기본은 restaurant.
@@ -89,10 +91,9 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   try {
     const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
     await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
-    // 고정 2.5초 대기 대신 "캡처가 잡힐 때까지"만 기다린다(상한 2.5초 동일). 실측상 캡처는 보통 0.5~1초에 도착 →
-    // 매 키워드 1.5~2초 절약, 스캔 깊이·차단 위험과 무관. (PLACE_CAP_WAIT_MS로 상한 조정 가능)
-    const capWait = parseInt(process.env.PLACE_CAP_WAIT_MS || '2500', 10);
-    for (let w = 0; w < capWait && !cap; w += 100) await page.waitForTimeout(100);
+    // 고정 2.5초 대기. 이 대기가 키워드 사이 간격 역할도 해서, 캡처 즉시 진행으로 줄이면
+    // 요청 속도가 올라가 네이버 누적 속도 제한에 걸린다(9/18~19 0곳 다발).
+    await page.waitForTimeout(2500);
     // 요청 캡처 보장(안 잡히면 스크롤 몇 번으로 유도)
     for (let i = 0; i < 4 && !cap; i++) {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
