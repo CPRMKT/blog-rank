@@ -318,6 +318,18 @@ export default async function handler(req, res) {
       try { const result = await supaFetch('/blog_predictions', { method: 'POST', body: JSON.stringify(body) }); return res.status(200).json({ ok: true, result }); }
       catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
     }
+    if (action === 'list_pending_predictions') {
+      // 검증일이 지났는데 아직 검증 안 된 예측(주간 검증 배치용)
+      const today = new Date().toISOString().slice(0, 10);
+      try { const rows = await supaFetch(`/blog_predictions?select=id,blog_id,store_id,keyword,probability,target_date&verified_at=is.null&target_date=lte.${today}&limit=500`);
+        return res.status(200).json({ ok: true, result: Array.isArray(rows) ? rows : [] }); }
+      catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true, result: [] }); throw e; }
+    }
+    if (action === 'set_prediction_verified') {
+      try { const r = await supaFetch(`/blog_predictions?id=eq.${parseInt(data.id, 10)}`, { method: 'PATCH', body: JSON.stringify({ verified_rank: data.verified_rank, verified_at: new Date().toISOString() }) });
+        return res.status(200).json({ ok: true, result: r }); }
+      catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
+    }
     if (action === 'get_prediction_accuracy') {
       // 최근 30일 중 검증 완료(verified_rank 채워짐)분으로 적중률 계산
       const since = new Date(Date.now() - 30 * 86400000).toISOString();
