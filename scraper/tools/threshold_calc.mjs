@@ -32,7 +32,8 @@ const toM = (u) => { const k = key(u); return k ? `https://m.blog.naver.com/${k}
 async function collect(urls) {
   const out = [];
   for (const u of urls) {
-    try { const h = await fetch(toM(u), { headers: UA }).then((r) => r.text()); const s = bodyStats(h); if (s && s.charCount > 50) out.push(s); }
+    const url = String(u).startsWith('http') ? toM(u) : `https://m.blog.naver.com/${u}`;   // u는 "blogId/logNo" 키
+    try { const h = await fetch(url, { headers: UA }).then((r) => r.text()); const s = bodyStats(h); if (s && s.charCount > 50) out.push(s); }
     catch { /* 건너뜀 */ }
     await sleep(250);
   }
