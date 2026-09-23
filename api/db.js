@@ -287,6 +287,49 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // ===== 블로그 진단 =====
+    // 블로그 공개정보(RSS+본문 통계) — NCP /blog-profile 프록시. 새 서버리스 함수 없이 db.js 안에서 처리.
+    if (action === 'blog_profile') {
+      const base = process.env.KOREAN_SCRAPER_URL, key = process.env.KOREAN_SCRAPER_KEY;
+      if (!base || !key) return res.status(200).json({ ok: false, error: '스크래퍼 미설정' });
+      const id = encodeURIComponent(String(data.blog_id || '').trim());
+      const bodies = Math.min(15, Math.max(0, parseInt(data.bodies, 10) || 10));
+      const r = await fetch(`${base.replace(/\/$/, '')}/blog-profile?id=${id}&bodies=${bodies}`, { headers: { Authorization: `Bearer ${key}` } });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || j.ok === false) return res.status(200).json({ ok: false, error: (j && j.error) || `스크래퍼 ${r.status}` });
+      return res.status(200).json({ ok: true, ...j });
+    }
+    // 진단/예측 테이블은 나중에 생성될 수 있다 → 없으면 에러 대신 missing_table 플래그로 알린다.
+    const MISSING = (e) => /does not exist|schema cache|relation .* does not exist|Could not find the table/i.test(String(e && e.message));
+    if (action === 'save_blog_diagnosis') {
+      const body = { blog_id: data.blog_id, store_id: data.store_id || null, score: data.score, grade: data.grade || null, breakdown: data.breakdown || null, posts: data.posts || null, flags: data.flags || null };
+      if (cronOwner) body.owner_id = cronOwner;
+      try { const result = await supaFetch('/blog_diagnoses', { method: 'POST', body: JSON.stringify(body) }); return res.status(200).json({ ok: true, result }); }
+      catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
+    }
+    if (action === 'list_blog_diagnoses') {
+      // 백분위 계산용: 블로그별 최신 점수만 필요하므로 최근 500건만
+      try { const result = await supaFetch('/blog_diagnoses?select=blog_id,score,created_at&order=created_at.desc&limit=500'); return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] }); }
+      catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true, result: [] }); throw e; }
+    }
+    if (action === 'save_blog_prediction') {
+      const body = { blog_id: data.blog_id, store_id: data.store_id || null, keyword: data.keyword, probability: data.probability, expected_band: data.expected_band || null, inputs: data.inputs || null, target_date: data.target_date || null };
+      if (cronOwner) body.owner_id = cronOwner;
+      try { const result = await supaFetch('/blog_predictions', { method: 'POST', body: JSON.stringify(body) }); return res.status(200).json({ ok: true, result }); }
+      catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
+    }
+    if (action === 'get_prediction_accuracy') {
+      // 최근 30일 중 검증 완료(verified_rank 채워짐)분으로 적중률 계산
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+      try {
+        const rows = await supaFetch(`/blog_predictions?select=probability,verified_rank,verified_at&verified_at=not.is.null&created_at=gte.${since}&limit=1000`);
+        const list = Array.isArray(rows) ? rows : [];
+        const high = list.filter((r) => Number(r.probability) >= 60);
+        const hit = high.filter((r) => r.verified_rank != null && r.verified_rank > 0 && r.verified_rank <= 7).length;
+        return res.status(200).json({ ok: true, sample: high.length, total: list.length, accuracy: high.length ? Math.round((hit / high.length) * 100) : null });
+      } catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
+    }
+
     // 수집 실패 현황(NCP failures.log 프록시) — 대시보드 배너용. 스크래퍼 키는 서버에만.
     if (action === 'get_collect_failures') {
       const base = process.env.KOREAN_SCRAPER_URL;
