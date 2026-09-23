@@ -2026,16 +2026,21 @@ async function bdLoadAccuracy(){
     el.innerHTML=`최근 30일 예측 적중률 <b>${r.accuracy}%</b> <span style="color:var(--faint)">(60% 이상으로 예측한 ${r.sample}건 중 실제 7위 내 노출 비율)</span>`;
   }catch(e){ el.textContent=''; }
 }
-// 매장 선택 → 그 매장에 연결된 블로그 아이디를 채운다(가장 많이 등장하는 블로그)
+// 매장 선택 → 블로그 아이디 자동 입력.
+// 매장에 연결된 블로그는 리뷰어 여러 명이므로, 실제로 순위에 잡힌 적이 많은 블로그를 우선 고른다.
 async function bdPickStore(){
   const sid=parseInt(document.getElementById('bdStoreSel').value,10);
   if(!sid) return;
-  const r=await dbCall('get_store_blog_posts',{store_id:sid});
-  const posts=(r&&r.posts)||[];
-  const cnt={}; for(const p of posts){ const id=p.blog_id||((p.blog_url||'').match(/blog\.naver\.com\/([^/?#]+)/)||[])[1]; if(id) cnt[id]=(cnt[id]||0)+1; }
+  const cnt={};
+  try{ const rr=await dbCall('get_store_rankings',{store_id:sid,days:14});
+    for(const row of (rr&&rr.result)||[]) for(const m of (row.matches||[])){
+      const id=((m.url||'').match(/blog\.naver\.com\/([^/?#]+)/)||[])[1]; if(id) cnt[id]=(cnt[id]||0)+2; }
+  }catch(e){}
+  try{ const r=await dbCall('get_store_blog_posts',{store_id:sid});
+    for(const p of ((r&&r.posts)||[])){ const id=p.blog_id||((p.blog_url||'').match(/blog\.naver\.com\/([^/?#]+)/)||[])[1]; if(id) cnt[id]=(cnt[id]||0)+1; }
+  }catch(e){}
   const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
   if(best) document.getElementById('bdInput').value=best[0];
-
 }
 function bdBlogId(v){
   const s=String(v||'').trim();
