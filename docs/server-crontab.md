@@ -15,6 +15,15 @@ MAILTO=""
 50 5 * * * /usr/bin/pm2 restart blog-rank-scraper >/dev/null 2>&1
 ```
 
+## 임시: 즉시조회 페이스 검증(2026-09-23~, 데이터 모으면 3줄 삭제)
+```cron
+10 10 * * * ... node tools/burst_test.mjs --delay=0    --n=20 --label=A-wait0-am
+10 15 * * * ... node tools/burst_test.mjs --delay=5000 --n=20 --label=B-wait5-pm
+20 19 * * * ... node tools/burst_test.mjs --delay=0    --n=15 --label=C-wait0-overlap   # 저녁 크론과 겹침
+```
+조회만 하고 저장하지 않으므로 데이터 영향 없음. 결과: `/var/log/blog-rank-scraper/burst-test.log`.
+판단 기준: 여러 날 반복해 0곳 0건이면 해당 페이스 안전.
+
 ## 이력
 - 2026-09-19: 0곳보류 급증의 진짜 원인은 겹침이 아니라 **수집 간격**으로 확정.
   키워드당 19.5~24.4초 간격(9/13~17)이면 0건, 16~17초(9/18~19)면 10~56건.
