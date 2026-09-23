@@ -58,15 +58,17 @@ async function main() {
     let done = 0;
     for (const st of stores) {
       if (done >= 3) break;
-      const blogId = await storeBlogId(st.id); if (!blogId) continue;
       const rr = await db('get_store_rankings', { store_id: st.id, days: 2 });
-      const rows = (rr.result || []).filter((r) => r.rank > 0).sort((a, b) => (a.checked_date < b.checked_date ? 1 : -1)).slice(0, 3);
+      // 저장된 매칭 URL(그 키워드에서 실제로 잡힌 글) 기준으로 비교해야 정확하다.
+      const rows = (rr.result || []).filter((r) => r.rank > 0 && r.rank <= 30 && r.matched_blog_url)
+        .sort((a, b) => (a.checked_date < b.checked_date ? 1 : -1)).slice(0, 3);
       if (!rows.length) continue;
       done++;
-      console.log(`\n[매장] ${st.name} (blog ${blogId})`);
+      console.log(`\n[매장] ${st.name}`);
       for (const row of rows) {
+        const postId = (String(row.matched_blog_url).match(/\/(\d+)/) || [])[1] || '';
         const k = await search(row.keyword, 30);
-        const hit = k ? k.items.find((it) => String(it.link || '').includes(`/${blogId}/`)) : null;
+        const hit = k ? k.items.find((it) => String(it.link || '').includes(postId)) : null;
         const now = hit ? hit.rank : 0;
         const diff = Math.abs(now - row.rank);
         console.log(`  "${row.keyword}" 기존 ${row.rank}위(${row.checked_date.slice(5)}) vs 진단경로 ${now || '미노출'} → ${diff === 0 ? '일치 ✅' : (diff <= 2 ? `±${diff} (시점차) ✅` : `차이 ${diff} ⚠`)}`);
