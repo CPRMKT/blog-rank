@@ -131,6 +131,83 @@ app.get('/place-search', async (req, res) => {
   }
 });
 
+// ── 블로그 진단용 공개정보 수집 (RSS + 글 본문 통계). 검색 경로와 무관한 별도 호스트라
+//    기존 place-search/blog-rank 뮤텍스·페이스에는 영향 없음. 글 본문은 순차로만 가져온다.
+const MOBILE_UA_BLOG = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
+const BLOG_UA = { 'User-Agent': MOBILE_UA_BLOG };
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+const cdata = (s) => String(s || '').replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '').trim();
+const tagOf = (xml, tag) => { const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`)); return m ? cdata(m[1]) : ''; };
+
+// se-main-container(본문 영역)만 div 균형을 맞춰 잘라낸다 → 댓글·추천글 제외
+function extractBody(html) {
+  const key = 'se-main-container';
+  const at = html.indexOf(key);
+  if (at < 0) return null;
+  let i = html.lastIndexOf('<div', at);
+  if (i < 0) i = at;
+  let depth = 0, j = i;
+  const re = /<div\b|<\/div>/gi;
+  re.lastIndex = i;
+  let m;
+  while ((m = re.exec(html))) {
+    depth += m[0] === '</div>' ? -1 : 1;
+    j = re.lastIndex;
+    if (depth === 0) break;
+    if (j - i > 600000) break;
+  }
+  return html.slice(i, j);
+}
+function bodyStats(html) {
+  const seg = extractBody(html);
+  if (!seg) return null;
+  const imgCount = (seg.match(/<img\b[^>]*>/gi) || []).filter((t) => !/se-sticker|emoticon/i.test(t)).length;
+  const text = seg.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#8203;|​/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  // 과최적화 판정용: 2글자 이상 한글 토큰 최다 반복 횟수
+  const freq = {};
+  for (const t of text.match(/[가-힣]{2,}/g) || []) freq[t] = (freq[t] || 0) + 1;
+  let topToken = '', topCount = 0;
+  for (const [t, c] of Object.entries(freq)) if (c > topCount) { topToken = t; topCount = c; }
+  return { charCount: text.length, imgCount, topToken, topCount };
+}
+
+app.get('/blog-profile', async (req, res) => {
+  const blogId = (req.query.id || '').toString().trim().replace(/[^A-Za-z0-9_-]/g, '');
+  const bodies = Math.min(15, Math.max(0, parseInt(req.query.bodies || '10', 10)));
+  if (!blogId) return res.status(400).json({ error: 'id required' });
+  const t0 = Date.now();
+  try {
+    const rr = await fetch(`https://rss.blog.naver.com/${blogId}.xml`, { headers: BLOG_UA });
+    if (!rr.ok) return res.status(502).json({ error: `RSS ${rr.status}`, blogId });
+    const xml = await rr.text();
+    const chunks = xml.split('<item>').slice(1);
+    const items = chunks.map((c) => {
+      const link = tagOf(c, 'link') || tagOf(c, 'guid');
+      const lm = link.match(/blog\.naver\.com\/([^/?#]+)\/(\d+)/);
+      return {
+        title: tagOf(c, 'title'),
+        link: lm ? `https://blog.naver.com/${lm[1]}/${lm[2]}` : link,
+        logNo: lm ? lm[2] : '',
+        pubDate: tagOf(c, 'pubDate'),
+        category: tagOf(c, 'category'),
+      };
+    }).filter((x) => x.logNo);
+    // 최근 글 본문 통계(순차)
+    for (let i = 0; i < Math.min(bodies, items.length); i++) {
+      try {
+        const h = await fetch(`https://m.blog.naver.com/${blogId}/${items[i].logNo}`, { headers: BLOG_UA }).then((r) => r.text());
+        const s = bodyStats(h);
+        if (s) Object.assign(items[i], s);
+      } catch { /* 본문 실패 → 해당 글은 통계 없음("확인 불가") */ }
+      await sleepMs(300);
+    }
+    res.json({ ok: true, blogId, items, rssCount: items.length, elapsedMs: Date.now() - t0 });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'blog-profile failed' });
+  }
+});
+
 // 수집 실패 현황: failures.log 최근분 + 두 배치의 마지막 "완료" 요약 라인.
 // 대시보드 배너용 — 서버에 직접 안 들어가도 실패를 볼 수 있게.
 app.get('/failures', (req, res) => {
