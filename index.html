@@ -512,6 +512,9 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
       <div class="menu-item" id="menu-store" onclick="showPage('store')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 5.2 5h13.6L20 9.5"/><path d="M4.6 9.5a2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0 2.15 2.15 0 0 0 4.3 0"/><path d="M5.5 11v8h13v-8"/><path d="M10 19v-4.5h4V19"/></svg> 매장 블로그 순위
       </div>
+      <div class="menu-item" id="menu-blogdiag" onclick="showPage('blogdiag')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5 6 4-13 2.5 7h6"/></svg> 블로그 진단
+      </div>
     </div>
 
     <div class="menu-group">
@@ -825,6 +828,85 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
         </div>
         <div style="font-size:11px;color:#777;margin-top:10px">※ 월 검색량 = 네이버 검색광고 기준 PC+모바일 월간 검색수. 기본으로 검색량 상위 10개가 선택돼 있습니다.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- 블로그 진단 (CPR 자체지수 + 상위노출 확률)      -->
+  <!-- ============================================= -->
+  <style>
+  /* 리포트 시트: 옅은 회색 바탕 위 흰 시트 1장, 번호 섹션 한 흐름(플레이스 SEO 분석과 동일 규칙) */
+  #page-blogdiag{padding:0}
+  #page-blogdiag .bd-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:860px}
+  #page-blogdiag .bd-top select,#page-blogdiag .bd-top input{height:40px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:0 12px;font-size:13.5px;outline:none}
+  #page-blogdiag .bd-top select{min-width:210px;cursor:pointer}
+  #page-blogdiag .bd-top input{flex:1;min-width:220px}
+  #page-blogdiag .bd-top select:focus,#page-blogdiag .bd-top input:focus{border-color:var(--line-strong)}
+  #page-blogdiag .bd-btn{background:var(--brand);color:#fff;border:none;border-radius:8px;height:40px;padding:0 20px;font-weight:700;cursor:pointer;font-size:13.5px}
+  #page-blogdiag .bd-btn:hover{background:var(--brand-ink)}
+  #page-blogdiag .bd-btn:disabled{opacity:.5;cursor:default}
+  #page-blogdiag .bd-prog{font-size:12.5px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-acc{font-size:12px;color:var(--muted);margin-top:10px;max-width:860px}
+  #page-blogdiag .bd-sheet{display:none;background:var(--surface);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.05);padding:40px;margin-top:20px;max-width:860px}
+  /* 글자 6단계 */
+  #page-blogdiag .bd-eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  #page-blogdiag .bd-h1{font-size:26px;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin-top:8px}
+  #page-blogdiag .bd-desc{font-size:13px;color:var(--muted);line-height:1.65;margin-top:8px}
+  #page-blogdiag .bd-h2{font-size:15px;font-weight:800;color:var(--ink)}
+  #page-blogdiag .bd-label{font-size:12px;font-weight:600;color:var(--muted)}
+  #page-blogdiag .bd-sec{margin-top:40px}
+  #page-blogdiag .bd-sec .bd-desc{margin-top:8px;margin-bottom:20px}
+  #page-blogdiag .bd-wait{font-size:12px;font-weight:600;color:var(--faint);padding:8px 0}
+  /* 수치 표: 라벨 왼쪽, 숫자 오른쪽 끝 */
+  #page-blogdiag table.bd-tbl{width:100%;border-collapse:collapse}
+  #page-blogdiag .bd-tbl th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:6px 0 6px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  #page-blogdiag .bd-tbl th:first-child{text-align:left;padding-left:0}
+  #page-blogdiag .bd-tbl td{font-size:13.5px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;padding:8px 0 8px 12px;border-bottom:1px solid var(--line-2)}
+  #page-blogdiag .bd-tbl td:first-child{text-align:left;padding-left:0;font-weight:600;color:var(--text)}
+  #page-blogdiag .bd-tbl tr:last-child td{border-bottom:none}
+  #page-blogdiag .bd-tbl td small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px}
+  #page-blogdiag .bd-tbl a{color:inherit;text-decoration:none}
+  #page-blogdiag .bd-tbl a:hover{text-decoration:underline}
+  /* 총점 줄 */
+  #page-blogdiag .bd-score{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  #page-blogdiag .bd-score .v{font-size:34px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums}
+  #page-blogdiag .bd-score .g{font-size:15px;font-weight:800;color:var(--ink)}
+  #page-blogdiag .bd-score .n{font-size:12px;color:var(--faint);font-weight:500}
+  /* 판정 색: 블루는 판정 수치에만 */
+  #page-blogdiag .bd-good{color:var(--brand-ink)}
+  #page-blogdiag .bd-badv{color:#c2410c}
+  #page-blogdiag .bd-mutev{color:var(--faint);font-weight:600}
+  #page-blogdiag .bd-row{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:8px 0;border-bottom:1px solid var(--line-2)}
+  #page-blogdiag .bd-row:last-child{border-bottom:none}
+  #page-blogdiag .bd-row .l{font-size:13.5px;font-weight:600;color:var(--text)}
+  #page-blogdiag .bd-row .v{font-size:13.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  /* 액션: 첫 항목에만 세로바 1개(화면 전체에서 유일) */
+  #page-blogdiag .bd-act{padding:8px 0;font-size:13.5px;font-weight:600;color:var(--text);line-height:1.6}
+  #page-blogdiag .bd-act.first{border-left:3px solid var(--ink);padding-left:14px;font-weight:700;color:var(--ink)}
+  #page-blogdiag .bd-foot{margin-top:40px;font-size:12px;color:var(--faint);line-height:1.7}
+  #page-blogdiag .bd-tblwrap{overflow-x:auto}
+  @media(max-width:720px){ #page-blogdiag .bd-sheet{padding:20px} }
+  </style>
+  <div id="page-blogdiag" style="display:none">
+    <div class="bd-top">
+      <select id="bdStoreSel" onchange="bdPickStore()"></select>
+      <input id="bdInput" placeholder="블로그 주소 또는 아이디 (예: blog.naver.com/myblog)">
+      <button class="bd-btn" id="bdRunBtn" onclick="bdRun()">분석</button>
+      <span class="bd-prog" id="bdProg"></span>
+    </div>
+    <div class="bd-acc" id="bdAcc"></div>
+    <div class="bd-sheet" id="bdSheet">
+      <div class="bd-eyebrow">CPR Blog Diagnosis</div>
+      <div class="bd-h1" id="bdTitle"></div>
+      <div class="bd-desc" id="bdMeta"></div>
+
+      <div class="bd-sec"><div class="bd-h2">1. 이렇게 읽었습니다</div><div id="bdS1" class="bd-wait">분석 중…</div></div>
+      <div class="bd-sec"><div class="bd-h2">2. CPR 블로그 지수</div><div id="bdS2" class="bd-wait">분석 중…</div></div>
+      <div class="bd-sec"><div class="bd-h2">3. 글별 노출 진단</div><div id="bdS3" class="bd-wait">분석 중…</div></div>
+      <div class="bd-sec"><div class="bd-h2">4. 키워드별 상위노출 확률</div><div id="bdS4" class="bd-wait">분석 중…</div></div>
+      <div class="bd-sec"><div class="bd-h2">5. 지금 해야 할 일</div><div id="bdS5" class="bd-wait">분석 중…</div></div>
+
+      <div class="bd-foot">노출 진단은 네이버 블로그탭 검색 결과를 그 시점에 직접 조회한 값입니다. 점수는 측정값에 정해진 공식을 적용한 CPR 자체지수이며 네이버가 발표하는 점수가 아닙니다. 검색 결과는 시점·지역·개인화에 따라 달라질 수 있습니다.</div>
     </div>
   </div>
 
@@ -1581,11 +1663,12 @@ async function initAuth(){
 window.addEventListener('DOMContentLoaded',initAuth);
 
 function showPage(page){
-  ['home','post','store','suggest','seoreport','placetrack','placerank','charge','order','admin','kwtool'].forEach(p=>{
+  ['home','post','store','suggest','blogdiag','seoreport','placetrack','placerank','charge','order','admin','kwtool'].forEach(p=>{
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
   if(page==='store') loadStores();
+  if(page==='blogdiag') initBlogDiag();
   if(page==='seoreport') initSeoReport();
   if(page==='placetrack') initPlaceTrack();
   if(page==='placerank') initPlaceRank();
@@ -1913,6 +1996,220 @@ async function adChangeStatus(orderId,status,el){
   } else {
     alert('상태 변경 실패: '+((r&&r.error)||'다시 시도해 주세요.'));
     el.value=prev; // 롤백
+  }
+}
+
+// ============ 블로그 진단 (CPR 자체지수 + 상위노출 확률) ============
+// 원칙: 모든 점수는 측정값에 고정 공식만 적용한다(같은 입력 → 같은 출력). 추정·AI 점수 금지.
+// 네이버 요청은 기존 즉시조회 경로(/api/search → NCP, 순차)만 사용한다.
+const BD_W={expose:50,topic:15,cadence:15,quality:10,overopt:10};   // 가중치(아침 결정 #1)
+const BD_TH={chars:1500,imgs:5,repeat:15,src:'임시'};               // 임계값(근거는 보고서 참조)
+const BD_GRADES=[[90,'최상'],[75,'최적+'],[55,'최적'],[30,'준최적'],[0,'일반']];
+const BD_STOP=new Set(['그리고','하지만','정말','너무','오늘','내돈내산','내돈','리뷰','후기','추천','방문','다녀온','소개','포스팅','블로그','그냥','다시','진짜','완전']);
+let bdBusy=false, bdRows=[], bdLast=null;
+
+async function initBlogDiag(){
+  if(!Array.isArray(stores)||!stores.length){ try{ const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result; }catch(e){} }
+  const sel=document.getElementById('bdStoreSel');
+  if(sel&&!sel.options.length){
+    sel.innerHTML='<option value="">매장 블로그 선택(선택사항)</option>'+stores.filter(s=>s.in_blog!==false).map(s=>`<option value="${s.id}">${escapeHtml(s.name||('매장 '+s.id))}</option>`).join('');
+  }
+  bdLoadAccuracy();
+}
+// 상단 예측 적중률(검증 리포트). 테이블 없으면 안내만.
+async function bdLoadAccuracy(){
+  const el=document.getElementById('bdAcc'); if(!el) return;
+  try{
+    const r=await dbCall('get_prediction_accuracy',{});
+    if(!r||!r.ok){ el.textContent='예측 검증 기능은 저장 테이블 생성(SQL 실행) 후 활성화됩니다.'; return; }
+    if(!r.sample||r.sample<20){ el.textContent=`예측 검증 데이터 축적 중 (검증 완료 ${r.sample||0}건 / 20건 이상부터 적중률 표시)`; return; }
+    el.innerHTML=`최근 30일 예측 적중률 <b>${r.accuracy}%</b> <span style="color:var(--faint)">(60% 이상으로 예측한 ${r.sample}건 중 실제 7위 내 노출 비율)</span>`;
+  }catch(e){ el.textContent=''; }
+}
+// 매장 선택 → 그 매장에 연결된 블로그 아이디를 채운다(가장 많이 등장하는 블로그)
+async function bdPickStore(){
+  const sid=parseInt(document.getElementById('bdStoreSel').value,10);
+  if(!sid) return;
+  const r=await dbCall('get_store_blog_posts',{store_id:sid});
+  const posts=(r&&r.posts)||[];
+  const cnt={}; for(const p of posts){ const id=p.blog_id||((p.blog_url||'').match(/blog\.naver\.com\/([^/?#]+)/)||[])[1]; if(id) cnt[id]=(cnt[id]||0)+1; }
+  const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  if(best) document.getElementById('bdInput').value=best[0];
+
+}
+function bdBlogId(v){
+  const s=String(v||'').trim();
+  const m=s.match(/blog\.naver\.com\/([A-Za-z0-9_-]+)/);
+  return (m?m[1]:s).replace(/[^A-Za-z0-9_-]/g,'');
+}
+// 제목 → 검사할 키워드(결정적): ①추적 키워드가 제목에 있으면 그것 ②없으면 앞쪽 실질 토큰 2개
+function bdExtractKeyword(title,storeKws){
+  const t=String(title||'').replace(/\[[^\]]*\]/g,' ').replace(/[^가-힣A-Za-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const norm=s=>String(s||'').replace(/\s+/g,'');
+  const nt=norm(t);
+  const hit=(storeKws||[]).filter(k=>k&&nt.includes(norm(k))).sort((a,b)=>norm(b).length-norm(a).length)[0];
+  if(hit) return hit;
+  const toks=t.split(' ').filter(w=>w.length>=2&&!BD_STOP.has(w));
+  return toks.length>=2?(toks[0]+' '+toks[1]):(toks[0]||'');
+}
+const bdRankPoint=(r)=>(r&&r>0)?(r<=7?1:(r<=15?0.5:(r<=30?0.25:0))):0;
+// 블로그탭 검색 1회(기존 즉시조회 경로). 실패 시 null.
+async function bdSearch(query,count){
+  try{
+    const d=await fetch(`/api/search?query=${encodeURIComponent(query)}&count=${count||30}`).then(r=>r.json());
+    if(!d||d.error) return null;
+    return {items:d.items||[],total:d.total||0};
+  }catch(e){ return null; }
+}
+function bdProg(txt){ const el=document.getElementById('bdProg'); if(el) el.textContent=txt||''; }
+
+// ── 지수 계산(순수 함수: 같은 입력 → 같은 출력) ──
+function bdScore(posts,recent,flags){
+  const parts=[]; const push=(key,label,weight,ratio,detail)=>parts.push({key,label,weight,ratio,detail,earned:+(weight*ratio).toFixed(1)});
+  // 1) 노출률: 키워드 순위가 있는 글만 대상
+  const scored=posts.filter(p=>p.kwRank!==undefined&&p.keyword);
+  if(scored.length) push('expose','노출률',BD_W.expose,scored.reduce((s,p)=>s+bdRankPoint(p.kwRank),0)/scored.length,`대상 ${scored.length}글 · 7위 내 ${scored.filter(p=>bdRankPoint(p.kwRank)===1).length}글`);
+  // 2) 주제 집중도: 최근 30글 대표 카테고리 비율
+  const cats=recent.map(p=>p.category).filter(Boolean);
+  if(cats.length>=5){ const c={}; for(const x of cats) c[x]=(c[x]||0)+1; const top=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+    push('topic','주제 집중도',BD_W.topic,top[1]/cats.length,`${top[0]} ${top[1]}/${cats.length}글`); }
+  // 3) 발행 규칙성: 최근 8주 주당 발행수 + 공백주 감점
+  const weeks=new Array(8).fill(0); const now=Date.now(); let dated=0;
+  for(const p of recent){ const t=Date.parse(p.pubDate); if(!t) continue; const w=Math.floor((now-t)/(7*86400000)); if(w>=0&&w<8){ weeks[w]++; dated++; } }
+  if(dated>0){ const avg=weeks.reduce((a,b)=>a+b,0)/8; const zero=weeks.filter(x=>x===0).length;
+    const base=(avg>=3&&avg<=5)?1:((avg>=2&&avg<7)?0.7:(avg>=1?0.4:0.15));
+    push('cadence','발행 규칙성',BD_W.cadence,Math.max(0,base*(1-zero/8*0.5)),`주당 평균 ${avg.toFixed(1)}회 · 공백 ${zero}주`); }
+  // 4) 글 품질: 평균 글자수·이미지수 (임계값 대비)
+  const withBody=posts.filter(p=>p.charCount!=null);
+  if(withBody.length){ const ac=withBody.reduce((s,p)=>s+p.charCount,0)/withBody.length, ai=withBody.reduce((s,p)=>s+(p.imgCount||0),0)/withBody.length;
+    push('quality','글 품질',BD_W.quality,Math.min(1,ac/BD_TH.chars)*0.6+Math.min(1,ai/BD_TH.imgs)*0.4,`평균 ${Math.round(ac)}자 · 이미지 ${ai.toFixed(1)}개 (기준 ${BD_TH.chars}자·${BD_TH.imgs}개, ${BD_TH.src})`); }
+  // 5) 과최적화 감점: 같은 단어 과다 반복 글 비율만큼 감점
+  const withTok=posts.filter(p=>p.topCount!=null);
+  if(withTok.length){ const bad=withTok.filter(p=>p.topCount>=BD_TH.repeat).length;
+    push('overopt','과최적화 감점',BD_W.overopt,1-bad/withTok.length,`${BD_TH.repeat}회 이상 반복 ${bad}/${withTok.length}글 (${BD_TH.src})`); }
+  const wSum=parts.reduce((s,p)=>s+p.weight,0), eSum=parts.reduce((s,p)=>s+p.earned,0);
+  const score=wSum?Math.round(eSum/wSum*100):0;
+  const grade=(BD_GRADES.find(g=>score>=g[0])||['','일반'])[1];
+  return {score,grade,parts,wSum:+wSum.toFixed(1),flags};
+}
+// ── 상위노출 확률(규칙 기반, 근거를 inputs에 저장) ──
+// p = 100 × (0.55×지수 + 0.25×현재순위점수 + 0.20×경쟁여유도)
+//   경쟁여유도: 블로그탭 총 문서수가 많을수록 낮아짐(log10 기준). 문서수를 못 구하면 검색량으로 대체, 둘 다 없으면 0.5.
+function bdProbability(score,curRank,docs,vol){
+  const s=score/100, r=bdRankPoint(curRank);
+  let c=0.5, basis='기본값';
+  if(docs>0){ c=Math.max(0,Math.min(1,1-(Math.log10(docs+10)-2)/4)); basis=`문서수 ${docs.toLocaleString()}`; }
+  else if(vol>0){ c=Math.max(0,Math.min(1,1-(Math.log10(vol+10)-1)/4)); basis=`검색량 ${vol.toLocaleString()}`; }
+  const p=Math.round(Math.max(0,Math.min(1,0.55*s+0.25*r+0.20*c))*100);
+  const band=p>=60?'1~7위 가능':(p>=35?'8~15위':'30위 밖');
+  return {p,band,inputs:{score,curRank:curRank||0,docs:docs||0,vol:vol||0,comp:+c.toFixed(3),basis}};
+}
+
+async function bdRun(){
+  if(bdBusy) return;
+  const blogId=bdBlogId(document.getElementById('bdInput').value);
+  if(!blogId){ alert('블로그 주소 또는 아이디를 입력하세요.'); return; }
+  const sid=parseInt(document.getElementById('bdStoreSel').value,10)||null;
+  bdBusy=true; const btn=document.getElementById('bdRunBtn'); btn.disabled=true; btn.textContent='분석 중…';
+  const sheet=document.getElementById('bdSheet'); sheet.style.display='block';
+  document.getElementById('bdTitle').textContent=blogId;
+  document.getElementById('bdMeta').textContent='블로그 공개정보와 블로그탭 검색 결과를 수집하는 중…';
+  ['bdS1','bdS2','bdS3','bdS4','bdS5'].forEach(id=>document.getElementById(id).innerHTML='<div class="bd-wait">분석 중…</div>');
+  const set=(id,html)=>{ const el=document.getElementById(id); if(el) el.innerHTML=html; };
+  try{
+    // 1) 공개정보 수집
+    bdProg('블로그 글 목록 수집 중…');
+    const prof=await dbCall('blog_profile',{blog_id:blogId,bodies:10});
+    if(!prof||!prof.ok){ set('bdS1',`<div class="bd-desc">블로그 정보를 가져오지 못했습니다: ${escapeHtml((prof&&prof.error)||'알 수 없음')}. 아이디가 맞는지, 블로그가 공개인지 확인해 주세요.</div>`); throw new Error('profile');}
+    const all=prof.items||[]; const posts=all.slice(0,10), recent=all.slice(0,30);
+    // 매장 추적 키워드(있으면 키워드 추출·재사용에 씀)
+    let storeKws=[];
+    if(sid){ try{ const kr=await dbCall('list_store_keywords',{store_id:sid}); storeKws=((kr&&kr.result)||[]).map(x=>x.keyword); }catch(e){} }
+    document.getElementById('bdMeta').textContent=`최근 글 ${all.length}개 수집 · 진단 대상 ${posts.length}글`+(sid?` · 매장 추적 키워드 ${storeKws.length}개 활용`:'');
+    // 2) 노출 진단 — 글당 ①제목 그대로 검색(누락 확인) ②키워드 순위
+    const totalSteps=posts.length*2; let step=0;
+    for(const p of posts){
+      step++; bdProg(`노출 진단 ${step}/${totalSteps}`);
+      const t=await bdSearch(`"${p.title}"`,30);
+      p.titleFound=t?t.items.some(it=>String(it.link||'').includes(`/${blogId}/`)||String(it.link||'').includes(`blog.naver.com/${blogId}`)):null;
+      p.keyword=bdExtractKeyword(p.title,storeKws);
+      step++; bdProg(`노출 진단 ${step}/${totalSteps}`);
+      if(p.keyword){
+        const k=await bdSearch(p.keyword,30);
+        if(k){ const hit=k.items.find(it=>String(it.link||'').includes(`/${blogId}/`)&&String(it.link||'').includes(p.logNo)); p.kwRank=hit?hit.rank:0; p.kwDocs=k.total||0; }
+      }
+    }
+    // 3) 지수
+    const missTitle=posts.slice(0,5).filter(p=>p.titleFound===false).length;
+    const flags={lowQualitySuspect:missTitle>=3,missTitle};
+    const res=bdScore(posts,recent,flags); bdLast={blogId,sid,res,posts,recent};
+    // 백분위
+    let pct=null, sample=0;
+    try{ const lr=await dbCall('list_blog_diagnoses',{}); if(lr&&lr.ok){ const latest={}; for(const r of lr.result||[]) if(!latest[r.blog_id]) latest[r.blog_id]=Number(r.score);
+      const arr=Object.values(latest); sample=arr.length; if(sample>=30){ const below=arr.filter(v=>v<res.score).length; pct=Math.max(1,100-Math.round(below/sample*100)); } } }catch(e){}
+    // ── 렌더 ──
+    const fmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+    set('bdS1',`<table class="bd-tbl">
+      <tr><td>블로그</td><td><a href="https://blog.naver.com/${blogId}" target="_blank" rel="noopener">${escapeHtml(blogId)}</a></td></tr>
+      <tr><td>수집한 글</td><td>${all.length}개 중 최근 ${posts.length}글 진단</td></tr>
+      <tr><td>최근 글 발행일</td><td>${escapeHtml((posts[0]&&posts[0].pubDate||'').slice(5,16)||'확인 불가')}</td></tr>
+      <tr><td>평균 글자수</td><td>${posts.some(p=>p.charCount!=null)?fmt(Math.round(posts.filter(p=>p.charCount!=null).reduce((s,p)=>s+p.charCount,0)/posts.filter(p=>p.charCount!=null).length))+'자':'<span class="bd-mutev">확인 불가</span>'}</td></tr>
+      <tr><td>평균 이미지</td><td>${posts.some(p=>p.imgCount!=null)?(posts.filter(p=>p.imgCount!=null).reduce((s,p)=>s+p.imgCount,0)/posts.filter(p=>p.imgCount!=null).length).toFixed(1)+'개':'<span class="bd-mutev">확인 불가</span>'}</td></tr>
+      <tr><td>이웃 수 · 총 방문자</td><td><span class="bd-mutev">확인 불가 (점수 계산에서 제외)</span></td></tr></table>`);
+    set('bdS2',`<div class="bd-score"><span class="v">${res.score}</span><span class="g">${res.grade}</span>
+        <span class="n">CPR 자체지수 · 네이버 공식 점수 아님</span></div>
+      <div class="bd-desc" style="margin-bottom:14px">${pct!=null?`우리 DB 블로그 ${sample}개 중 <b>상위 ${pct}%</b>`:`백분위: 표본 부족 (현재 ${sample}개 / 30개 이상 필요)`}${res.flags.lowQualitySuspect?' · <span class="bd-badv">저품질 의심</span> — 최근 글 제목을 그대로 검색해도 노출되지 않는 글이 '+res.flags.missTitle+'개':''}</div>
+      <table class="bd-tbl"><tr><th>항목</th><th>배점</th><th>획득</th><th>측정값</th></tr>
+      ${res.parts.map(p=>`<tr><td>${p.label}</td><td>${p.weight}</td><td class="${p.earned/p.weight>=0.7?'bd-good':(p.earned/p.weight<0.4?'bd-badv':'')}">${p.earned}</td><td style="font-weight:500;color:var(--muted);font-size:12px">${escapeHtml(p.detail)}</td></tr>`).join('')}
+      <tr><td>합계</td><td>${res.wSum}</td><td>${res.parts.reduce((s,p)=>s+p.earned,0).toFixed(1)}</td><td style="font-weight:500;color:var(--muted);font-size:12px">측정 불가 항목은 배점에서 제외 후 100점 환산</td></tr></table>`);
+    set('bdS3',`<div class="bd-desc">제목 검색은 글 제목을 그대로 검색해 내 글이 나오는지 본 결과입니다(누락·저품질 확인). 키워드 순위는 제목에서 뽑은 키워드로 블로그탭 30위까지 조회한 값입니다.</div>
+      <div class="bd-tblwrap"><table class="bd-tbl"><tr><th style="min-width:220px">글</th><th>키워드</th><th>순위</th><th>제목 검색</th></tr>
+      ${posts.map(p=>`<tr><td><a href="${p.link}" target="_blank" rel="noopener">${escapeHtml(p.title.slice(0,34))}</a><small>${escapeHtml((p.pubDate||'').slice(5,16))}${p.charCount!=null?' · '+fmt(p.charCount)+'자 · 이미지 '+p.imgCount:''}</small></td>
+        <td style="font-weight:500;color:var(--muted);font-size:12px">${escapeHtml(p.keyword||'-')}</td>
+        <td class="${p.kwRank>0&&p.kwRank<=7?'bd-good':(p.kwRank===0?'bd-badv':'')}">${p.kwRank===undefined?'<span class="bd-mutev">-</span>':(p.kwRank>0?p.kwRank+'위':'30위 밖')}</td>
+        <td class="${p.titleFound===false?'bd-badv':''}">${p.titleFound===null?'<span class="bd-mutev">확인 불가</span>':(p.titleFound?'노출':'누락')}</td></tr>`).join('')}</table></div>`);
+    // 4) 확률 — 매장 추적 키워드 우선, 없으면 진단한 키워드 상위 5개
+    bdProg('상위노출 확률 계산 중…');
+    const targets=[...new Set((storeKws.length?storeKws:posts.map(p=>p.keyword)).filter(Boolean))].slice(0,5);
+    let vols={};
+    try{ const vr=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:targets})}).then(r=>r.json()); if(vr&&vr.ok) vols=vr.volumes||{}; }catch(e){}
+    const preds=[];
+    for(const kw of targets){
+      const known=posts.find(p=>p.keyword===kw&&p.kwRank!==undefined);
+      let rank=known?known.kwRank:undefined, docs=known?known.kwDocs:0;
+      if(rank===undefined){ bdProg(`확률 계산: ${kw}`); const k=await bdSearch(kw,30); if(k){ const hit=k.items.find(it=>String(it.link||'').includes(`/${blogId}/`)); rank=hit?hit.rank:0; docs=k.total||0; } }
+      const v=vols[kw]?vols[kw].total:0;
+      const pr=bdProbability(res.score,rank,docs,v);
+      preds.push({keyword:kw,rank:rank||0,docs,vol:v,...pr});
+    }
+    set('bdS4',targets.length?`<div class="bd-desc">지수·현재 순위·경쟁도(블로그탭 문서수 또는 검색량)를 고정 공식에 넣어 계산합니다. 공식: 확률 = 55%×지수 + 25%×현재순위점수 + 20%×경쟁여유도.</div>
+      <div class="bd-tblwrap"><table class="bd-tbl"><tr><th>키워드</th><th>월 검색량</th><th>현재 순위</th><th>확률</th><th>예상 순위대</th></tr>
+      ${preds.map(p=>`<tr><td>${escapeHtml(p.keyword)}</td><td>${p.vol?fmt(p.vol):'<span class="bd-mutev">10 미만</span>'}</td>
+        <td>${p.rank>0?p.rank+'위':'<span class="bd-mutev">30위 밖</span>'}</td>
+        <td class="${p.p>=60?'bd-good':(p.p<35?'bd-badv':'')}">${p.p}%</td><td style="font-weight:500;color:var(--muted);font-size:12px">${p.band}</td></tr>`).join('')}</table></div>`
+      :'<div class="bd-desc">확률을 계산할 키워드를 찾지 못했습니다. 매장을 선택하면 추적 키워드로 계산합니다.</div>');
+    // 5) 액션(룰 기반, 걸린 것만)
+    const acts=[];
+    if(res.flags.lowQualitySuspect) acts.push({p:1,t:`<b>저품질 의심 점검</b> — 최근 글 제목을 그대로 검색해도 ${res.flags.missTitle}개가 안 나옵니다. 새 글 1~2개를 다른 주제·원본 사진으로 올려 노출 회복을 먼저 확인하세요.`});
+    const ex=res.parts.find(p=>p.key==='expose'); if(ex&&ex.earned/ex.weight<0.4) acts.push({p:2,t:`<b>노출률 ${Math.round(ex.earned/ex.weight*100)}%</b> — 경쟁이 약한 키워드(검색량 적고 문서수 적은 조합)로 제목을 다시 잡으세요.`});
+    const cd=res.parts.find(p=>p.key==='cadence'); if(cd&&cd.earned/cd.weight<0.7) acts.push({p:3,t:`<b>발행 규칙성 보강</b> — ${cd.detail}. 주 3~5회로 고정하면 점수와 노출이 함께 올라갑니다.`});
+    const ql=res.parts.find(p=>p.key==='quality'); if(ql&&ql.earned/ql.weight<0.7) acts.push({p:4,t:`<b>글 길이·사진 보강</b> — ${ql.detail}.`});
+    const oo=res.parts.find(p=>p.key==='overopt'); if(oo&&oo.earned/oo.weight<1) acts.push({p:5,t:`<b>같은 단어 반복 줄이기</b> — ${oo.detail}. 같은 표현을 여러 번 쓰는 대신 문장을 바꿔 쓰세요.`});
+    const tp=res.parts.find(p=>p.key==='topic'); if(tp&&tp.earned/tp.weight<0.5) acts.push({p:6,t:`<b>주제 집중</b> — ${tp.detail}. 업종과 무관한 글 비중을 줄이세요.`});
+    set('bdS5',acts.length?acts.sort((a,b)=>a.p-b.p).map((a,i)=>`<div class="bd-act${i===0?' first':''}">${i+1}. ${a.t}</div>`).join(''):'<div class="bd-desc">진단에서 걸린 항목이 없습니다. 현재 발행 패턴을 유지하세요.</div>');
+    // 저장(테이블 있으면) — 예측은 7일 뒤 검증 대상으로 기록
+    const save=await dbCall('save_blog_diagnosis',{blog_id:blogId,store_id:sid,score:res.score,grade:res.grade,
+      breakdown:{parts:res.parts,weights:BD_W,thresholds:BD_TH},posts:posts.map(p=>({title:p.title,link:p.link,pubDate:p.pubDate,keyword:p.keyword,rank:p.kwRank,titleFound:p.titleFound,charCount:p.charCount,imgCount:p.imgCount})),flags:res.flags});
+    if(save&&save.ok){
+      const td=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+      for(const p of preds) await dbCall('save_blog_prediction',{blog_id:blogId,store_id:sid,keyword:p.keyword,probability:p.p,expected_band:p.band,inputs:p.inputs,target_date:td});
+      bdProg('분석 완료 · 저장됨');
+    } else bdProg('분석 완료 (저장 기능은 SQL 실행 후 활성화)');
+    bdLoadAccuracy();
+  }catch(e){
+    if(String(e.message)!=='profile') bdProg('분석 중 오류: '+String(e.message).slice(0,40));
+  }finally{
+    bdBusy=false; const b=document.getElementById('bdRunBtn'); b.disabled=false; b.textContent='분석';
   }
 }
 
