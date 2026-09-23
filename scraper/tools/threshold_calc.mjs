@@ -24,7 +24,10 @@ function bodyStats(html) {
 }
 const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); };
 const pct = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; };
-const toM = (u) => String(u || '').replace('blog.naver.com', 'm.blog.naver.com').split('?')[0];
+// blog / m.blog / PostView 어느 형식이든 m.blog.naver.com/{id}/{logNo} 로 정규화
+const key = (u) => { const s = String(u || ''); const a = s.match(/blog\.naver\.com\/([A-Za-z0-9_-]+)\/(\d+)/); if (a) return `${a[1]}/${a[2]}`;
+  const b = s.match(/blogId=([A-Za-z0-9_-]+)[\s\S]*?logNo=(\d+)/); return b ? `${b[1]}/${b[2]}` : ''; };
+const toM = (u) => { const k = key(u); return k ? `https://m.blog.naver.com/${k}` : ''; };
 
 async function collect(urls) {
   const out = [];
@@ -42,14 +45,14 @@ async function main() {
   for (const st of stores.filter((s) => s.in_blog !== false)) {
     const rr = await db('get_store_rankings', { store_id: st.id, days: 14 });
     for (const row of (rr.result || [])) for (const m of (row.matches || [])) {
-      if (!m || !m.url) continue; exposedAny.add(m.url.split('?')[0]);
-      if (m.rank > 0 && m.rank <= 7) exposedTop.add(m.url.split('?')[0]);
+      const k = key(m && m.url); if (!k) continue; exposedAny.add(k);
+      if (m.rank > 0 && m.rank <= 7) exposedTop.add(k);
     }
   }
   const notExposed = new Set();
   for (const st of stores.filter((s) => s.in_blog !== false)) {
     const pr = await db('get_store_blog_posts', { store_id: st.id });
-    for (const p of (pr.posts || [])) { const u = (p.blog_url || '').split('?')[0]; if (u && !exposedAny.has(u)) notExposed.add(u); }
+    for (const p of (pr.posts || [])) { const k = key(p.blog_url) || (p.blog_id && p.post_id ? `${p.blog_id}/${p.post_id}` : ''); if (k && !exposedAny.has(k)) notExposed.add(k); }
     if (notExposed.size > CAP * 3) break;
   }
   const pick = (set) => [...set].slice(0, CAP);
