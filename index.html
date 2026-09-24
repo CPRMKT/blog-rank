@@ -2218,12 +2218,25 @@ async function bdPickStore(){
 }
 function bdBloggerList(){
   const raw=String((document.getElementById('bdBloggers')||{}).value||'');
-  return [...new Set(raw.split(/[\n,\s]+/).map(x=>bdBlogId(x)).filter(Boolean))].slice(0,50);
+  const seen=new Set(), out=[];
+  for(const tok of raw.split(/[\n,\s]+/).map(x=>x.trim()).filter(Boolean)){
+    const id=bdBlogId(tok);
+    const key=id||('!'+tok);
+    if(seen.has(key)) continue;
+    seen.add(key); out.push({id,raw:tok});
+    if(out.length>=50) break;
+  }
+  return out;
 }
+// 블로그 홈 / 글 URL / m.blog / PostView.naver?blogId= / 아이디만 → 전부 아이디로.
+// 형식이 아니면 null 을 돌려주고 호출부에서 "잘못된 주소"로 표시한다(끝 하이픈·언더스코어는 유지).
 function bdBlogId(v){
   const s=String(v||'').trim();
-  const m=s.match(/blog\.naver\.com\/([A-Za-z0-9_-]+)/);
-  return (m?m[1]:s).replace(/[^A-Za-z0-9_-]/g,'');
+  if(!s) return null;
+  let m=s.match(/[?&]blogId=([A-Za-z0-9_-]+)/i); if(m) return m[1];
+  m=s.match(/blog\.naver\.com\/([A-Za-z0-9_-]+)/i); if(m&&m[1].toLowerCase()!=='postview') return m[1];
+  if(/^[A-Za-z0-9_-]{3,40}$/.test(s)) return s;
+  return null;
 }
 // ── 목표 키워드 해석: 업종 그룹 + 지역 토큰 ──
 const BD_IND={
@@ -2329,12 +2342,20 @@ function bdProbability(score,fit,comp,fallbackExposure){
 // ── 블로그탭 검색 1회(기존 즉시조회 경로, 순차) ──
 async function bdSearch(query,count){
   try{
-    const d=await fetch(`/api/search?query=${encodeURIComponent(query)}&count=${count||30}`).then(r=>r.json());
+    const d=await fetch(`/api/search?query=${encodeURIComponent(query)}&count=${count||30}`,{signal:AbortSignal.timeout(30000)}).then(r=>r.json());
     if(!d||d.error) return null;
     return {items:d.items||[],total:d.total||0};
   }catch(e){ return null; }
 }
 function bdSetProg(t){ const el=document.getElementById('bdProg'); if(el) el.textContent=t||''; }
+// 응답이 오지 않는 요청 때문에 큐가 멈추지 않게: 무엇이든 제한 시간을 넘기면 예외로 만든다.
+function bdTimeout(promise,ms,msg){
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(()=>clearTimeout(timer)),
+    new Promise((_,rej)=>{ timer=setTimeout(()=>rej(new Error(msg||'시간 초과')),ms); })
+  ]);
+}
 // 제목 → 검사 키워드(결정적)
 function bdExtractKeyword(title,hintKws){
   const t=String(title||'').replace(/\[[^\]]*\]/g,' ').replace(/[^가-힣A-Za-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -2347,10 +2368,16 @@ function bdExtractKeyword(title,hintKws){
 }
 // ── 블로거 1명 심사(순차) ──
 async function bdScreenOne(blogId,metas,progBase,progTotal){
-  const prof=await dbCall('blog_profile',{blog_id:blogId,bodies:BD_POSTS});
-  if(!prof||!prof.ok) return {blogId,error:(prof&&prof.error)||'블로그 정보를 가져오지 못했습니다'};
+  bdSetProg(`심사 중 ${progBase}/${progTotal} · ${blogId} 글 목록 확인`);
+  let prof;
+  try{ prof=await bdTimeout(dbCall('blog_profile',{blog_id:blogId,bodies:BD_POSTS}),60000,'시간 초과'); }
+  catch(e){ return {blogId,error:String(e.message||e).slice(0,30)}; }
+  if(!prof||!prof.ok){
+    const msg=String((prof&&prof.error)||'');
+    return {blogId,error:/404|not found/i.test(msg)?'존재하지 않는 블로그':(msg?msg.slice(0,30):'블로그 정보를 가져오지 못했습니다')};
+  }
   const all=prof.items||[], posts=all.slice(0,BD_POSTS), recent=all.slice(0,30);
-  if(!posts.length) return {blogId,error:'공개된 글이 없습니다'};
+  if(!posts.length) return {blogId,error:'공개 글 없음(비공개이거나 RSS 없음)'};
   const hint=metas.map(m=>m.keyword);
   let step=0, fails=0;
   for(const p of posts){
@@ -2391,16 +2418,24 @@ async function bdScreenAll(){
   if(!list.length){ alert('후보 블로거를 한 줄에 하나씩 입력하세요.'); return; }
   bdQueue=list.slice(); bdResults=[]; bdBatch='B'+Date.now(); bdOpen=null;
   document.getElementById('bdSheet').style.display='block';
-  document.getElementById('bdDetailSec').style.display='none';
+  bdShow('List');
   document.getElementById('bdMeta').textContent=`목표 키워드 ${bdTargets.length}개 · 후보 ${list.length}명 · 블로거당 약 ${BD_SEC}초`;
-  await bdLoadRegions();   // 인접 지역 사전(있으면 지역 인식 확장)
-  bdComp={}; bdMetas=bdTargets.map(bdKwMeta);
-  let vols={};
-  try{ const vr=await fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:bdTargets})}).then(r=>r.json()); if(vr&&vr.ok) vols=vr.volumes||{}; }catch(e){}
-  for(const kw of bdTargets){
-    bdSetProg(`목표 키워드 경쟁도 조회: ${kw}`);
-    const k=await bdSearch(kw,30);
-    bdComp[kw]=bdCompetition(k?k.total:0,vols[kw]?vols[kw].total:0);
+  bdSetProg(`심사 준비 중 · 후보 ${list.length}명`);
+  bdRenderList();   // 시작하자마자 대기 목록이 보이게(멈춘 건지 도는 건지 구분)
+  try{
+    await bdLoadRegions();
+    bdComp={}; bdMetas=bdTargets.map(bdKwMeta);
+    let vols={};
+    try{ const vr=await bdTimeout(fetch('/api/search-volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:bdTargets})}).then(r=>r.json()),20000,'검색량 조회 시간 초과'); if(vr&&vr.ok) vols=vr.volumes||{}; }catch(e){}
+    for(const kw of bdTargets){
+      bdSetProg(`목표 키워드 경쟁도 조회: ${kw}`);
+      const k=await bdSearch(kw,30);
+      bdComp[kw]=bdCompetition(k?k.total:0,vols[kw]?vols[kw].total:0);
+    }
+  }catch(e){
+    // 준비 단계에서 실패해도 심사는 진행한다(경쟁도는 기본값)
+    console.warn('[blogdiag] 준비 단계 오류',e);
+    bdMetas=bdTargets.map(bdKwMeta);
   }
   await bdPump();
 }
@@ -2410,11 +2445,23 @@ async function bdPump(){
   document.getElementById('bdResumeBtn').style.display='none';
   const total=bdResults.length+bdQueue.length;
   while(bdQueue.length){
-    const id=bdQueue[0];
+    const item=bdQueue[0];
+    const id=(item&&typeof item==='object')?item.id:item;
+    const raw=(item&&typeof item==='object')?item.raw:item;
     const done=bdResults.length+1;
     const left=Math.max(1,Math.round((bdQueue.length*BD_SEC)/60));
     bdSetProg(`심사 중 ${done}/${total} · 약 ${left}분 남음`);
-    const r=await bdScreenOne(id,bdMetas,done,total);
+    if(!id){   // 블로그 주소로 읽을 수 없는 입력
+      bdQueue.shift(); bdResults.push({blogId:raw,error:'잘못된 주소'}); bdRenderList(); continue;
+    }
+    let r;
+    try{
+      // 워치독: 한 명이 3분을 넘기면 실패 처리하고 다음으로 넘어간다
+      r=await bdTimeout(bdScreenOne(id,bdMetas,done,total),180000,'시간 초과(3분)');
+    }catch(e){
+      console.warn('[blogdiag] 심사 예외',id,e);
+      r={blogId:id,error:String((e&&e.message)||e||'알 수 없는 오류').slice(0,40)};
+    }
     if(r.halt){
       bdPaused=true; bdBusy=false;
       document.getElementById('bdRunBtn').disabled=false;
@@ -2427,9 +2474,11 @@ async function bdPump(){
     if(!r.error) await bdSave(r);
   }
   bdBusy=false;
-  document.getElementById('bdRunBtn').disabled=false;
-  bdSetProg(`심사 완료 ${bdResults.length}명`);
-  await bdFillPercentile();
+  const btnEnd=document.getElementById('bdRunBtn'); if(btnEnd) btnEnd.disabled=false;
+  const okN=bdResults.filter(r=>!r.error).length, failN=bdResults.length-okN;
+  bdSetProg(`심사 완료 ${okN}명${failN?` · 실패 ${failN}명`:''}`);
+  try{ await bdFillPercentile(); }catch(e){}
+  bdRenderList();
   bdLoadAccuracy();
 }
 function bdResume(){ if(!bdBusy&&bdQueue.length) bdPump(); }
@@ -2494,7 +2543,8 @@ function bdRenderList(){
       <td class="bd-hide-m bd-mutev">-</td>${bdTargets.map(()=>'<td class="bd-mutev">-</td>').join('')}
       <td class="bd-hide-m bd-mutev" style="text-align:left">조회 실패</td><td class="bd-mutev">-</td></tr>`).join('')}
     </table></div>`:'<div class="bd-desc">아직 심사한 블로거가 없습니다.</div>')
-    +(bdSaved===false?'<div class="bd-desc" style="margin-top:20px">심사 기록 저장은 SQL 실행 후 활성화됩니다(화면 결과는 정상).</div>':'');
+    +(bdQueue.length?`<div class="bd-desc" style="margin-top:20px">대기 중 ${bdQueue.length}명: ${bdQueue.slice(0,8).map(q=>escapeHtml(String((q&&q.id)||(q&&q.raw)||q))).join(', ')}${bdQueue.length>8?' 외 '+(bdQueue.length-8)+'명':''}</div>`:'')
+    +(bdSaved===false?'<div class="bd-desc" style="margin-top:8px">심사 기록 저장은 SQL 실행 후 활성화됩니다(화면 결과는 정상).</div>':'');
 }
 
 // ── 블로거 리포트(화면 2) ──
