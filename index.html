@@ -2243,6 +2243,9 @@ function bdIndustryOf(kw){
 // 목표 키워드의 지역명을 인접·상위·별칭 지명까지 넓혀 인식한다. 파일이 없으면 기존 방식 그대로 동작.
 const BD_REGION_URL=(typeof location!=='undefined'?'':'https://blog-rank-phi.vercel.app')+'/region-aliases.json';
 let bdRegionDict=null, bdRegionTried=false;
+// 사전 파일이 없을 때 쓰는 최소 광역 지명(사전이 있으면 사전의 broad 목록을 쓴다)
+const BD_BROAD_FALLBACK=['부산','서울','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주'];
+const bdBroadSet=()=>new Set(((bdRegionDict&&bdRegionDict.broad)||BD_BROAD_FALLBACK).map(bdNorm));
 async function bdLoadRegions(){
   if(bdRegionDict||bdRegionTried) return bdRegionDict;
   bdRegionTried=true;
@@ -2275,21 +2278,34 @@ function bdRegionTokens(kw){
   }
   return out;
 }
-function bdKwMeta(kw){ const ind=bdIndustryOf(kw); const base=bdRegionTokens(kw);
+function bdKwMeta(kw){
+  const ind=bdIndustryOf(kw); const base=bdRegionTokens(kw);
   const expanded=bdExpandRegions(base);
-  return {keyword:kw,group:ind.group,terms:ind.terms,regions:expanded,baseRegions:base,expandedBy:expanded.length-base.length}; }
+  // 좁은 지명(동·역·상권명 + 사전 별칭) = 1.0, 광역 지명(시·도)만 = 0.5 로 나눠 채점한다.
+  const broad=bdBroadSet();
+  const narrow=expanded.filter(t=>!broad.has(bdNorm(t)));
+  const wide=expanded.filter(t=>broad.has(bdNorm(t)));
+  return {keyword:kw,group:ind.group,terms:ind.terms,regions:expanded,regionsNarrow:narrow,regionsWide:wide,
+          baseRegions:base,expandedBy:expanded.length-base.length}; }
 // ── 목표 키워드 적합도: 업종 일치 / 지역 일치 / 유사 키워드 실적 / 체험단 비율 ──
 function bdFit(recent,posts,meta){
   const txt=(p)=>String(p.title||'')+' '+String(p.category||'');
   const indHit=meta.terms.length?recent.filter(p=>meta.terms.some(t=>txt(p).includes(t))).length:0;
-  const regHit=meta.regions.length?recent.filter(p=>meta.regions.some(t=>txt(p).includes(t))).length:0;
+  // 지역 일치: 좁은 지명(동·역·상권·사전 별칭)이 있으면 1.0, 광역 지명(시·도)만 있으면 0.5, 없으면 0
+  const narrow=meta.regionsNarrow||meta.regions||[], wide=meta.regionsWide||[];
+  const regScore=(p)=>{ const t=txt(p);
+    if(narrow.some(x=>t.includes(x))) return 1;
+    if(wide.some(x=>t.includes(x))) return 0.5;
+    return 0; };
   const industry=recent.length?indHit/recent.length:0;
-  const region=recent.length?regHit/recent.length:0;
-  const rel=posts.filter(p=>p.kwRank!==undefined&&(meta.terms.some(t=>txt(p).includes(t))||meta.regions.some(t=>txt(p).includes(t))));
+  const region=recent.length?recent.reduce((s,p)=>s+regScore(p),0)/recent.length:0;
+  const regNarrowCount=recent.filter(p=>regScore(p)===1).length, regWideCount=recent.filter(p=>regScore(p)===0.5).length;
+  // 유사 글 실적은 업종이 맞거나 '좁은 지명'이 맞는 글만 인정(광역 지명만으로는 관련 글로 보지 않음)
+  const rel=posts.filter(p=>p.kwRank!==undefined&&(meta.terms.some(t=>txt(p).includes(t))||narrow.some(t=>txt(p).includes(t))));
   const relScore=rel.length?rel.reduce((s,p)=>s+bdRankPoint(p.kwRank),0)/rel.length:null;
   const withBody=posts.filter(p=>p.sponsored!==undefined);
   const sponsored=withBody.length?withBody.filter(p=>p.sponsored).length/withBody.length:null;
-  return {industry,region,relScore,relCount:rel.length,relTop:rel.filter(p=>p.kwRank>0&&p.kwRank<=7).length,sponsored};
+  return {industry,region,regNarrowCount,regWideCount,relScore,relCount:rel.length,relTop:rel.filter(p=>p.kwRank>0&&p.kwRank<=7).length,sponsored};
 }
 // ── 상위노출 확률(고정 공식) ──
 // p = 100 × (0.35×지수 + 0.30×적합도 + 0.20×유사키워드실적 + 0.15×경쟁여유도)
@@ -2521,7 +2537,7 @@ function bdShowReport(blogId){
   document.getElementById('brS4').innerHTML=`<div class="bd-desc" style="margin-bottom:12px">${escapeHtml(f0.keyword)} 기준</div>
     <table class="bd-tbl">
       <tr><td>업종 일치<small>최근 ${r.recentCount}글 중 같은 업종 글 비율</small></td><td>${Math.round(f0.fit.industry*100)}%${bdPctBar(f0.fit.industry)}</td></tr>
-      <tr><td>지역 일치<small>최근 글 제목에 목표 지역·인접 지역이 등장한 비율</small></td><td>${Math.round(f0.fit.region*100)}%${bdPctBar(f0.fit.region)}</td></tr>
+      <tr><td>지역 일치<small>좁은 지명(동·역·상권) 1.0 · 시·도만 0.5로 가중 평균</small></td><td>${Math.round(f0.fit.region*100)}%${bdPctBar(f0.fit.region)}</td></tr>
       <tr><td>유사 글 실적<small>같은 업종·지역 글의 실제 순위</small></td><td>${f0.fit.relCount?`${f0.fit.relCount}글 중 7위 내 ${f0.fit.relTop}`:'<span class="bd-mutev">관련 글 없음</span>'}${f0.fit.relCount?bdPctBar(f0.fit.relTop/f0.fit.relCount):''}</td></tr>
     </table>`;
   // 5. 블로그 현황
