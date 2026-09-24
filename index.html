@@ -838,14 +838,14 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   /* 리포트 시트: 옅은 회색 바탕 위 흰 시트 1장, 번호 섹션 한 흐름(플레이스 SEO 분석과 동일 규칙) */
   #page-blogdiag{padding:0}
   #page-blogdiag .bd-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:860px}
-  #page-blogdiag .bd-top select,#page-blogdiag .bd-top input{height:40px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:0 12px;font-size:13.5px;outline:none}
+  #page-blogdiag .bd-top select,#page-blogdiag .bd-top input{height:40px;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:0 12px;font-size:13px;outline:none}
   #page-blogdiag .bd-top select{min-width:210px;cursor:pointer}
   #page-blogdiag .bd-top input{flex:1;min-width:220px}
   #page-blogdiag .bd-top select:focus,#page-blogdiag .bd-top input:focus{border-color:var(--line-strong)}
-  #page-blogdiag .bd-btn{background:var(--brand);color:#fff;border:none;border-radius:8px;height:40px;padding:0 20px;font-weight:700;cursor:pointer;font-size:13.5px}
+  #page-blogdiag .bd-btn{background:var(--brand);color:#fff;border:none;border-radius:8px;height:40px;padding:0 20px;font-weight:700;cursor:pointer;font-size:13px}
   #page-blogdiag .bd-btn:hover{background:var(--brand-ink)}
   #page-blogdiag .bd-btn:disabled{opacity:.5;cursor:default}
-  #page-blogdiag .bd-prog{font-size:12.5px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-prog{font-size:12px;color:var(--muted);font-weight:600}
   #page-blogdiag .bd-acc{font-size:12px;color:var(--muted);margin-top:10px;max-width:860px}
   #page-blogdiag .bd-sheet{display:none;background:var(--surface);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.05);padding:40px;margin-top:20px;max-width:860px}
   /* 글자 6단계 */
@@ -861,39 +861,29 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   #page-blogdiag table.bd-tbl{width:100%;border-collapse:collapse}
   #page-blogdiag .bd-tbl th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:6px 0 6px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
   #page-blogdiag .bd-tbl th:first-child{text-align:left;padding-left:0}
-  #page-blogdiag .bd-tbl td{font-size:13.5px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;padding:8px 0 8px 12px;border-bottom:1px solid var(--line-2)}
+  #page-blogdiag .bd-tbl td{font-size:13px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;padding:8px 0 8px 12px;border-bottom:1px solid var(--line-2)}
   #page-blogdiag .bd-tbl td:first-child{text-align:left;padding-left:0;font-weight:600;color:var(--text)}
   #page-blogdiag .bd-tbl tr:last-child td{border-bottom:none}
-  #page-blogdiag .bd-tbl td small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px}
+  #page-blogdiag .bd-tbl td small{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-top:2px}
   #page-blogdiag .bd-tbl a{color:inherit;text-decoration:none}
   #page-blogdiag .bd-tbl a:hover{text-decoration:underline}
   /* 총점 줄 */
-  #page-blogdiag .bd-score{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  #page-blogdiag .bd-score .v{font-size:34px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums}
-  #page-blogdiag .bd-score .g{font-size:15px;font-weight:800;color:var(--ink)}
-  #page-blogdiag .bd-score .n{font-size:12px;color:var(--faint);font-weight:500}
   /* 판정 색: 블루는 판정 수치에만 */
   #page-blogdiag .bd-good{color:var(--brand-ink)}
   #page-blogdiag .bd-badv{color:#c2410c}
   #page-blogdiag .bd-mutev{color:var(--faint);font-weight:600}
-  #page-blogdiag .bd-row{display:flex;justify-content:space-between;align-items:baseline;gap:20px;padding:8px 0;border-bottom:1px solid var(--line-2)}
-  #page-blogdiag .bd-row:last-child{border-bottom:none}
-  #page-blogdiag .bd-row .l{font-size:13.5px;font-weight:600;color:var(--text)}
-  #page-blogdiag .bd-row .v{font-size:13.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
   /* 액션: 첫 항목에만 세로바 1개(화면 전체에서 유일) */
-  #page-blogdiag .bd-act{padding:8px 0;font-size:13.5px;font-weight:600;color:var(--text);line-height:1.6}
-  #page-blogdiag .bd-act.first{border-left:3px solid var(--ink);padding-left:14px;font-weight:700;color:var(--ink)}
   #page-blogdiag .bd-foot{margin-top:40px;font-size:12px;color:var(--faint);line-height:1.7}
   #page-blogdiag .bd-tblwrap{overflow-x:auto}
   /* 입력 영역 */
   #page-blogdiag .bd-setup{max-width:860px}
   #page-blogdiag .bd-field{margin-bottom:20px}
-  #page-blogdiag .bd-field .bd-label{margin-bottom:8px;font-size:12.5px;color:var(--ink);font-weight:700}
+  #page-blogdiag .bd-field .bd-label{margin-bottom:8px;font-size:12px;color:var(--ink);font-weight:700}
   #page-blogdiag textarea{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:13px;outline:none;font-family:inherit;resize:vertical;line-height:1.6}
   #page-blogdiag textarea:focus{border-color:var(--line-strong)}
   #page-blogdiag .bd-hint{font-size:12px;color:var(--muted);margin-top:6px}
   #page-blogdiag .bd-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;min-height:26px}
-  #page-blogdiag .bd-tag{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600;color:var(--text)}
+  #page-blogdiag .bd-tag{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--text)}
   #page-blogdiag .bd-tag button{background:none;border:none;color:var(--faint);cursor:pointer;font-size:13px;padding:0;line-height:1}
   #page-blogdiag .bd-btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--line)}
   #page-blogdiag .bd-btn.ghost:hover{background:var(--surface-3)}
@@ -901,30 +891,30 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   #page-blogdiag tr.bd-click{cursor:pointer}
   #page-blogdiag tr.bd-click:hover td{background:var(--surface-3)}
   #page-blogdiag tr.bd-sel td{background:var(--surface-3)}
-  #page-blogdiag .bd-sub{font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px;display:block}
+  #page-blogdiag .bd-sub{font-size:12px;font-weight:500;color:var(--muted);margin-top:2px;display:block}
   /* ── 리포트/상세 공통: 최대 720px 중앙 정렬, 테두리 없이 여백과 얇은 구분선으로만 구분 ── */
   #page-blogdiag .bd-report{max-width:720px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.05);padding:40px}
   #page-blogdiag .bd-rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
   #page-blogdiag .bd-rhead-act{display:flex;gap:16px;padding-top:6px}
-  #page-blogdiag .bd-link{background:none;border:none;padding:0;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+  #page-blogdiag .bd-link{background:none;border:none;padding:0;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
   #page-blogdiag .bd-link:hover{color:var(--ink);text-decoration:underline}
   /* 1. 지수 게이지 — 연회색 트랙 + 검정 단색 호 */
   #page-blogdiag .bd-gauge{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
   #page-blogdiag .bd-gauge svg{flex:none}
-  #page-blogdiag .bd-gauge .gv{font-size:30px;font-weight:800;fill:var(--ink)}
+  #page-blogdiag .bd-gauge .gv{font-size:26px;font-weight:800;fill:var(--ink)}
   #page-blogdiag .bd-gauge .gu{font-size:11px;font-weight:600;fill:var(--faint)}
-  #page-blogdiag .bd-gauge .gg{font-size:17px;font-weight:800;color:var(--ink)}
+  #page-blogdiag .bd-gauge .gg{font-size:15px;font-weight:800;color:var(--ink)}
   #page-blogdiag .bd-gauge .gm{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
   /* 2·3 미니 지표 한 줄 */
   #page-blogdiag .bd-metrics{display:flex;gap:40px;flex-wrap:wrap}
-  #page-blogdiag .bd-metrics .m .l{font-size:11.5px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-metrics .m .l{font-size:12px;color:var(--muted);font-weight:600}
   #page-blogdiag .bd-metrics .m .v{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
   /* 확률 블록 */
   #page-blogdiag .bd-kwblock{padding:20px 0;border-bottom:1px solid var(--line-2)}
   #page-blogdiag .bd-kwblock:last-child{border-bottom:none;padding-bottom:0}
   #page-blogdiag .bd-kwblock:first-child{padding-top:0}
-  #page-blogdiag .bd-kwblock .k{font-size:13.5px;font-weight:700;color:var(--ink)}
-  #page-blogdiag .bd-kwblock .p{font-size:28px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums;margin-top:4px}
+  #page-blogdiag .bd-kwblock .k{font-size:13px;font-weight:700;color:var(--ink)}
+  #page-blogdiag .bd-kwblock .p{font-size:20px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums;margin-top:4px}
   #page-blogdiag .bd-kwblock .meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
   /* 얇은 진행바 — 회색 트랙, 검정 채움 */
   #page-blogdiag .bd-bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:10px}
@@ -932,8 +922,8 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   #page-blogdiag .bd-tbl .bd-bar{margin-top:6px;width:120px;margin-left:auto}
   /* 5. 블로그 현황 3×2 */
   #page-blogdiag .bd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 8px}
-  #page-blogdiag .bd-grid .l{font-size:11.5px;color:var(--muted);font-weight:600}
-  #page-blogdiag .bd-grid .v{font-size:19px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
+  #page-blogdiag .bd-grid .l{font-size:12px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-grid .v{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
   #page-blogdiag .bd-grid .v small{font-size:12px;font-weight:600;color:var(--faint)}
   /* 7. 참고 — 경고가 있을 때만 좌측 바 1개 */
   #page-blogdiag .bd-note{font-size:13px;color:var(--text);line-height:1.7}
@@ -945,16 +935,16 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   /* 화면 3: 글 목록 */
   #page-blogdiag .bd-post{padding:20px 0;border-bottom:1px solid var(--line-2)}
   #page-blogdiag .bd-post:last-child{border-bottom:none}
-  #page-blogdiag .bd-post .d{font-size:11.5px;color:var(--faint);font-weight:600}
-  #page-blogdiag .bd-post .t{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:4px;line-height:1.5}
+  #page-blogdiag .bd-post .d{font-size:12px;color:var(--faint);font-weight:600}
+  #page-blogdiag .bd-post .t{font-size:13px;font-weight:700;color:var(--ink);margin-top:4px;line-height:1.5}
   #page-blogdiag .bd-post .t a{color:inherit;text-decoration:none}
   #page-blogdiag .bd-post .t a:hover{text-decoration:underline}
   #page-blogdiag .bd-post.miss .t{color:var(--muted);font-weight:600}
-  #page-blogdiag .bd-kwrow{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-top:8px;font-size:12.5px}
+  #page-blogdiag .bd-kwrow{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-top:8px;font-size:12px}
   #page-blogdiag .bd-kwrow .kn{color:var(--muted)}
   #page-blogdiag .bd-kwrow .kr{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
   #page-blogdiag .bd-kwrow .kr.none{color:var(--faint);font-weight:600}
-  #page-blogdiag .bd-post .st{font-size:11.5px;color:var(--faint);margin-top:6px}
+  #page-blogdiag .bd-post .st{font-size:12px;color:var(--faint);margin-top:6px}
   @media(max-width:720px){
     #page-blogdiag .bd-report{padding:20px}
     #page-blogdiag .bd-grid{grid-template-columns:repeat(2,1fr)}
@@ -2212,7 +2202,7 @@ function bdAddKw(){
 function bdRemoveKw(i){ bdTargets.splice(i,1); bdRenderKwTags(); }
 function bdRenderKwTags(){
   const el=document.getElementById('bdKwTags'); if(!el) return;
-  el.innerHTML=bdTargets.length?bdTargets.map((k,i)=>`<span class="bd-tag">${escapeHtml(k)}<button onclick="bdRemoveKw(${i})" title="삭제">✕</button></span>`).join('')
+  el.innerHTML=bdTargets.length?bdTargets.map((k,i)=>`<span class="bd-tag">${escapeHtml(k)}<button onclick="bdRemoveKw(${i})" title="삭제" aria-label="삭제">&times;</button></span>`).join('')
     :'<span class="bd-mutev" style="font-size:12.5px">목표 키워드를 추가하세요</span>';
 }
 // 매장 선택 → 그 매장의 추적 키워드를 목표 키워드 후보로 불러온다(보조 수단)
