@@ -2177,13 +2177,15 @@ function bdFit(recent,posts,meta){
 //   유사키워드실적: 같은 업종·지역 글의 실제 순위 점수 평균(관련 글 없으면 전체 노출률로 대체)
 //   경쟁여유도: 블로그탭 총 문서수(없으면 검색량)가 많을수록 낮아짐
 function bdCompetition(docs,vol){
-  if(docs>0) return {c:Math.max(0,Math.min(1,1-(Math.log10(docs+10)-2)/4)),basis:`문서수 ${docs.toLocaleString()}`};
+  // 검색 결과가 30건 남짓이면 그건 "총 문서수"가 아니라 우리가 가져온 개수다 → 신뢰하지 않고 검색량으로 판단
+  if(docs>=100) return {c:Math.max(0,Math.min(1,1-(Math.log10(docs+10)-2)/4)),basis:`문서수 ${docs.toLocaleString()}`};
   if(vol>0) return {c:Math.max(0,Math.min(1,1-(Math.log10(vol+10)-1)/4)),basis:`검색량 ${vol.toLocaleString()}`};
   return {c:0.5,basis:'기본값'};
 }
 function bdProbability(score,fit,comp,fallbackExposure){
   const fitScore=0.5*fit.industry+0.5*fit.region;
-  const rel=(fit.relScore!=null)?fit.relScore:(fallbackExposure||0);
+  // 목표와 무관한 주제에서의 노출 실적은 그대로 인정하지 않는다(적합도만큼만 반영).
+  const rel=(fit.relScore!=null)?fit.relScore:((fallbackExposure||0)*fitScore);
   const p=Math.round(Math.max(0,Math.min(1,BD_PW.score*(score/100)+BD_PW.fit*fitScore+BD_PW.rel*rel+BD_PW.comp*comp.c))*100);
   return {p,band:p>=60?'1~7위 가능':(p>=35?'8~15위':'30위 밖'),
     inputs:{score,industry:+fit.industry.toFixed(2),region:+fit.region.toFixed(2),rel:+rel.toFixed(2),comp:+comp.c.toFixed(2),basis:comp.basis}};
