@@ -2162,11 +2162,13 @@ const bdNorm=(s)=>String(s||'').replace(/\s+/g,'');
 function bdExpandRegions(tokens){
   if(!bdRegionDict) return tokens;
   const out=new Set(tokens.map(bdNorm));
+  const broad=new Set((bdRegionDict.broad||[]).map(bdNorm));
   for(const g of bdRegionDict.groups){
     const names=[g.canon,...(g.aliases||[])].map(bdNorm);
-    // 양방향 포함 인정: '서면속눈썹펌'→'서면', '대전대흥동육'→'대전대흥동' (업종어가 지역명을 깎은 경우)
-    const hit=tokens.some(t=>{ const n=bdNorm(t); if(n.length<2) return false;
-      return names.some(x=>x===n||(x.length>=2&&(x.includes(n)||n.includes(x)))); });
+    // 양방향 포함 인정: '서면속눈썹펌'→'서면', '대전대흥동육'→'대전대흥동' (업종어가 지역명을 깎은 경우).
+    // 단 광역 지명(부산·서울 등)은 그 자체로 확장을 일으키지 않는다.
+    const hit=tokens.some(t=>{ const n=bdNorm(t); if(n.length<2||broad.has(n)) return false;
+      return names.some(x=>x===n||(x.length>=2&&!broad.has(x)&&(x.includes(n)||n.includes(x)))); });
     if(hit) names.forEach(n=>out.add(n));
   }
   return [...out];
