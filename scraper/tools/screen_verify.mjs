@@ -12,7 +12,7 @@ async function engine() {
   const html = await fetch(BASE + '/').then((r) => r.text());
   const a = html.indexOf('const BD_W='), b = html.indexOf('async function bdScreenOne(');
   if (a < 0 || b < 0) throw new Error('엔진 추출 실패');
-  return new Function(html.slice(a, b) + '\nreturn {bdScore,bdFit,bdProbability,bdCompetition,bdKwMeta,bdExtractKeyword,bdRankPoint};')();
+  return new Function(html.slice(a, b) + '\nreturn {bdScore,bdFit,bdProbability,bdCompetition,bdKwMeta,bdExtractKeyword,bdRankPoint,bdLoadRegions,getDict:()=>bdRegionDict};')();
 }
 const search = async (q, n = 30) => {
   try { const d = await fetch(`${BASE}/api/search?query=${encodeURIComponent(q)}&count=${n}`).then((r) => r.json()); return d && !d.error ? { items: d.items || [], total: d.total || 0 } : null; }
@@ -47,7 +47,9 @@ async function main() {
   const E = await engine();
   const kw = arg('kw', '부산 전포 맛집');
   const ids = arg('ids', '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (process.env.BD_NO_REGION !== '1') await E.bdLoadRegions();   // 인접 지역 사전(BD_NO_REGION=1이면 끄고 비교)
   const meta = E.bdKwMeta(kw);
+  console.log(`지역 사전: ${E.getDict() ? E.getDict().groups.length + '개 그룹 적용' : '미적용(기존 방식)'} | 지역 토큰 ${meta.regions.length}개`);
   let vol = 0;
   try { const vr = await fetch(`${BASE}/api/search-volume`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: [kw] }) }).then((r) => r.json()); if (vr && vr.ok && vr.volumes[kw]) vol = vr.volumes[kw].total; } catch {}
   const k = await search(kw, 30);
