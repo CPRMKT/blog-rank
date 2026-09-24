@@ -1,4 +1,5 @@
--- 블로그 진단 탭: 진단 결과 + 상위노출 확률 예측 저장.
+-- 체험단 후보 블로거 심사: 심사 결과 + 목표 키워드별 상위노출 확률 예측 저장.
+-- 블로거 본문은 저장하지 않는다(통계값·순위·점수만).
 -- 기존 테이블·정책은 건드리지 않는다. 계정 격리는 기존과 동일하게 owner_id + RLS.
 
 create table if not exists public.blog_diagnoses (
@@ -8,7 +9,8 @@ create table if not exists public.blog_diagnoses (
   score       numeric,
   grade       text,
   breakdown   jsonb,   -- 항목별 점수/측정값
-  posts       jsonb,   -- 글별 노출 진단 결과
+  posts       jsonb,   -- 글별 노출 진단 결과(제목·순위·통계값만, 본문 저장 안 함)
+  batch_id    text,    -- 한 번의 심사 묶음
   flags       jsonb,   -- 저품질 의심 등
   owner_id    uuid not null default auth.uid(),
   created_at  timestamptz not null default now()
@@ -25,6 +27,8 @@ create table if not exists public.blog_predictions (
   expected_band  text,         -- '1~7위 가능' 등
   inputs         jsonb,        -- 계산에 쓴 값(재현용)
   target_date    date,         -- 검증 예정일(기본 7일 뒤)
+  batch_id       text,         -- 심사 묶음
+  fit            jsonb,        -- 적합도 세부(업종/지역/유사키워드 실적)
   verified_rank  integer,      -- 검증 시 실제 순위(0=미노출)
   verified_at    timestamptz,
   owner_id       uuid not null default auth.uid(),

@@ -318,6 +318,23 @@ export default async function handler(req, res) {
       try { const result = await supaFetch('/blog_predictions', { method: 'POST', body: JSON.stringify(body) }); return res.status(200).json({ ok: true, result }); }
       catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
     }
+    // 심사한 블로거가 실제로 그 키워드로 글을 써서 순위에 잡혔는지 찾는다(예측 검증 자동 연결).
+    // store_rankings.matches 안의 blog URL에서 블로거 아이디를 대조 — 사장님이 따로 입력할 것 없음.
+    if (action === 'find_blog_keyword_rank') {
+      const kw = encodeURIComponent(String(data.keyword || ''));
+      const since = String(data.since || '').slice(0, 10);
+      const rows = await supaFetch(`/store_rankings?keyword=eq.${kw}&checked_date=gte.${since}&select=keyword,checked_date,rank,matched_blog_url,matches&order=checked_date.desc&limit=200`);
+      const id = String(data.blog_id || '').toLowerCase();
+      let best = null;
+      for (const r of (Array.isArray(rows) ? rows : [])) {
+        const list = Array.isArray(r.matches) ? r.matches : (r.matched_blog_url ? [{ rank: r.rank, url: r.matched_blog_url }] : []);
+        for (const m of list) {
+          const bid = ((String(m && m.url || '').match(/blog\.naver\.com\/([A-Za-z0-9_-]+)/) || [])[1] || '').toLowerCase();
+          if (bid && bid === id && m.rank > 0 && (!best || m.rank < best.rank)) best = { rank: m.rank, checked_date: r.checked_date, url: m.url };
+        }
+      }
+      return res.status(200).json({ ok: true, found: !!best, ...(best || {}) });
+    }
     if (action === 'list_pending_predictions') {
       // 검증일이 지났는데 아직 검증 안 된 예측(주간 검증 배치용)
       const today = new Date().toISOString().slice(0, 10);
