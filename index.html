@@ -902,43 +902,145 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
   #page-blogdiag tr.bd-click:hover td{background:var(--surface-3)}
   #page-blogdiag tr.bd-sel td{background:var(--surface-3)}
   #page-blogdiag .bd-sub{font-size:11.5px;font-weight:500;color:var(--muted);margin-top:2px;display:block}
+  /* ── 리포트/상세 공통: 최대 720px 중앙 정렬, 테두리 없이 여백과 얇은 구분선으로만 구분 ── */
+  #page-blogdiag .bd-report{max-width:720px;margin:0 auto;background:var(--surface);border-radius:16px;box-shadow:0 1px 2px rgba(17,20,24,.05);padding:40px}
+  #page-blogdiag .bd-rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+  #page-blogdiag .bd-rhead-act{display:flex;gap:16px;padding-top:6px}
+  #page-blogdiag .bd-link{background:none;border:none;padding:0;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+  #page-blogdiag .bd-link:hover{color:var(--ink);text-decoration:underline}
+  /* 1. 지수 게이지 — 연회색 트랙 + 검정 단색 호 */
+  #page-blogdiag .bd-gauge{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+  #page-blogdiag .bd-gauge svg{flex:none}
+  #page-blogdiag .bd-gauge .gv{font-size:30px;font-weight:800;fill:var(--ink)}
+  #page-blogdiag .bd-gauge .gu{font-size:11px;font-weight:600;fill:var(--faint)}
+  #page-blogdiag .bd-gauge .gg{font-size:17px;font-weight:800;color:var(--ink)}
+  #page-blogdiag .bd-gauge .gm{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+  /* 2·3 미니 지표 한 줄 */
+  #page-blogdiag .bd-metrics{display:flex;gap:40px;flex-wrap:wrap}
+  #page-blogdiag .bd-metrics .m .l{font-size:11.5px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-metrics .m .v{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
+  /* 확률 블록 */
+  #page-blogdiag .bd-kwblock{padding:20px 0;border-bottom:1px solid var(--line-2)}
+  #page-blogdiag .bd-kwblock:last-child{border-bottom:none;padding-bottom:0}
+  #page-blogdiag .bd-kwblock:first-child{padding-top:0}
+  #page-blogdiag .bd-kwblock .k{font-size:13.5px;font-weight:700;color:var(--ink)}
+  #page-blogdiag .bd-kwblock .p{font-size:28px;font-weight:800;color:var(--brand-ink);font-variant-numeric:tabular-nums;margin-top:4px}
+  #page-blogdiag .bd-kwblock .meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+  /* 얇은 진행바 — 회색 트랙, 검정 채움 */
+  #page-blogdiag .bd-bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:10px}
+  #page-blogdiag .bd-bar i{display:block;height:100%;background:var(--ink)}
+  #page-blogdiag .bd-tbl .bd-bar{margin-top:6px;width:120px;margin-left:auto}
+  /* 5. 블로그 현황 3×2 */
+  #page-blogdiag .bd-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px 8px}
+  #page-blogdiag .bd-grid .l{font-size:11.5px;color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-grid .v{font-size:19px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
+  #page-blogdiag .bd-grid .v small{font-size:12px;font-weight:600;color:var(--faint)}
+  /* 7. 참고 — 경고가 있을 때만 좌측 바 1개 */
+  #page-blogdiag .bd-note{font-size:13px;color:var(--text);line-height:1.7}
+  #page-blogdiag .bd-note.warn{border-left:3px solid var(--ink);padding-left:14px;font-weight:600;color:var(--ink)}
+  /* 화면 3: 텍스트 탭(밑줄만) */
+  #page-blogdiag .bd-tabs{display:flex;gap:20px;margin:24px 0 4px;border-bottom:1px solid var(--line)}
+  #page-blogdiag .bd-tabs button{background:none;border:none;padding:0 0 10px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  #page-blogdiag .bd-tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+  /* 화면 3: 글 목록 */
+  #page-blogdiag .bd-post{padding:20px 0;border-bottom:1px solid var(--line-2)}
+  #page-blogdiag .bd-post:last-child{border-bottom:none}
+  #page-blogdiag .bd-post .d{font-size:11.5px;color:var(--faint);font-weight:600}
+  #page-blogdiag .bd-post .t{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:4px;line-height:1.5}
+  #page-blogdiag .bd-post .t a{color:inherit;text-decoration:none}
+  #page-blogdiag .bd-post .t a:hover{text-decoration:underline}
+  #page-blogdiag .bd-post.miss .t{color:var(--muted);font-weight:600}
+  #page-blogdiag .bd-kwrow{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-top:8px;font-size:12.5px}
+  #page-blogdiag .bd-kwrow .kn{color:var(--muted)}
+  #page-blogdiag .bd-kwrow .kr{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  #page-blogdiag .bd-kwrow .kr.none{color:var(--faint);font-weight:600}
+  #page-blogdiag .bd-post .st{font-size:11.5px;color:var(--faint);margin-top:6px}
+  @media(max-width:720px){
+    #page-blogdiag .bd-report{padding:20px}
+    #page-blogdiag .bd-grid{grid-template-columns:repeat(2,1fr)}
+    #page-blogdiag .bd-metrics{gap:20px}
+    /* 목록은 모바일에서 확률 열만 남긴다 */
+    #page-blogdiag table.bd-tbl th.bd-hide-m,#page-blogdiag table.bd-tbl td.bd-hide-m{display:none}
+  }
   @media(max-width:720px){ #page-blogdiag .bd-sheet{padding:20px} }
   </style>
   <div id="page-blogdiag" style="display:none">
-    <div class="bd-setup">
-      <div class="bd-field">
-        <div class="bd-label">1. 목표 키워드 <span style="font-weight:500">— 이 키워드로 상위노출될 후보를 찾습니다 (최대 5개)</span></div>
-        <div class="bd-top">
-          <input id="bdKwInput" placeholder="예: 부산 전포 맛집, 전포동 삼겹살" onkeydown="if(event.key==='Enter')bdAddKw()">
-          <button class="bd-btn ghost" onclick="bdAddKw()">추가</button>
-          <select id="bdStoreSel" onchange="bdPickStore()"></select>
+    <!-- 화면 1: 심사 목록 -->
+    <div id="bdViewList">
+      <div class="bd-setup">
+        <div class="bd-field">
+          <div class="bd-label">1. 목표 키워드 <span style="font-weight:500">— 이 키워드로 상위노출될 후보를 찾습니다 (최대 5개)</span></div>
+          <div class="bd-top">
+            <input id="bdKwInput" placeholder="예: 부산 전포 맛집, 전포동 삼겹살" onkeydown="if(event.key==='Enter')bdAddKw()">
+            <button class="bd-btn ghost" onclick="bdAddKw()">추가</button>
+            <select id="bdStoreSel" onchange="bdPickStore()"></select>
+          </div>
+          <div id="bdKwTags" class="bd-tags"><span class="bd-mutev" style="font-size:12.5px">목표 키워드를 추가하세요</span></div>
         </div>
-        <div id="bdKwTags" class="bd-tags"><span class="bd-mutev" style="font-size:12.5px">목표 키워드를 추가하세요</span></div>
+        <div class="bd-field">
+          <div class="bd-label">2. 후보 블로거 <span style="font-weight:500">— 한 줄에 하나씩, 주소나 아이디 (최대 50명)</span></div>
+          <textarea id="bdBloggers" rows="6" placeholder="blog.naver.com/blogger1&#10;blogger2&#10;https://m.blog.naver.com/blogger3"></textarea>
+          <div class="bd-hint" id="bdCount">0명</div>
+        </div>
+        <div class="bd-top" style="margin-top:4px">
+          <button class="bd-btn" id="bdRunBtn" onclick="bdScreenAll()">심사 시작</button>
+          <button class="bd-btn ghost" id="bdResumeBtn" onclick="bdResume()" style="display:none">이어서 심사</button>
+          <span class="bd-prog" id="bdProg"></span>
+        </div>
+        <div class="bd-acc" id="bdAcc"></div>
       </div>
-      <div class="bd-field">
-        <div class="bd-label">2. 후보 블로거 <span style="font-weight:500">— 한 줄에 하나씩, 주소나 아이디 (최대 50명)</span></div>
-        <textarea id="bdBloggers" rows="6" placeholder="blog.naver.com/blogger1&#10;blogger2&#10;https://m.blog.naver.com/blogger3"></textarea>
-        <div class="bd-hint" id="bdCount">0명</div>
+
+      <div class="bd-sheet" id="bdSheet">
+        <div class="bd-eyebrow">Blogger Screening</div>
+        <div class="bd-h1">심사 결과</div>
+        <div class="bd-desc" id="bdMeta"></div>
+        <div id="bdList" class="bd-wait" style="margin-top:20px">심사 대기 중…</div>
       </div>
-      <div class="bd-top" style="margin-top:4px">
-        <button class="bd-btn" id="bdRunBtn" onclick="bdScreenAll()">심사 시작</button>
-        <button class="bd-btn ghost" id="bdResumeBtn" onclick="bdResume()" style="display:none">이어서 심사</button>
-        <span class="bd-prog" id="bdProg"></span>
-      </div>
-      <div class="bd-acc" id="bdAcc"></div>
     </div>
 
-    <div class="bd-sheet" id="bdSheet">
-      <div class="bd-eyebrow">Blogger Screening</div>
-      <div class="bd-h1">후보 블로거 심사</div>
-      <div class="bd-desc" id="bdMeta"></div>
+    <!-- 화면 2: 블로거 리포트 -->
+    <div id="bdViewReport" style="display:none">
+      <div class="bd-report">
+        <div class="bd-rhead">
+          <div>
+            <div class="bd-eyebrow">Blogger Report</div>
+            <div class="bd-h1" id="brName"></div>
+            <div class="bd-desc" id="brSub"></div>
+          </div>
+          <div class="bd-rhead-act">
+            <button class="bd-link" onclick="bdBackToList()">목록</button>
+            <button class="bd-link" id="brRescan" onclick="bdRescan()">재심사</button>
+          </div>
+        </div>
 
-      <div class="bd-sec"><div class="bd-h2">1. 심사 결과</div>
-        <div class="bd-desc">목표 키워드에서 상위노출될 가능성이 높은 순으로 정렬했습니다. 블로거를 누르면 근거를 볼 수 있습니다.</div>
-        <div id="bdList" class="bd-wait">심사 대기 중…</div></div>
-      <div class="bd-sec" id="bdDetailSec" style="display:none"><div class="bd-h2">2. 상세 근거</div><div id="bdDetail"></div></div>
+        <div class="bd-sec"><div class="bd-h2">1. CPR 블로그 지수</div><div id="brS1"></div></div>
+        <div class="bd-sec"><div class="bd-h2">2. 최근 글 노출·누락</div><div id="brS2"></div></div>
+        <div class="bd-sec"><div class="bd-h2">3. 목표 키워드 상위노출 가능성</div><div id="brS3"></div></div>
+        <div class="bd-sec"><div class="bd-h2">4. 목표 키워드 적합도</div><div id="brS4"></div></div>
+        <div class="bd-sec"><div class="bd-h2">5. 블로그 현황</div><div id="brS5"></div></div>
+        <div class="bd-sec"><div class="bd-h2">6. 항목별 점수</div><div id="brS6"></div></div>
+        <div class="bd-sec"><div class="bd-h2">7. 참고</div><div id="brS7"></div></div>
 
-      <div class="bd-foot">순위는 네이버 블로그탭을 그 시점에 직접 조회한 값입니다. 확률은 측정값에 고정 공식을 적용한 CPR 자체 추정치이며 네이버가 발표하는 값이 아닙니다. 블로거 본문은 저장하지 않고 제목·순위·통계값만 기록합니다.</div>
+        <div class="bd-foot">CPR 블로그 지수는 측정값에 고정 산식을 적용한 자체 지수이며 네이버가 발표하는 점수가 아닙니다. 순위는 조회 시점의 블로그탭 결과이고, 블로거 본문은 저장하지 않습니다.</div>
+      </div>
+    </div>
+
+    <!-- 화면 3: 노출·누락 상세 -->
+    <div id="bdViewDetail" style="display:none">
+      <div class="bd-report">
+        <div class="bd-rhead">
+          <div>
+            <div class="bd-eyebrow">Post Exposure</div>
+            <div class="bd-h1" id="bpName"></div>
+            <div class="bd-desc" id="bpSub"></div>
+          </div>
+          <div class="bd-rhead-act"><button class="bd-link" onclick="bdShowReport(bdOpen)">리포트</button></div>
+        </div>
+        <div id="bpMetrics" style="margin-top:20px"></div>
+        <div class="bd-tabs" id="bpTabs"></div>
+        <div id="bpList"></div>
+        <div class="bd-foot">제목 검색은 글 제목을 그대로 검색해 그 글이 나오는지 본 결과입니다. 키워드 순위는 제목에서 뽑은 키워드로 블로그탭 30위까지 조회한 값입니다.</div>
+      </div>
     </div>
   </div>
 
@@ -2045,7 +2147,7 @@ const BD_PW={score:0.35,fit:0.30,rel:0.20,comp:0.15};  // 확률 가중치(아�
 const BD_POSTS=5;   // 블로거당 검사 글 수(검색 10회 ≈ 35초)
 const BD_SEC=38;    // 블로거당 예상 소요(진행률 표시용)
 let bdBusy=false, bdPaused=false, bdQueue=[], bdResults=[], bdTargets=[], bdMetas=[], bdComp={};
-let bdBatch=null, bdStoreId=null, bdOpen=null, bdSaved=null;
+let bdBatch=null, bdStoreId=null, bdOpen=null, bdSaved=null, bdPostFilter='all';
 const bdRankPoint=(r)=>(r&&r>0)?(r<=7?1:(r<=15?0.5:(r<=30?0.25:0))):0;
 // ── CPR 블로그 지수(순수 함수: 같은 입력 → 같은 출력) ──
 // 측정 불가 항목은 배점에서 제외하고 100점으로 환산한다(없는 값을 0으로 취급하지 않음).
@@ -2263,7 +2365,17 @@ async function bdScreenOne(blogId,metas,progBase,progTotal){
   const fallback=exposure.weight?exposure.earned/exposure.weight:0;
   const preds=metas.map(m=>{ const fit=bdFit(recent,posts,m); const pr=bdProbability(res.score,fit,bdComp[m.keyword]||{c:0.5,basis:'기본값'},fallback);
     return {keyword:m.keyword,fit,...pr}; });
-  return {blogId,score:res.score,grade:res.grade,parts:res.parts,flags:res.flags,posts,recentCount:recent.length,preds};
+  // 리포트 화면용 요약 통계(주 발행·평균 글자수·대표 주제 등)
+  const wb=posts.filter(p=>p.charCount!=null);
+  const weeks=new Array(8).fill(0); const now=Date.now();
+  for(const p of recent){ const t=Date.parse(p.pubDate); if(!t) continue; const w=Math.floor((now-t)/(7*86400000)); if(w>=0&&w<8) weeks[w]++; }
+  const cats={}; for(const p of recent) if(p.category) cats[p.category]=(cats[p.category]||0)+1;
+  const topCat=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
+  const stats={rss:all.length,weekAvg:weeks.reduce((a,b)=>a+b,0)/8,
+    avgChars:wb.length?Math.round(wb.reduce((s,p)=>s+p.charCount,0)/wb.length):null,
+    avgImgs:wb.length?wb.reduce((s,p)=>s+(p.imgCount||0),0)/wb.length:null,
+    topic:topCat?topCat[0]:null, at:new Date().toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})};
+  return {blogId,score:res.score,grade:res.grade,parts:res.parts,wSum:res.wSum,flags:res.flags,posts,recentCount:recent.length,preds,stats};
 }
 // ── 다건 심사 ──
 async function bdScreenAll(){
@@ -2311,9 +2423,19 @@ async function bdPump(){
   bdBusy=false;
   document.getElementById('bdRunBtn').disabled=false;
   bdSetProg(`심사 완료 ${bdResults.length}명`);
+  await bdFillPercentile();
   bdLoadAccuracy();
 }
 function bdResume(){ if(!bdBusy&&bdQueue.length) bdPump(); }
+// 우리 DB에 쌓인 심사 점수와 비교한 백분위(모수 30개 미만이면 표본 부족)
+async function bdFillPercentile(){
+  let arr=[];
+  try{ const lr=await dbCall('list_blog_diagnoses',{});
+    if(lr&&lr.ok){ const latest={}; for(const row of lr.result||[]) if(!latest[row.blog_id]) latest[row.blog_id]=Number(row.score); arr=Object.values(latest); } }catch(e){}
+  for(const r of bdResults){ if(r.error) continue;
+    r.pctText=(arr.length>=30)?`상위 ${Math.max(1,100-Math.round(arr.filter(v=>v<r.score).length/arr.length*100))}% (표본 ${arr.length})`
+      :`백분위 표본 부족 (현재 ${arr.length}개 / 30개 이상 필요)`; }
+}
 // 저장(테이블 있을 때만) — 본문은 저장하지 않는다
 async function bdSave(r){
   const posts=r.posts.map(p=>({title:p.title,link:p.link,pubDate:p.pubDate,keyword:p.keyword,rank:p.kwRank,titleFound:p.titleFound,charCount:p.charCount,imgCount:p.imgCount,sponsored:p.sponsored}));
@@ -2325,56 +2447,150 @@ async function bdSave(r){
   for(const p of r.preds) await dbCall('save_blog_prediction',{blog_id:r.blogId,store_id:bdStoreId,keyword:p.keyword,
     probability:p.p,expected_band:p.band,inputs:p.inputs,fit:p.fit,target_date:td,batch_id:bdBatch});
 }
-// ── 결과 목록(확률 내림차순) ──
+// ── 화면 전환 ──
+function bdShow(view){
+  for(const v of ['List','Report','Detail']) document.getElementById('bdView'+v).style.display=(view===v?'':'none');
+  const c=document.querySelector('.content'); if(c) c.scrollTop=0;
+}
+function bdBackToList(){ bdShow('List'); }
+function bdRescan(){
+  if(!bdOpen||bdBusy) return;
+  const id=bdOpen;
+  bdResults=bdResults.filter(r=>r.blogId!==id);
+  bdQueue.unshift(id); bdShow('List'); bdRenderList(); bdPump();
+}
+const bdFmt=(n)=>Number(n||0).toLocaleString('ko-KR');
+const bdPctBar=(ratio)=>`<div class="bd-bar"><i style="width:${Math.max(0,Math.min(100,Math.round(ratio*100)))}%"></i></div>`;
+
+// ── 결과 목록(화면 1) ──
 function bdRenderList(){
   const el=document.getElementById('bdList'); if(!el) return;
   const ok=bdResults.filter(r=>!r.error);
   const best=(r)=>Math.max.apply(null,r.preds.map(p=>p.p));
   const sorted=ok.slice().sort((a,b)=>best(b)-best(a));
   const fails=bdResults.filter(r=>r.error);
-  el.innerHTML=(sorted.length?`<div class="bd-tblwrap"><table class="bd-tbl"><tr><th style="min-width:150px">블로거</th><th>지수</th>
-      ${bdTargets.map(k=>`<th>${escapeHtml(k.length>9?k.slice(0,9)+'…':k)}</th>`).join('')}<th style="min-width:190px">근거 요약</th></tr>
+  el.innerHTML=(sorted.length?`<div class="bd-tblwrap"><table class="bd-tbl">
+      <tr><th style="min-width:150px">블로거</th><th class="bd-hide-m">지수</th>
+      ${bdTargets.map(k=>`<th>${escapeHtml(k.length>9?k.slice(0,9)+'…':k)}</th>`).join('')}
+      <th class="bd-hide-m" style="min-width:190px">근거 요약</th><th>상세</th></tr>
     ${sorted.map(r=>{
       const ex=r.parts.find(p=>p.key==='expose'); const exTxt=ex?`관련 글 노출 ${Math.round(ex.earned/ex.weight*100)}%`:'노출 측정 불가';
       const f=r.preds[0].fit;
       const sp=f.sponsored!=null?` · 체험단 표기 ${Math.round(f.sponsored*100)}%`:'';
-      return `<tr class="bd-click${bdOpen===r.blogId?' bd-sel':''}" onclick="bdShowDetail('${r.blogId}')">
+      return `<tr class="bd-click" onclick="bdShowReport('${r.blogId}')">
         <td>${escapeHtml(r.blogId)}<span class="bd-sub">${r.flags&&r.flags.lowQualitySuspect?'저품질 의심':'최근 '+r.posts.length+'글 검사'}</span></td>
-        <td>${r.score}<span class="bd-sub">${r.grade}</span></td>
-        ${r.preds.map(p=>`<td class="${p.p>=60?'bd-good':(p.p<35?'bd-badv':'')}">${p.p}%<span class="bd-sub">${p.band}</span></td>`).join('')}
-        <td style="font-weight:500;color:var(--muted);font-size:12px;text-align:left">${exTxt} · 업종 ${Math.round(f.industry*100)}% · 지역 ${Math.round(f.region*100)}%${sp}</td></tr>`;
-    }).join('')}</table></div>`:'<div class="bd-desc">아직 심사한 블로거가 없습니다.</div>')
-    +(fails.length?`<div class="bd-desc" style="margin-top:12px">조회 실패 ${fails.length}명: ${fails.map(f=>escapeHtml(f.blogId)).join(', ')} <span style="color:var(--faint)">(비공개이거나 RSS가 없는 블로그)</span></div>`:'')
-    +(bdSaved===false?'<div class="bd-desc" style="margin-top:8px">심사 기록 저장은 SQL 실행 후 활성화됩니다(화면 결과는 정상).</div>':'');
+        <td class="bd-hide-m">${r.score}<span class="bd-sub">${r.grade}</span></td>
+        ${r.preds.map(p=>`<td class="bd-good">${p.p}%<span class="bd-sub">${p.band}</span></td>`).join('')}
+        <td class="bd-hide-m" style="font-weight:500;color:var(--muted);font-size:12px;text-align:left">${exTxt} · 업종 ${Math.round(f.industry*100)}% · 지역 ${Math.round(f.region*100)}%${sp}</td>
+        <td><span class="bd-link">리포트</span></td></tr>`;
+    }).join('')}
+    ${fails.map(f=>`<tr><td style="color:var(--faint)">${escapeHtml(f.blogId)}<span class="bd-sub">${escapeHtml(String(f.error).slice(0,28))}</span></td>
+      <td class="bd-hide-m bd-mutev">-</td>${bdTargets.map(()=>'<td class="bd-mutev">-</td>').join('')}
+      <td class="bd-hide-m bd-mutev" style="text-align:left">조회 실패</td><td class="bd-mutev">-</td></tr>`).join('')}
+    </table></div>`:'<div class="bd-desc">아직 심사한 블로거가 없습니다.</div>')
+    +(bdSaved===false?'<div class="bd-desc" style="margin-top:20px">심사 기록 저장은 SQL 실행 후 활성화됩니다(화면 결과는 정상).</div>':'');
 }
-// ── 상세 근거 ──
-function bdShowDetail(blogId){
-  const r=bdResults.find(x=>x.blogId===blogId); if(!r||r.error) return;
-  bdOpen=blogId; bdRenderList();
-  document.getElementById('bdDetailSec').style.display='';
-  const fmt=(n)=>Number(n||0).toLocaleString('ko-KR');
-  const withBody=r.posts.filter(p=>p.charCount!=null);
-  const el=document.getElementById('bdDetail');
-  el.innerHTML=`<div class="bd-score"><span class="v">${r.score}</span><span class="g">${r.grade}</span>
-      <span class="n">${escapeHtml(r.blogId)} · CPR 자체지수 · 네이버 공식 점수 아님</span></div>
-    <table class="bd-tbl" style="margin-top:10px"><tr><th>항목</th><th>배점</th><th>획득</th><th>측정값</th></tr>
-      ${r.parts.map(p=>`<tr><td>${p.label}</td><td>${p.weight}</td><td class="${p.earned/p.weight>=0.7?'bd-good':(p.earned/p.weight<0.4?'bd-badv':'')}">${p.earned}</td>
-        <td style="font-weight:500;color:var(--muted);font-size:12px">${escapeHtml(p.detail)}</td></tr>`).join('')}</table>
-    <div class="bd-h2" style="margin-top:24px;font-size:13.5px">목표 키워드 적합도</div>
-    <div class="bd-tblwrap"><table class="bd-tbl" style="margin-top:8px"><tr><th>목표 키워드</th><th>업종 일치</th><th>지역 일치</th><th>유사 글 실적</th><th>경쟁도</th><th>확률</th></tr>
-      ${r.preds.map(p=>`<tr><td>${escapeHtml(p.keyword)}</td><td>${Math.round(p.fit.industry*100)}%</td><td>${Math.round(p.fit.region*100)}%</td>
-        <td>${p.fit.relCount?`${p.fit.relCount}글 중 7위내 ${p.fit.relTop}`:'<span class="bd-mutev">관련 글 없음</span>'}</td>
-        <td style="font-weight:500;color:var(--muted);font-size:12px">${escapeHtml(p.inputs.basis)}</td>
-        <td class="${p.p>=60?'bd-good':(p.p<35?'bd-badv':'')}">${p.p}%</td></tr>`).join('')}</table></div>
-    <div class="bd-h2" style="margin-top:24px;font-size:13.5px">글별 노출 진단</div>
-    <div class="bd-tblwrap"><table class="bd-tbl" style="margin-top:8px"><tr><th style="min-width:210px">글</th><th>키워드</th><th>순위</th><th>제목 검색</th></tr>
-      ${r.posts.map(p=>`<tr><td><a href="${p.link}" target="_blank" rel="noopener">${escapeHtml(String(p.title).slice(0,32))}</a>
-          <span class="bd-sub">${escapeHtml(String(p.pubDate||'').slice(5,16))}${p.charCount!=null?' · '+fmt(p.charCount)+'자 · 이미지 '+p.imgCount:''}${p.sponsored?' · 체험단 표기':''}</span></td>
-        <td style="font-weight:500;color:var(--muted);font-size:12px">${escapeHtml(p.keyword||'-')}</td>
-        <td class="${p.kwRank>0&&p.kwRank<=7?'bd-good':(p.kwRank===0?'bd-badv':'')}">${p.kwRank===undefined?'<span class="bd-mutev">-</span>':(p.kwRank>0?p.kwRank+'위':'30위 밖')}</td>
-        <td class="${p.titleFound===false?'bd-badv':''}">${p.titleFound===null?'<span class="bd-mutev">확인 불가</span>':(p.titleFound?'노출':'누락')}</td></tr>`).join('')}</table></div>
-    ${withBody.length?`<div class="bd-desc" style="margin-top:12px">평균 ${fmt(Math.round(withBody.reduce((s,p)=>s+p.charCount,0)/withBody.length))}자 · 이미지 ${(withBody.reduce((s,p)=>s+(p.imgCount||0),0)/withBody.length).toFixed(1)}개</div>`:''}`;
-  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+// ── 블로거 리포트(화면 2) ──
+function bdShowReport(blogId){
+  const r=bdResults.find(x=>x.blogId===blogId&&!x.error); if(!r) return;
+  bdOpen=blogId; bdShow('Report');
+  const st=r.stats||{};
+  document.getElementById('brName').textContent=r.blogId;
+  document.getElementById('brSub').textContent=[st.topic||'주제 확인 불가',`수집 ${r.posts.length}글`,st.at||''].filter(Boolean).join(' · ');
+  // 1. 지수 게이지
+  const R=52,C=2*Math.PI*R, pct=Math.max(0,Math.min(100,r.score));
+  document.getElementById('brS1').innerHTML=`<div class="bd-gauge">
+    <svg width="128" height="128" viewBox="0 0 128 128" aria-label="지수 ${r.score}점">
+      <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--line)" stroke-width="10"/>
+      <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--ink)" stroke-width="10" stroke-linecap="round"
+        stroke-dasharray="${(C*pct/100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 64 64)"/>
+      <text class="gv" x="64" y="66" text-anchor="middle">${r.score}</text>
+      <text class="gu" x="64" y="84" text-anchor="middle">/ 100</text></svg>
+    <div><div class="gg">${r.grade}</div>
+      <div class="gm">${r.pctText||'백분위 표본 부족'} · CPR 자체지수 · 네이버 공식 점수 아님</div></div></div>`;
+  // 2. 최근 글 노출·누락
+  const scored=r.posts.filter(p=>p.kwRank!==undefined);
+  const top7=scored.filter(p=>p.kwRank>0&&p.kwRank<=7).length;
+  const missed=r.posts.filter(p=>p.titleFound===false).length;
+  const exposed=scored.filter(p=>p.kwRank>0).length;
+  document.getElementById('brS2').innerHTML=`<div class="bd-metrics">
+      <div class="m"><div class="l">분석</div><div class="v">${r.posts.length}</div></div>
+      <div class="m"><div class="l">제목 검색 누락</div><div class="v">${missed}</div></div>
+      <div class="m"><div class="l">7위 내</div><div class="v">${top7}</div></div>
+      <div class="m"><div class="l">노출 비율</div><div class="v">${scored.length?Math.round(exposed/scored.length*100):0}%</div></div></div>
+    <div style="margin-top:20px"><button class="bd-btn" onclick="bdShowPosts('${r.blogId}')">노출·누락 상세 보기</button></div>`;
+  // 3. 목표 키워드 상위노출 가능성
+  document.getElementById('brS3').innerHTML=r.preds.map(p=>`<div class="bd-kwblock">
+      <div class="k">${escapeHtml(p.keyword)}</div>
+      <div class="p">${p.p}%</div>${bdPctBar(p.p/100)}
+      <div class="meta">예상 순위대 ${p.band} · ${escapeHtml(p.inputs.basis)} · 적합도 ${Math.round((p.inputs.industry+p.inputs.region)/2*100)}% · 경쟁여유 ${Math.round(p.inputs.comp*100)}%</div>
+    </div>`).join('');
+  // 4. 적합도
+  const f0=r.preds[0];
+  document.getElementById('brS4').innerHTML=`<div class="bd-desc" style="margin-bottom:12px">${escapeHtml(f0.keyword)} 기준</div>
+    <table class="bd-tbl">
+      <tr><td>업종 일치<small>최근 ${r.recentCount}글 중 같은 업종 글 비율</small></td><td>${Math.round(f0.fit.industry*100)}%${bdPctBar(f0.fit.industry)}</td></tr>
+      <tr><td>지역 일치<small>최근 글 제목에 목표 지역·인접 지역이 등장한 비율</small></td><td>${Math.round(f0.fit.region*100)}%${bdPctBar(f0.fit.region)}</td></tr>
+      <tr><td>유사 글 실적<small>같은 업종·지역 글의 실제 순위</small></td><td>${f0.fit.relCount?`${f0.fit.relCount}글 중 7위 내 ${f0.fit.relTop}`:'<span class="bd-mutev">관련 글 없음</span>'}${f0.fit.relCount?bdPctBar(f0.fit.relTop/f0.fit.relCount):''}</td></tr>
+    </table>`;
+  // 5. 블로그 현황
+  document.getElementById('brS5').innerHTML=`<div class="bd-grid">
+      <div><div class="l">전체 방문자</div><div class="v"><small>확인 불가</small></div></div>
+      <div><div class="l">이웃</div><div class="v"><small>확인 불가</small></div></div>
+      <div><div class="l">수집된 글</div><div class="v">${bdFmt(st.rss||r.recentCount)}</div></div>
+      <div><div class="l">분석 글</div><div class="v">${r.posts.length}</div></div>
+      <div><div class="l">주 발행</div><div class="v">${st.weekAvg!=null?st.weekAvg.toFixed(1)+'회':'<small>확인 불가</small>'}</div></div>
+      <div><div class="l">평균 글자수</div><div class="v">${st.avgChars?bdFmt(st.avgChars):'<small>확인 불가</small>'}</div></div>
+    </div>`;
+  // 6. 항목별 점수
+  document.getElementById('brS6').innerHTML=`<table class="bd-tbl">
+    ${r.parts.map(p=>`<tr><td>${p.label}<small>${escapeHtml(p.detail)}</small></td><td>${p.earned} <span style="color:var(--faint);font-weight:600">/ ${p.weight}</span>${bdPctBar(p.earned/p.weight)}</td></tr>`).join('')}
+    <tr><td>합계<small>측정 불가 항목은 배점에서 제외 후 100점 환산</small></td><td>${r.parts.reduce((s,p)=>s+p.earned,0).toFixed(1)} <span style="color:var(--faint);font-weight:600">/ ${r.wSum||r.parts.reduce((s,p)=>s+p.weight,0)}</span></td></tr></table>`;
+  // 7. 참고 (경고 있을 때만 좌측 바)
+  const notes=[];
+  if(r.flags&&r.flags.lowQualitySuspect) notes.push(`최근 글 ${r.flags.missTitle}개가 제목을 그대로 검색해도 나오지 않습니다. 저품질 가능성이 있어 초대 전 확인이 필요합니다.`);
+  const spr=r.preds[0].fit.sponsored;
+  if(spr!=null) notes.push(`분석한 글 중 체험단·협찬 표기가 있는 글은 ${Math.round(spr*100)}%입니다. 감점 요소는 아니며, 협찬 글도 상위노출되는지 3번 항목의 순위로 확인하세요.`);
+  if(st.avgImgs!=null) notes.push(`평균 이미지 ${st.avgImgs.toFixed(1)}장, 평균 ${bdFmt(st.avgChars||0)}자입니다.`);
+  document.getElementById('brS7').innerHTML=notes.map((t,i)=>`<div class="bd-note${i===0&&r.flags&&r.flags.lowQualitySuspect?' warn':''}" style="margin-top:${i?12:0}px">${t}</div>`).join('')||'<div class="bd-note">특이사항 없습니다.</div>';
+}
+
+// ── 노출·누락 상세(화면 3) ──
+function bdShowPosts(blogId){
+  const r=bdResults.find(x=>x.blogId===blogId&&!x.error); if(!r) return;
+  bdOpen=blogId; bdPostFilter='all'; bdShow('Detail');
+  document.getElementById('bpName').textContent=r.blogId;
+  document.getElementById('bpSub').textContent=`최근 ${r.posts.length}글 노출·누락 진단`;
+  const scored=r.posts.filter(p=>p.kwRank!==undefined);
+  const top7=scored.filter(p=>p.kwRank>0&&p.kwRank<=7).length;
+  const missed=r.posts.filter(p=>p.titleFound===false).length;
+  const exposed=scored.filter(p=>p.kwRank>0).length;
+  document.getElementById('bpMetrics').innerHTML=`<div class="bd-metrics">
+      <div class="m"><div class="l">분석</div><div class="v">${r.posts.length}</div></div>
+      <div class="m"><div class="l">제목 검색 누락</div><div class="v">${missed}</div></div>
+      <div class="m"><div class="l">7위 내</div><div class="v">${top7}</div></div>
+      <div class="m"><div class="l">노출 비율</div><div class="v">${scored.length?Math.round(exposed/scored.length*100):0}%</div></div></div>`;
+  bdRenderPosts();
+}
+function bdSetPostFilter(f){ bdPostFilter=f; bdRenderPosts(); }
+function bdRenderPosts(){
+  const r=bdResults.find(x=>x.blogId===bdOpen); if(!r) return;
+  const tabs=[['all','전체'],['exposed','노출'],['missed','누락']];
+  document.getElementById('bpTabs').innerHTML=tabs.map(([k,l])=>`<button class="${bdPostFilter===k?'on':''}" onclick="bdSetPostFilter('${k}')">${l}</button>`).join('');
+  const list=r.posts.filter(p=>bdPostFilter==='all'?true:(bdPostFilter==='exposed'?(p.kwRank>0||p.titleFound===true):(p.kwRank===0||p.titleFound===false)));
+  document.getElementById('bpList').innerHTML=list.length?list.map(p=>{
+    const miss=(p.kwRank===0);
+    return `<div class="bd-post${miss?' miss':''}">
+      <div class="d">${escapeHtml(String(p.pubDate||'').slice(5,16))}</div>
+      <div class="t"><a href="${p.link}" target="_blank" rel="noopener">${escapeHtml(String(p.title))}</a></div>
+      ${p.keyword?`<div class="bd-kwrow"><span class="kn">${escapeHtml(p.keyword)}</span>
+        <span class="kr${p.kwRank>0?'':' none'}">${p.kwRank===undefined?'조회 안 됨':(p.kwRank>0?'블로그탭 '+p.kwRank+'위':'—')}</span></div>`:''}
+      <div class="bd-kwrow"><span class="kn">제목 그대로 검색</span>
+        <span class="kr${p.titleFound?'':' none'}">${p.titleFound===null||p.titleFound===undefined?'확인 불가':(p.titleFound?'노출':'—')}</span></div>
+      <div class="st">${p.charCount!=null?bdFmt(p.charCount)+'자 · 이미지 '+p.imgCount:''}${p.sponsored?' · 체험단 표기':''}</div>
+    </div>`;
+  }).join(''):'<div class="bd-desc" style="margin-top:20px">해당하는 글이 없습니다.</div>';
 }
 
 // ============ 플레이스 SEO 분석 (매장 종합 리포트) ============
