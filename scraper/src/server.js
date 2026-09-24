@@ -169,7 +169,9 @@ function bodyStats(html) {
   for (const t of text.match(/[가-힣]{2,}/g) || []) freq[t] = (freq[t] || 0) + 1;
   let topToken = '', topCount = 0;
   for (const [t, c] of Object.entries(freq)) if (c > topCount) { topToken = t; topCount = c; }
-  return { charCount: text.length, imgCount, topToken, topCount };
+  // 체험단·협찬 표기 여부(감점이 아니라 정보로 쓴다)
+  const sponsored = /체험단|협찬|제공받아|제공 받아|원고료|소정의 (원고료|수수료)|무상으로 제공/.test(text);
+  return { charCount: text.length, imgCount, topToken, topCount, sponsored };
 }
 
 app.get('/blog-profile', async (req, res) => {
