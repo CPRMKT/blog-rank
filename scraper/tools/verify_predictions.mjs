@@ -12,22 +12,22 @@ async function main() {
   if (!pend || !pend.ok) { log(pend && pend.missing_table ? '예측 테이블 없음 — SQL 실행 전. 종료.' : '예측 목록 조회 실패'); return; }
   const rows = pend.result || [];
   log(`검증 대상 ${rows.length}건`);
-  const cache = new Map();
   let done = 0, skip = 0;
+  const today = new Date().toISOString().slice(0, 10);
   for (const p of rows) {
-    if (!p.store_id) { skip++; continue; }
-    if (!cache.has(p.store_id)) {
-      const rr = await db('get_store_rankings', { store_id: p.store_id, days: 14 });
-      cache.set(p.store_id, (rr && rr.result) || []);
+    // 심사한 블로거가 그 키워드로 실제 글을 써서 순위에 잡혔는지 자동 대조
+    // (매장 블로그 순위 수집이 이미 매일 그 글의 순위를 기록하고 있다)
+    const r = await db('find_blog_keyword_rank', { blog_id: p.blog_id, keyword: p.keyword, since: p.target_date });
+    if (r && r.ok && r.found) {
+      await db('set_prediction_verified', { id: p.id, verified_rank: r.rank });
+      done++;
+      log(`  #${p.id} ${p.blog_id} "${p.keyword}" 예측 ${p.probability}% → 실제 ${r.rank}위 (${r.checked_date})`);
+      continue;
     }
-    // 검증일 이후 가장 최근 수집분에서 그 키워드의 실제 순위(없으면 0=미노출)
-    const hit = cache.get(p.store_id)
-      .filter((r) => r.keyword === p.keyword && r.checked_date >= p.target_date)
-      .sort((a, b) => (a.checked_date < b.checked_date ? 1 : -1))[0];
-    if (!hit) { skip++; continue; }
-    await db('set_prediction_verified', { id: p.id, verified_rank: hit.rank || 0 });
-    done++;
-    log(`  #${p.id} "${p.keyword}" 예측 ${p.probability}% → 실제 ${hit.rank > 0 ? hit.rank + '위' : '미노출'} (${hit.checked_date})`);
+    // 아직 글이 안 올라온 경우: 검증일 + 21일이 지나면 "글 없음"으로 종결(0 = 미노출)
+    const limit = new Date(Date.parse(p.target_date) + 21 * 86400000).toISOString().slice(0, 10);
+    if (today > limit) { await db('set_prediction_verified', { id: p.id, verified_rank: 0 }); done++; log(`  #${p.id} ${p.blog_id} "${p.keyword}" 기한 초과 → 미노출로 종결`); }
+    else skip++;
   }
   const acc = await db('get_prediction_accuracy');
   log(`검증 완료 ${done}건 / 보류 ${skip}건` + (acc && acc.ok && acc.sample ? ` | 최근 30일 적중률 ${acc.accuracy}% (표본 ${acc.sample})` : ''));
