@@ -2,6 +2,8 @@
 // 한국 IP에서 실행되므로 사용자가 보는 화면 순서를 그대로 받음.
 import { chromium } from 'playwright';
 
+import { notify } from './notify.mjs';
+
 let browser = null;
 let launching = null; // 동시 호출 시 중복 launch 방지
 
@@ -13,6 +15,8 @@ export async function initBrowser() {
   launching = (async () => {
     if (browser) {
       console.log('Chromium dead — relaunching');
+      // 크롬이 죽는 건 드문 일이라 그때만 알린다(같은 종류는 하루 1통)
+      notify('browser', '⚠️ 스크래퍼 크롬이 죽어 재기동했습니다.\n반복되면 메모리(1GB)나 크래시 원인을 봐야 합니다.').catch(() => {});
       await browser.close().catch(() => {});
       browser = null;
     }

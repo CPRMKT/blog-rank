@@ -9,6 +9,7 @@
 //   COLLECTOR_BASE_URL  Vercel 배포 주소 (기본값 아래)
 //   DRY_RUN=1           저장하지 않고 결과만 로그 (기본: 저장함)
 import fs from 'fs';
+import { notifyBatchResult } from './src/notify.mjs';
 
 const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.app').replace(/\/$/, '');
 const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
@@ -213,6 +214,7 @@ async function main() {
     }
 
     log(`완료 — 매장 ${summary.stores}, 키워드 ${summary.keywords}, 매칭 ${summary.matched}, 저장 ${summary.saved}, 에러 ${summary.errors}${DRY_RUN ? ' (DRY_RUN: 저장 안 함)' : ''}`);
+    await notifyBatchResult('블로그 순위 수집', summary);   // 조건에 걸릴 때만 발송
     if (summary.errors > 0) {
       log(`⚠ 실패(${summary.errors}): ${summary.failed.slice(0, 20).join(', ')}${summary.failed.length > 20 ? ' 외 ' + (summary.failed.length - 20) + '개' : ''}`);
       logFail('blog', '[요약]', `실패 ${summary.errors}/${summary.keywords}건 (date=${kstDate()})`);

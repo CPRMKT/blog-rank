@@ -6,6 +6,7 @@
 //   COLLECTOR_BASE_URL  Vercel 배포 주소(기본 아래)
 //   SCRAPER_API_KEY     로컬 스크래퍼 Bearer 키 (.env)
 import fs from 'fs';
+import { notifyBatchResult } from './src/notify.mjs';
 
 const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.app').replace(/\/$/, '');
 const SCRAPER = 'http://127.0.0.1:8080';
@@ -191,6 +192,7 @@ async function main() {
   } catch (e) {
     log(`치명적 오류: ${e.message}`);
     process.exitCode = 1;
+    await notifyBatchResult('플레이스 순위 수집', summary);   // 조건에 걸릴 때만 발송
   } finally {
     // 오늘 보류된 키워드 목록을 파일로 남긴다 — 화면에서 '-'(미노출)와 구분해 "보류"로 표시하는 근거.
     // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
