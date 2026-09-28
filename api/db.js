@@ -367,7 +367,7 @@ export default async function handler(req, res) {
       const r = await fetch(`${base.replace(/\/$/, '')}/failures`, { headers: { Authorization: `Bearer ${key}` } });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j) return res.status(200).json({ ok: false, error: `스크래퍼 ${r.status}` });
-      return res.status(200).json({ ok: true, failures: j.failures || [], lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
+      return res.status(200).json({ ok: true, failures: j.failures || [], held: j.held || null, lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
     }
 
     // 키워드별 최근 수집일(빠름) — "한 번도 수집 안 된" 키워드 판별용(재진입 이어하기).

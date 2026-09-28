@@ -294,6 +294,8 @@ tr:hover td{background:var(--surface-3)}
 .pt-day.pre{background:var(--surface-2);opacity:.55}
 /* 즉시수집 실패(자동 재시도 예정): 미노출 '-'와 구분 */
 .pt-retrywait{font-size:10px;font-weight:700;color:#b45309;white-space:nowrap}
+/* 배치 0곳 보류: 네이버가 빈 응답을 준 날. 미노출 '-'와 구분해 글자로 표시 */
+.pt-held{font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap}
 /* 블로그 순위표: 키워드 등록일 이전 날짜 칸 음영(플레이스 탭 .pt-day.pre와 동일 규칙) */
 td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
 /* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
@@ -4348,6 +4350,7 @@ let ptCollecting=new Set();  // "storeId|키워드" — 수집 대기/진행 중
 // ── 즉시수집 순차 큐: 연속 등록 시 동시 발사 금지(6개 병렬→전부 타임아웃 사건) ──
 const ptQueue=[]; let ptQBusy=false;
 const ptFailedKw=new Set();  // "storeId|키워드" — 수집 최종 실패(오늘 칸 "재시도 대기")
+let ptHeldKw=new Set();     // 키워드 — 오늘 배치가 0곳 응답을 받아 저장 보류(오늘 칸 "보류")
 const ptRetryCnt={};         // key -> 자동 재시도 횟수(최대 3회, 이후엔 새벽 크론이 채움)
 const ptKey=(sid,kw)=>sid+'|'+kw;
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
@@ -4373,6 +4376,10 @@ async function ptLoadFailBanner(){
     if(!r||!r.ok){ el.style.display='none'; return; }
     // "완료 — [매장 N,] 키워드 T, ..., 에러 E[, 0곳보류 S]" → {total, errors, held}
     const parse=(line)=>{ if(!line) return null; const m=line.match(/키워드 ([\d,]+).*에러 ([\d,]+)/); if(!m) return null; const h=line.match(/0곳보류 ([\d,]+)/); return {total:+m[1].replace(/,/g,''),errors:+m[2].replace(/,/g,''),held:h?+h[1].replace(/,/g,''):0}; };
+    // 오늘 0곳 보류된 키워드 → 오늘 칸을 '-'(미노출)가 아니라 "보류"로 표시하는 근거
+    const todayKst=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date());
+    ptHeldKw=new Set((r.held&&r.held.date===todayKst&&Array.isArray(r.held.keywords))?r.held.keywords:[]);
+    if(ptHeldKw.size&&typeof ptRenderCards==='function'&&ptKeywords&&ptKeywords.length) ptRenderCards();
     const p=parse(r.lastPlace), b=parse(r.lastBlog);
     const errors=(p?p.errors:0)+(b?b.errors:0);
     const held=(p?p.held:0)+(b?b.held:0);   // 0곳 보류: 에러는 아니지만 데이터 공백 → 배너에 표시
@@ -4809,6 +4816,7 @@ function ptRenderCards(){
       if(ptCollecting.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">${ptProgressLabel(ptKey(ptStoreId,kw))}</span></div>`; }
       else if(ptFailedKw.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
+      else if(!row && d===allDates[0] && ptHeldKw.has(kw)){ inner=`<div class="pt-day-body"><span class="pt-held" title="수집 보류 — 네이버 응답 없음, 다음 수집에서 재시도">보류</span></div>`; }  // 배치 0곳: 미노출과 절대 같은 모양이면 안 됨
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
       else{
         // 변동 기준: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날(prior)

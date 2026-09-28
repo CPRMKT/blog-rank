@@ -16,8 +16,15 @@ const LOCK = '/tmp/blog-rank-place-collect.lock';
 // 10초씩 걸려 자연 간격이 됐지만 인덱스 추가로 1초가 되면서 간격이 사라졌다 → 그 몫을 여기서 명시적으로 준다.
 // 목표: 키워드당 ~24초(9/17 검증값). 줄이려면 전체 크론 1회분 규모로 검증할 것.
 const KEYWORD_DELAY_MS = 11000;
-const RETRY_DELAY_MS = 8000;   // 키워드 실패 시 1회 재시도 전 대기
-const FAIL_LOG = '/var/log/blog-rank-scraper/failures.log'; // 실패 전용 로그(스크립트 공통)
+const RETRY_DELAY_MS = 8000;   // 키워드 "에러"(예외) 시 1회 재시도 전 대기 — 0곳에는 쓰지 않는다
+// 0곳 백오프: 네이버 허용량을 소진하면 그 뒤로는 계속 빈 응답이 온다(2026-09-24 사건).
+// 이때 즉시 재수집은 요청량만 2배로 늘려 회복을 막으므로, 연속 0곳 3건이면 35분 쉬었다 이어간다.
+const ZERO_STREAK_LIMIT = 3;        // 연속 0곳 몇 건이면 백오프할지
+const BACKOFF_MS = 35 * 60 * 1000;  // 회복 대기(과거 관측상 약 35분이면 응답 재개)
+const BACKOFF_MAX = 3;              // 백오프 최대 횟수. 그 뒤에도 0곳이 이어지면 이번 실행은 중단
+const backoffMin = () => Math.max(1, Math.round(BACKOFF_MS / 60000));
+const LOG_DIR = '/var/log/blog-rank-scraper';
+const FAIL_LOG = `${LOG_DIR}/failures.log`; // 실패 전용 로그(스크립트 공통)
 
 function log(msg) {
   const ts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
@@ -65,7 +72,7 @@ async function main() {
   if (fs.existsSync(LOCK)) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
   fs.writeFileSync(LOCK, String(process.pid));
 
-  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [] };
+  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0 };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
     // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
@@ -89,6 +96,8 @@ async function main() {
       if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);
       return data.items || [];
     };
+    let zeroStreak = 0;            // 연속 0곳 카운터(정상 응답 1건이면 0으로 리셋)
+    const totalKw = byKeyword.size;
     for (const [keyword, owners] of byKeyword) {
       summary.keywords++;
       try {
@@ -101,10 +110,30 @@ async function main() {
           await sleep(RETRY_DELAY_MS);
           items = await scrapeOnce(keyword);
         }
-        // 자체점검①: 0곳은 "정상적 빈 결과"와 "조용한 스크랩 실패"가 섞인다 → 1회 재수집
+        // 자체점검①: 0곳이 연달아 나오면 네이버 허용량 소진으로 보고 쉬었다 간다.
+        // (즉시 재수집은 차단 구간에서 요청량만 2배로 늘려 회복을 막으므로 하지 않는다)
         if (items.length === 0) {
-          await sleep(RETRY_DELAY_MS);
-          try { const again = await scrapeOnce(keyword); if (again.length > 0) { log(`  ↻ "${keyword}" 0곳 → 재수집 ${again.length}곳(회복)`); items = again; } } catch { /* 유지 */ }
+          zeroStreak++;
+          if (zeroStreak >= ZERO_STREAK_LIMIT) {
+            if (summary.backoffs >= BACKOFF_MAX) {
+              // 백오프를 다 쓰고도 0곳이 이어짐 → 이번 실행은 여기서 멈추고 나머지는 다음 크론에 맡긴다
+              summary.aborted = true;
+              summary.keywords--;   // 이 키워드는 처리하지 못했으므로 진행 수에서 뺀다(다음 크론 몫)
+              summary.remaining = totalKw - summary.keywords;
+              log(`  ■ 0곳 ${zeroStreak}건 연속 + 백오프 ${BACKOFF_MAX}회 소진 → 이번 실행 중단(남은 ${summary.remaining}개는 다음 수집에서)`);
+              logFail('place', '[중단]', `백오프 ${BACKOFF_MAX}회 후에도 0곳 연속 — 남은 ${summary.remaining}개 다음 크론으로 (date=${today})`);
+              break;
+            }
+            summary.backoffs++;
+            log(`  ⏸ 0곳 ${zeroStreak}건 연속 → ${backoffMin()}분 대기 후 이어서 진행 (백오프 ${summary.backoffs}/${BACKOFF_MAX}, 진행 ${summary.keywords}/${totalKw})`);
+            logFail('place', '[백오프]', `0곳 ${zeroStreak}건 연속 → ${backoffMin()}분 대기 (${summary.backoffs}/${BACKOFF_MAX}, 진행 ${summary.keywords}/${totalKw}, date=${today})`);
+            await sleep(BACKOFF_MS);
+            log(`  ▶ 대기 종료 — "${keyword}"부터 이어서 진행`);
+            zeroStreak = 0;
+            try { const again = await scrapeOnce(keyword); if (again.length > 0) { log(`  ↻ "${keyword}" 대기 후 ${again.length}곳(회복)`); items = again; } } catch { /* 유지 */ }
+          }
+        } else {
+          zeroStreak = 0;
         }
         // 자체점검②: 재시도 후에도 0곳인데 과거에 정상 데이터가 있던 키워드면 의심 → 저장 보류(기존 스냅샷 보존).
         // 과거에도 늘 0이던 키워드(동래배네스트cc류)만 진짜 0으로 인정하고 기존대로 처리.
@@ -145,7 +174,9 @@ async function main() {
       }
       await sleep(KEYWORD_DELAY_MS);
     }
-    log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}, 0곳보류 ${summary.zeroHeld}`);
+    log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}, 0곳보류 ${summary.zeroHeld}`
+      + (summary.backoffs ? `, 백오프 ${summary.backoffs}회` : '')
+      + (summary.aborted ? `, 중단(남은 ${summary.remaining}개)` : ''));
     if (summary.zeroHeld > 0) {
       log(`⚠ 0곳 보류(${summary.zeroHeld}): ${summary.heldKws.slice(0, 15).join(', ')}${summary.heldKws.length > 15 ? ' 외 ' + (summary.heldKws.length - 15) + '개' : ''} — 기존 스냅샷 보존됨`);
       logFail('place', '[요약]', `0곳 보류 ${summary.zeroHeld}건 (date=${today}) — 연속 다발 시 차단 의심`);
@@ -161,6 +192,12 @@ async function main() {
     log(`치명적 오류: ${e.message}`);
     process.exitCode = 1;
   } finally {
+    // 오늘 보류된 키워드 목록을 파일로 남긴다 — 화면에서 '-'(미노출)와 구분해 "보류"로 표시하는 근거.
+    // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
+    try {
+      fs.writeFileSync(`${LOG_DIR}/held-${kstDate()}.json`,
+        JSON.stringify({ date: kstDate(), at: new Date().toISOString(), keywords: summary.heldKws, aborted: summary.aborted, remaining: summary.remaining }));
+    } catch {}
     try { fs.unlinkSync(LOCK); } catch {}
   }
 }

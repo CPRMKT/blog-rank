@@ -232,9 +232,15 @@ app.get('/failures', (req, res) => {
   };
   try {
     const failures = readTail(`${LOG_DIR}/failures.log`).split('\n').filter(Boolean).slice(-80);
+    // 오늘 0곳 보류된 키워드 전체 목록(꼬리 80줄 제한을 받지 않는 별도 파일)
+    const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? req.query.date : kstToday;
+    let held = { date, keywords: [] };
+    try { held = JSON.parse(fs.readFileSync(`${LOG_DIR}/held-${date}.json`, 'utf8')); } catch {}
     res.json({
       ok: true,
       failures,
+      held,
       lastPlace: lastMatch(readTail(`${LOG_DIR}/place-collect.log`), '완료 —'),
       lastBlog: lastMatch(readTail(`${LOG_DIR}/collect.log`), '완료 —'),
     });
