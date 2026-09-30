@@ -359,6 +359,25 @@ export default async function handler(req, res) {
       } catch (e) { if (MISSING(e)) return res.status(200).json({ ok: false, missing_table: true }); throw e; }
     }
 
+    // 진단: Vercel이 실제로 어떤 스크래퍼 주소를 보고 있는지 확인(크론 시크릿 필요).
+    // IP 교체 후 "환경변수가 반영됐는지"를 추측 대신 사실로 확인하려고 둔다.
+    if (action === 'scraper_diag') {
+      if (!isCron) return res.status(403).json({ ok: false, error: '권한 없음' });
+      const base = (process.env.KOREAN_SCRAPER_URL || '').trim();
+      if (!base) return res.status(200).json({ ok: false, error: 'KOREAN_SCRAPER_URL 미설정' });
+      const t0 = Date.now();
+      let reach = null, err = null;
+      try {
+        const r = await fetch(`${base.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(8000) });
+        reach = `HTTP ${r.status}`;
+      } catch (e) { err = String(e && e.message || e); }
+      return res.status(200).json({
+        ok: true,
+        url_raw: JSON.stringify(process.env.KOREAN_SCRAPER_URL || null),  // 앞뒤 공백·줄바꿈까지 보이게
+        reach, err, ms: Date.now() - t0,
+      });
+    }
+
     // 수집 실패 현황(NCP failures.log 프록시) — 대시보드 배너용. 스크래퍼 키는 서버에만.
     if (action === 'get_collect_failures') {
       const base = process.env.KOREAN_SCRAPER_URL;
