@@ -16,7 +16,7 @@
 |---|---|---|---|
 | **Vercel** | 프론트(정적 HTML) + `/api/*` 서버리스 함수 호스팅 | 코드로는 확인 불가 — **Hobby/Free 추정** | 프로젝트명 `blog-rank-phi`, GitHub 연동 자동배포 |
 | **Supabase** | Postgres DB + PostgREST(REST) + RLS | 코드로는 확인 불가 — **Free 추정** | 프로젝트 ref는 `SUPABASE_URL`에 포함. service_role 키로 접근 |
-| **NCP (네이버 클라우드)** | Playwright 스크래퍼 + 수집 크론 상시 구동 | **Micro급 VM(약 1GB RAM/1 vCPU), Ubuntu** | IP `175.45.200.77`, root, 2GB 스왑 추가됨. pm2로 상시 실행 |
+| **NCP (네이버 클라우드)** | Playwright 스크래퍼 + 수집 크론 상시 구동 | **Micro급 VM(약 1GB RAM/1 vCPU), Ubuntu** | IP `211.233.194.246` (2026-09-30 교체, 옛 IP 175.45.200.77은 24시간 보관 후 반납), root, 2GB 스왑 추가됨. pm2로 상시 실행 |
 | **Anthropic (Claude API)** | "키워드 제안" 탭에서 지역/메뉴/상황 요소 추출 | 사용량 기반 | 기본 모델 `claude-haiku-4-5-20251001`(env로 override) |
 | **네이버 검색광고 API** | 키워드 월 검색량·경쟁지수 (keywordstool) | 무료 API(사업자 계정) | HMAC 서명(license/secret/customer id) |
 | **네이버 검색 OpenAPI** | 블로그 검색 폴백(sort=sim) | 무료 API | 스크래퍼 실패 시 폴백 경로 |
