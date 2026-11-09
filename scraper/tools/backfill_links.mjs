@@ -36,8 +36,9 @@ async function db(action, data = {}) {
   return j.result;
 }
 
-// 공백 제거 + 소문자 — 화면 등록과 같은 규칙
-const norm = (x) => String(x || '').toLowerCase().split(/\s+/).join('');
+// 앞뒤 공백 제거 + 연속 공백 1개 + 소문자 — add_linked_keyword와 같은 규칙.
+// 공백을 완전히 지우면 띄어쓰기만 다른 별개 키워드가 뭉쳐 누락된다.
+const norm = (x) => String(x || '').trim().toLowerCase().split(/\s+/).join(' ');
 
 const stores = await db('list_stores');
 const targets = [];   // {store_id, name, keyword, target}

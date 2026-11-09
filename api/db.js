@@ -235,8 +235,10 @@ export default async function handler(req, res) {
       const origin = data.origin === 'place' ? 'place' : 'blog';   // 사용자가 실제로 등록한 쪽
       if (!storeId || !keyword) return res.status(200).json({ ok: false, error: '매장과 키워드가 필요합니다' });
 
-      // 공백 제거 + 소문자로 비교(사장님 지시: 공백/대소문자 차이 흡수)
-      const norm = (x) => String(x || '').toLowerCase().split(/\s+/).join('');
+      // 앞뒤 공백 제거 + 연속 공백 1개 + 소문자까지만 비교한다.
+      // 공백을 완전히 지우면 "울산 신정동 밥집"과 "울산신정동밥집"이 한 키워드로 뭉쳐
+      // 일부러 따로 추적하던 키워드가 조용히 누락된다(네이버는 띄어쓰기가 다르면 다른 검색).
+      const norm = (x) => String(x || '').trim().toLowerCase().split(/\s+/).join(' ');
       const nk = norm(keyword);
 
       const [bRows, pRows] = await Promise.all([

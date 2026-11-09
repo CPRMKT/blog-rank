@@ -22,10 +22,33 @@ const RETRY_DELAY_MS = 8000;   // 키워드 "에러"(예외) 시 1회 재시도 
 // 이때 즉시 재수집은 요청량만 2배로 늘려 회복을 막으므로, 연속 0곳 3건이면 35분 쉬었다 이어간다.
 const ZERO_STREAK_LIMIT = 3;        // 연속 0곳 몇 건이면 백오프할지
 const BACKOFF_MS = 35 * 60 * 1000;  // 회복 대기(과거 관측상 약 35분이면 응답 재개)
-const BACKOFF_MAX = 3;              // 백오프 최대 횟수. 그 뒤에도 0곳이 이어지면 이번 실행은 중단
+// 백오프 횟수는 제한하지 않는다. 횟수로 끊으면(기존 3회) 키워드가 늘어난 만큼
+// 매번 뒤쪽이 통째로 굶는다(2026-11 기준 358개 중 143개 미수집).
+// 대신 총 실행 시간에 상한을 두고, 넘으면 안전하게 멈춘다.
+const RUN_LIMIT_MS = parseInt(process.env.PLACE_RUN_LIMIT_MS || String(10 * 60 * 60 * 1000), 10);
 const backoffMin = () => Math.max(1, Math.round(BACKOFF_MS / 60000));
 const LOG_DIR = '/var/log/blog-rank-scraper';
 const FAIL_LOG = `${LOG_DIR}/failures.log`; // 실패 전용 로그(스크립트 공통)
+const LAST_FILE = `${LOG_DIR}/place-last-collected.json`;   // 키워드 -> 마지막 수집일(KST)
+
+// 키워드별 마지막 수집일. 파일이 없으면 기존 로그에서 복원한다(첫 실행에도 정렬이 되도록).
+function loadLastCollected() {
+  try { return JSON.parse(fs.readFileSync(LAST_FILE, 'utf8')); } catch {}
+  const map = {};
+  try {
+    const txt = fs.readFileSync(`${LOG_DIR}/place-collect.log`, 'utf8');
+    for (const line of txt.split('\n')) {
+      // 예: [2026-11-09 08:12:03 KST]   • "부산 사직 맛집" -> 300곳 x 계정 1개 저장
+      const d = line.match(/^\[(\d{4}-\d{2}-\d{2}) /);
+      const k = line.match(/\u2022 "([^"]+)"/);
+      if (d && k) map[k[1]] = d[1];
+    }
+  } catch {}
+  return map;
+}
+function saveLastCollected(map) {
+  try { fs.writeFileSync(LAST_FILE, JSON.stringify(map)); } catch {}
+}
 
 function log(msg) {
   const ts = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
@@ -73,7 +96,8 @@ async function main() {
   if (fs.existsSync(LOCK)) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
   fs.writeFileSync(LOCK, String(process.pid));
 
-  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0 };
+  let lastMapRef = null;
+  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0, notRun: [] };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
     // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
@@ -99,7 +123,32 @@ async function main() {
     };
     let zeroStreak = 0;            // 연속 0곳 카운터(정상 응답 1건이면 0으로 리셋)
     const totalKw = byKeyword.size;
-    for (const [keyword, owners] of byKeyword) {
+    const startedAt = Date.now();
+
+    // 마지막 수집일이 오래된 키워드부터 돈다. 중간에 멈춰도 다음 회차에서 그 뒤가 먼저 처리돼
+    // 같은 키워드가 계속 굶지 않는다(한 번도 수집 안 된 키워드가 맨 앞).
+    const lastMap = loadLastCollected();
+    lastMapRef = lastMap;
+    const ordered = [...byKeyword.entries()].sort((a, b) => {
+      const la = lastMap[a[0]] || '';
+      const lb = lastMap[b[0]] || '';
+      if (la !== lb) return la < lb ? -1 : 1;
+      return a[0] < b[0] ? -1 : 1;
+    });
+    const queue = ordered.map(([k]) => k);
+    log(`처리 순서: 마지막 수집일 오래된 순 (한 번도 수집 안 된 키워드 ${queue.filter((k) => !lastMap[k]).length}개 우선)`);
+    let idx = -1;
+    for (const [keyword, owners] of ordered) {
+      idx++;
+      // 총 실행 시간 상한: 넘으면 남은 키워드는 다음 회차(오래된 순이라 다음에 먼저 처리됨)
+      if (Date.now() - startedAt > RUN_LIMIT_MS) {
+        summary.aborted = true;
+        summary.notRun = queue.slice(idx);
+        summary.remaining = summary.notRun.length;
+        log(`  \u25a0 총 실행 시간 ${Math.round(RUN_LIMIT_MS / 3600000)}시간 초과 -> 안전 중단(남은 ${summary.remaining}개는 다음 수집에서 먼저 처리)`);
+        logFail('place', '[중단]', `실행 시간 상한 초과 — 남은 ${summary.remaining}개 다음 크론으로 (date=${today})`);
+        break;
+      }
       summary.keywords++;
       try {
         let items;
@@ -116,18 +165,20 @@ async function main() {
         if (items.length === 0) {
           zeroStreak++;
           if (zeroStreak >= ZERO_STREAK_LIMIT) {
-            if (summary.backoffs >= BACKOFF_MAX) {
-              // 백오프를 다 쓰고도 0곳이 이어짐 → 이번 실행은 여기서 멈추고 나머지는 다음 크론에 맡긴다
+            // 쉬고 나면 남은 시간이 있어야 의미가 있다. 상한을 넘길 것 같으면 지금 멈춘다.
+            if (Date.now() - startedAt + BACKOFF_MS > RUN_LIMIT_MS) {
               summary.aborted = true;
               summary.keywords--;   // 이 키워드는 처리하지 못했으므로 진행 수에서 뺀다(다음 크론 몫)
-              summary.remaining = totalKw - summary.keywords;
-              log(`  ■ 0곳 ${zeroStreak}건 연속 + 백오프 ${BACKOFF_MAX}회 소진 → 이번 실행 중단(남은 ${summary.remaining}개는 다음 수집에서)`);
-              logFail('place', '[중단]', `백오프 ${BACKOFF_MAX}회 후에도 0곳 연속 — 남은 ${summary.remaining}개 다음 크론으로 (date=${today})`);
+              summary.notRun = queue.slice(idx);
+              summary.remaining = summary.notRun.length;
+              log(`  \u25a0 대기하면 실행 시간 상한을 넘김 -> 안전 중단(남은 ${summary.remaining}개는 다음 수집에서 먼저 처리)`);
+              logFail('place', '[중단]', `대기 시 실행 시간 상한 초과 — 남은 ${summary.remaining}개 다음 크론으로 (date=${today})`);
               break;
             }
             summary.backoffs++;
-            log(`  ⏸ 0곳 ${zeroStreak}건 연속 → ${backoffMin()}분 대기 후 이어서 진행 (백오프 ${summary.backoffs}/${BACKOFF_MAX}, 진행 ${summary.keywords}/${totalKw})`);
-            logFail('place', '[백오프]', `0곳 ${zeroStreak}건 연속 → ${backoffMin()}분 대기 (${summary.backoffs}/${BACKOFF_MAX}, 진행 ${summary.keywords}/${totalKw}, date=${today})`);
+            const leftMin = Math.round((RUN_LIMIT_MS - (Date.now() - startedAt)) / 60000);
+            log(`  \u23f8 0곳 ${zeroStreak}건 연속 -> ${backoffMin()}분 대기 후 이어서 진행 (백오프 ${summary.backoffs}회째, 진행 ${summary.keywords}/${totalKw}, 남은 시간 ${leftMin}분)`);
+            logFail('place', '[백오프]', `0곳 ${zeroStreak}건 연속 — ${backoffMin()}분 대기 (${summary.backoffs}회째, 진행 ${summary.keywords}/${totalKw}, date=${today})`);
             await sleep(BACKOFF_MS);
             log(`  ▶ 대기 종료 — "${keyword}"부터 이어서 진행`);
             zeroStreak = 0;
@@ -167,6 +218,7 @@ async function main() {
           summary.saved++;
         }
         log(`  • "${keyword}" → ${items.length}곳 × 계정 ${owners.length}개 저장`);
+        lastMap[keyword] = today;   // 다음 회차 정렬 기준
       } catch (e) {
         summary.errors++;
         summary.failed.push(keyword);
@@ -177,7 +229,7 @@ async function main() {
     }
     log(`완료 — 키워드 ${summary.keywords}, 저장 ${summary.saved}, 에러 ${summary.errors}, 0곳보류 ${summary.zeroHeld}`
       + (summary.backoffs ? `, 백오프 ${summary.backoffs}회` : '')
-      + (summary.aborted ? `, 중단(남은 ${summary.remaining}개)` : ''));
+      + (summary.aborted ? `, 중단(미수집 ${summary.remaining}개)` : ''));
     if (summary.zeroHeld > 0) {
       log(`⚠ 0곳 보류(${summary.zeroHeld}): ${summary.heldKws.slice(0, 15).join(', ')}${summary.heldKws.length > 15 ? ' 외 ' + (summary.heldKws.length - 15) + '개' : ''} — 기존 스냅샷 보존됨`);
       logFail('place', '[요약]', `0곳 보류 ${summary.zeroHeld}건 (date=${today}) — 연속 다발 시 차단 의심`);
@@ -198,8 +250,10 @@ async function main() {
     // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
     try {
       fs.writeFileSync(`${LOG_DIR}/held-${kstDate()}.json`,
-        JSON.stringify({ date: kstDate(), at: new Date().toISOString(), keywords: summary.heldKws, aborted: summary.aborted, remaining: summary.remaining }));
+        JSON.stringify({ date: kstDate(), at: new Date().toISOString(), keywords: summary.heldKws,
+          aborted: summary.aborted, remaining: summary.remaining, notRun: summary.notRun }));
     } catch {}
+    try { if (lastMapRef) saveLastCollected(lastMapRef); } catch {}
     try { fs.unlinkSync(LOCK); } catch {}
   }
 }
