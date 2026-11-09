@@ -229,7 +229,7 @@ export default async function handler(req, res) {
     // 일부러 트랜잭션(RPC)으로 묶지 않는다 — "한쪽이 실패해도 다른 쪽은 유지하고
     // 실패한 쪽만 재시도 대기로 표시"가 요구사항이라, 전부 되돌리면 오히려 어긋난다.
     if (action === 'add_linked_keyword') {
-      const BLOG_MAX = 30, PLACE_MAX = 40;
+      const BLOG_MAX = 40, PLACE_MAX = 40;   // 두 탭 한도를 같게(2026-11-09)
       const storeId = data.store_id;
       const keyword = String(data.keyword || '').trim();
       const origin = data.origin === 'place' ? 'place' : 'blog';   // 사용자가 실제로 등록한 쪽

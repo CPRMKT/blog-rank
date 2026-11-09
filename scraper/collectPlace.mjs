@@ -93,7 +93,22 @@ async function dbSaveWithRetry(action, data, label) {
 
 async function main() {
   if (!SCRAPER_KEY) { log('SCRAPER_API_KEY 없음. 종료.'); process.exit(1); }
-  if (fs.existsSync(LOCK)) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
+  // 앞 회차가 아직 돌고 있으면 시작하지 않는다. 다만 프로세스가 죽어 락만 남은 경우
+  // (OOM·재부팅·강제종료) 그대로 두면 이후 모든 회차가 영구히 종료되므로 확인 후 정리한다.
+  if (fs.existsSync(LOCK)) {
+    let alive = false;
+    try {
+      const pid = parseInt(fs.readFileSync(LOCK, 'utf8').trim(), 10);
+      if (pid > 0) { try { process.kill(pid, 0); alive = true; } catch { alive = false; } }
+    } catch {}
+    // 락이 12시간보다 오래됐으면 살아 있어도 비정상으로 본다(상한 8h/4h보다 길다)
+    let tooOld = false;
+    try { tooOld = Date.now() - fs.statSync(LOCK).mtimeMs > 12 * 60 * 60 * 1000; } catch {}
+    if (alive && !tooOld) { log(`이미 실행 중(lock). 종료.`); process.exit(0); }
+    log(`남아 있던 락 정리 (${alive ? '12시간 초과' : '프로세스 없음'})`);
+    logFail('place', '[락]', `스테일 락 정리 — ${alive ? '12시간 초과' : '프로세스 없음'}`);
+    try { fs.unlinkSync(LOCK); } catch {}
+  }
   fs.writeFileSync(LOCK, String(process.pid));
 
   let lastMapRef = null;

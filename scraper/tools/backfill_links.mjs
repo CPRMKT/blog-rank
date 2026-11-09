@@ -90,7 +90,7 @@ for (const st of stores) {
   const pn = new Set(place.map(norm));
   // 한도를 넘길 만큼은 애초에 대상에서 뺀다(액션에서도 한 번 더 막는다)
   let placeRoom = 40 - place.length;
-  let blogRoom = 30 - blog.length;
+  let blogRoom = 40 - blog.length;
   for (const k of blog) {
     if (pn.has(norm(k))) continue;
     if (placeRoom <= 0) { targets.push({ store_id: st.id, name: st.name, keyword: k, target: 'place', skip: '플레이스 40개 한도' }); continue; }
@@ -99,7 +99,7 @@ for (const st of stores) {
   }
   for (const k of place) {
     if (bn.has(norm(k))) continue;
-    if (blogRoom <= 0) { targets.push({ store_id: st.id, name: st.name, keyword: k, target: 'blog', skip: '블로그 30개 한도' }); continue; }
+    if (blogRoom <= 0) { targets.push({ store_id: st.id, name: st.name, keyword: k, target: 'blog', skip: '블로그 40개 한도' }); continue; }
     blogRoom--;
     targets.push({ store_id: st.id, name: st.name, keyword: k, target: 'blog' });
   }
