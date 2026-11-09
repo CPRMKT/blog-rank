@@ -78,15 +78,23 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   };
   // GraphQL 요청 템플릿(쿼리·헤더·쿠키) 캡처 → 이후 start 오프셋만 바꿔 직접 호출.
   // 모바일 스크롤 UI는 ~110위에서 자동로딩을 멈추지만, GraphQL은 start로 300위까지 페이지네이션됨.
-  let cap = null;
-  page.on('request', (req) => {
-    if (req.url().includes('api.place.naver.com/graphql') && req.method() === 'POST' && !cap) {
-      const pd = req.postData();
-      if (pd && /PlaceList|business/i.test(pd)) cap = { url: req.url(), headers: req.headers(), body: pd };
-    }
-  });
   const findInput = (v) =>
     (v && (v.input || v.restaurantListInput || v.businessListInput || v.hairShopListInput || v.hospitalListInput || v.cafeListInput)) || null;
+  let cap = null;
+  page.on('request', (req) => {
+    if (cap) return;
+    if (!req.url().includes('api.place.naver.com/graphql') || req.method() !== 'POST') return;
+    const pd = req.postData();
+    if (!pd || !/PlaceList|business/i.test(pd)) return;
+    // 목록 요청만 채택한다. 리스트 페이지에는 '신규 오픈'(getNxNewOpeningList, openingInput) 같은
+    // 다른 모듈의 GraphQL도 뜨는데, 그쪽을 먼저 잡으면 start/display를 넣을 자리가 없어
+    // 페이지네이션이 통째로 실패하고 결과가 0곳이 된다(2026-10-30~ 보류 다발의 원인).
+    let b;
+    try { b = JSON.parse(pd); } catch { return; }
+    const arr = Array.isArray(b) ? b : [b];
+    if (!arr.some((op) => op && op.variables && findInput(op.variables))) return;
+    cap = { url: req.url(), headers: req.headers(), body: pd };
+  });
 
   try {
     const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
@@ -120,7 +128,9 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       const body = JSON.parse(cap.body);
       const arr = Array.isArray(body) ? body : [body];
       const idx = arr.findIndex((op) => op && op.variables && findInput(op.variables));
-      if (idx < 0) break;
+      // 첫 페이지부터 입력 자리를 못 찾으면 스크랩 실패다. 0곳으로 위장하면 기존 스냅샷이
+      // 0으로 덮이거나 화면에 가짜 미노출이 뜬다 → 명시적 에러로 올린다.
+      if (idx < 0) { if (start === 1) throw new Error('목록 GraphQL 입력 없음(요청 캡처 오류)'); break; }
       const inp = findInput(arr[idx].variables);
       inp.start = start;
       inp.display = PAGE;
