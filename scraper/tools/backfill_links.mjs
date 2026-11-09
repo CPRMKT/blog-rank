@@ -40,6 +40,43 @@ async function db(action, data = {}) {
 // 공백을 완전히 지우면 띄어쓰기만 다른 별개 키워드가 뭉쳐 누락된다.
 const norm = (x) => String(x || '').trim().toLowerCase().split(/\s+/).join(' ');
 
+// ── 오타·죽은 키워드 자동 제외 ──
+// (1) 최근 4회차 내내 플레이스 0곳인 키워드  (2) 월 검색량 0인 키워드
+function alwaysZeroKeywords() {
+  let txt = '';
+  try { txt = fs.readFileSync('/var/log/blog-rank-scraper/place-collect.log', 'utf8'); } catch { return new Set(); }
+  const runs = []; let cur = null;
+  for (const l of txt.split('\n')) {
+    if (l.includes('플레이스 순위 수집 시작')) { cur = { zero: new Set(), ok: new Set() }; runs.push(cur); }
+    if (!cur) continue;
+    const m = l.match(/"([^"]+)"/);
+    if (!m) continue;
+    if (l.includes('0곳 응답')) cur.zero.add(m[1]);
+    else if (l.includes('• "')) cur.ok.add(m[1]);
+  }
+  const last = runs.slice(-4);
+  if (last.length < 2) return new Set();
+  return new Set([...last[0].zero].filter((k) => last.every((r) => r.zero.has(k) && !r.ok.has(k))));
+}
+
+// 검색량 조회 실패(null)는 제외하지 않는다 — 모르는 것을 오타로 단정하지 않기 위해
+async function zeroVolume(keywords) {
+  const out = new Set();
+  for (let i = 0; i < keywords.length; i += 100) {
+    const chunk = keywords.slice(i, i + 100);
+    try {
+      const r = await fetch(`${BASE}/api/search-volume`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: chunk }), signal: AbortSignal.timeout(30000),
+      }).then((x) => x.json());
+      if (r && r.ok) for (const [k, v] of Object.entries(r.volumes || {})) {
+        if (v && typeof v.total === 'number' && v.total === 0) out.add(k);
+      }
+    } catch {}
+  }
+  return out;
+}
+
 const stores = await db('list_stores');
 const targets = [];   // {store_id, name, keyword, target}
 for (const st of stores) {
@@ -68,6 +105,15 @@ for (const st of stores) {
   }
 }
 
+// 오타 의심 제외
+const deadKw = alwaysZeroKeywords();
+const volZero = await zeroVolume([...new Set(targets.filter((t) => !t.skip).map((t) => t.keyword))]);
+for (const t of targets) {
+  if (t.skip) continue;
+  if (deadKw.has(t.keyword)) t.skip = '최근 4회차 내내 0곳';
+  else if (volZero.has(t.keyword)) t.skip = '월 검색량 0';
+}
+
 const doable = targets.filter((t) => !t.skip);
 const skipped = targets.filter((t) => t.skip);
 const toPlace = doable.filter((t) => t.target === 'place').length;
@@ -83,8 +129,13 @@ if (!RUN) {
     console.log(`  [${t.name}] "${t.keyword}" → ${t.target === 'place' ? '플레이스' : '블로그'}`);
   }
   if (skipped.length) {
-    console.log('\n=== 한도로 제외된 건 ===');
-    for (const t of skipped.slice(0, 20)) console.log(`  [${t.name}] "${t.keyword}" → ${t.target} (${t.skip})`);
+    console.log('\n=== 제외 목록 ===');
+    const byReason = {};
+    for (const t of skipped) (byReason[t.skip] = byReason[t.skip] || []).push(t);
+    for (const [reason, list] of Object.entries(byReason)) {
+      console.log(`\n  [${reason}] ${list.length}건`);
+      for (const t of list) console.log(`    ${t.name} / "${t.keyword}" -> ${t.target === 'place' ? '플레이스' : '블로그'}`);
+    }
   }
   console.log('\n(--dry 미리보기입니다. 실제 등록은 --run)');
   process.exit(0);
