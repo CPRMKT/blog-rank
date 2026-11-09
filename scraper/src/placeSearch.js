@@ -80,6 +80,17 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   // 모바일 스크롤 UI는 ~110위에서 자동로딩을 멈추지만, GraphQL은 start로 300위까지 페이지네이션됨.
   const findInput = (v) =>
     (v && (v.input || v.restaurantListInput || v.businessListInput || v.hairShopListInput || v.hospitalListInput || v.cafeListInput)) || null;
+  // '신규 오픈' 모듈(getNxNewOpeningList / getOpeningRestaurants …)은 같은 리스트 페이지에서 함께 뜨고
+  // 일부는 input(start/display)까지 갖고 있어 모양만으로는 목록 요청과 구분되지 않는다.
+  // 구분 표식: 오픈 모듈은 filterOpening='true', 진짜 목록은 'false' + sortingOrder를 갖는다.
+  const isListOp = (op) => {
+    if (!op || !op.variables) return false;
+    if (/opening/i.test(String(op.operationName || ''))) return false;
+    const inp = findInput(op.variables);
+    if (!inp) return false;
+    if (String(inp.filterOpening) === 'true') return false;
+    return true;
+  };
   let cap = null;
   page.on('request', (req) => {
     if (cap) return;
@@ -92,7 +103,7 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     let b;
     try { b = JSON.parse(pd); } catch { return; }
     const arr = Array.isArray(b) ? b : [b];
-    if (!arr.some((op) => op && op.variables && findInput(op.variables))) return;
+    if (!arr.some((op) => op && op.variables && isListOp(op))) return;
     cap = { url: req.url(), headers: req.headers(), body: pd };
   });
 
@@ -127,7 +138,7 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       if (Date.now() - t0 > budgetMs) break; // 시간예산 초과 → 여기까지 수집한 선에서 종료
       const body = JSON.parse(cap.body);
       const arr = Array.isArray(body) ? body : [body];
-      const idx = arr.findIndex((op) => op && op.variables && findInput(op.variables));
+      const idx = arr.findIndex((op) => isListOp(op));
       // 첫 페이지부터 입력 자리를 못 찾으면 스크랩 실패다. 0곳으로 위장하면 기존 스냅샷이
       // 0으로 덮이거나 화면에 가짜 미노출이 뜬다 → 명시적 에러로 올린다.
       if (idx < 0) { if (start === 1) throw new Error('목록 GraphQL 입력 없음(요청 캡처 오류)'); break; }
