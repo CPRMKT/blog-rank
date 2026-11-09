@@ -224,6 +224,77 @@ export default async function handler(req, res) {
       const result = await supaFetch(`/store_place_keywords?store_id=eq.${data.store_id}&order=created_at.asc`);
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
+    // ===== 블로그 ↔ 플레이스 키워드 양방향 연동 =====
+    // 한쪽 탭에 (매장, 키워드)를 등록하면 반대쪽에도 같이 등록한다.
+    // 일부러 트랜잭션(RPC)으로 묶지 않는다 — "한쪽이 실패해도 다른 쪽은 유지하고
+    // 실패한 쪽만 재시도 대기로 표시"가 요구사항이라, 전부 되돌리면 오히려 어긋난다.
+    if (action === 'add_linked_keyword') {
+      const BLOG_MAX = 30, PLACE_MAX = 40;
+      const storeId = data.store_id;
+      const keyword = String(data.keyword || '').trim();
+      const origin = data.origin === 'place' ? 'place' : 'blog';   // 사용자가 실제로 등록한 쪽
+      if (!storeId || !keyword) return res.status(200).json({ ok: false, error: '매장과 키워드가 필요합니다' });
+
+      // 공백 제거 + 소문자로 비교(사장님 지시: 공백/대소문자 차이 흡수)
+      const norm = (x) => String(x || '').toLowerCase().split(/\s+/).join('');
+      const nk = norm(keyword);
+
+      const [bRows, pRows] = await Promise.all([
+        supaFetch(`/store_keywords?store_id=eq.${storeId}&select=keyword`).catch(() => []),
+        supaFetch(`/store_place_keywords?store_id=eq.${storeId}&select=keyword`).catch(() => []),
+      ]);
+      const blogKws = (Array.isArray(bRows) ? bRows : []).map((r) => r.keyword).filter(Boolean);
+      const placeKws = (Array.isArray(pRows) ? pRows : []).map((r) => r.keyword).filter(Boolean);
+      const hasBlog = blogKws.some((k) => norm(k) === nk);
+      const hasPlace = placeKws.some((k) => norm(k) === nk);
+
+      const out = { blog: hasBlog ? 'exists' : null, place: hasPlace ? 'exists' : null };
+
+      const addBlog = async () => {
+        if (hasBlog) return;
+        if (blogKws.length >= BLOG_MAX) { out.blog = `limit:${BLOG_MAX}`; return; }
+        await supaFetch('/store_keywords', { method: 'POST', body: JSON.stringify({ store_id: storeId, keyword }) });
+        out.blog = 'added';
+      };
+      const addPlace = async () => {
+        if (hasPlace) return;
+        if (placeKws.length >= PLACE_MAX) { out.place = `limit:${PLACE_MAX}`; return; }
+        await supaFetch('/store_place_keywords', {
+          method: 'POST',
+          body: JSON.stringify({ store_id: storeId, keyword }),
+          headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        });
+        out.place = 'added';
+      };
+
+      // 사용자가 등록한 쪽을 먼저 확정한다. 이쪽이 실패하면 등록 자체가 실패다.
+      try {
+        if (origin === 'blog') await addBlog(); else await addPlace();
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: String(e.message || e).slice(0, 120) });
+      }
+      // 반대쪽은 실패해도 등록을 되돌리지 않고 "연동 실패"로만 알린다.
+      let linkError = null;
+      try {
+        if (origin === 'blog') await addPlace(); else await addBlog();
+      } catch (e) {
+        linkError = String(e.message || e).slice(0, 120);
+        out[origin === 'blog' ? 'place' : 'blog'] = 'failed';
+      }
+
+      // 상대 탭에 매장이 없으면 키워드를 넣어도 화면에 안 보인다 → 그 탭 소속 플래그를 켠다.
+      try {
+        const patch = {};
+        if (out.blog === 'added') patch.in_blog = true;
+        if (out.place === 'added') patch.in_place = true;
+        if (Object.keys(patch).length) {
+          await supaFetch(`/stores?id=eq.${storeId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+        }
+      } catch (e) { /* 플래그 실패는 등록을 막지 않는다 */ }
+
+      return res.status(200).json({ ok: true, result: out, link_error: linkError });
+    }
+
     if (action === 'add_store_place_keyword') {
       const result = await supaFetch('/store_place_keywords', {
         method: 'POST',

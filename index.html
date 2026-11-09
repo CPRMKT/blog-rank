@@ -292,6 +292,10 @@ tr:hover td{background:var(--surface-3)}
 .pt-day.today{background:var(--brand-soft);border-radius:6px;border-bottom-color:transparent}
 /* 키워드 등록일 이전 날짜: 데이터가 "없는" 게 아니라 "존재할 수 없는" 칸 — 음영으로 구분 */
 .pt-day.pre{background:var(--surface-2);opacity:.55}
+/* 블로그↔플레이스 연동 알림: 성공은 조용한 회색, 실패는 재시도 대기(주황) */
+.link-note{font-size:12px;margin-top:8px;line-height:1.6;color:var(--muted)}
+.link-note.fail{color:#b45309;font-weight:600}
+.link-note .lk-retry{color:var(--brand);font-weight:700;cursor:pointer;text-decoration:underline;margin-left:6px}
 /* 즉시수집 실패(자동 재시도 예정): 미노출 '-'와 구분 */
 .pt-retrywait{font-size:10px;font-weight:700;color:#b45309;white-space:nowrap}
 /* 배치 0곳 보류: 네이버가 빈 응답을 준 날. 미노출 '-'와 구분해 글자로 표시 */
@@ -759,6 +763,7 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
           <button class="btn primary" onclick="addKeyword()">등록</button>
           <span id="kwCount" style="font-size:12px;color:#aaa;white-space:nowrap">0/30</span>
         </div>
+        <div id="linkNoteBlog" class="link-note" style="display:none"></div>
         <div class="kw-tags" id="kwTags"><span class="muted">등록된 키워드가 없습니다</span></div>
       </div>
 
@@ -1175,6 +1180,7 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
             <span id="ptKwCount" style="font-size:12px;color:var(--muted);white-space:nowrap">0/20</span>
           </div>
           <div class="pt-tags" id="ptKwTags"><span style="color:var(--faint);font-size:12.5px">등록된 키워드가 없습니다</span></div>
+          <div id="linkNotePlace" class="link-note" style="display:none"></div>
           <div id="ptKwErr" style="display:none;color:var(--bad);font-size:12px;margin-top:8px"></div>
         </div>
 
@@ -1793,10 +1799,10 @@ function showPage(page){
     const pg=document.getElementById('page-'+p); if(pg) pg.style.display=page===p?'':'none';
     const mn=document.getElementById('menu-'+p); if(mn) mn.classList.toggle('active',page===p);
   });
-  if(page==='store') loadStores();
+  if(page==='store'){ loadStores(); linkOnEnter('blog'); }
   if(page==='blogdiag') initBlogDiag();
   if(page==='seoreport') initSeoReport();
-  if(page==='placetrack') initPlaceTrack();
+  if(page==='placetrack'){ initPlaceTrack(); linkOnEnter('place'); }
   if(page==='placerank') initPlaceRank();
   if(page==='charge') initCharge();
   if(page==='order') initOrder();
@@ -3604,6 +3610,108 @@ function renderStoreMeta(store){
     .catch(()=>{ if(curStoreId===sid) metaEls.textContent='리뷰 조회 실패'; });
 }
 
+// ---------- 블로그 ↔ 플레이스 키워드 연동 ----------
+// 한쪽 탭에 등록하면 반대쪽에도 같이 등록한다. 반대쪽이 실패하면 등록을 되돌리지 않고
+// "연동 실패, 재시도 대기"로 남겨 둔다(조용한 누락 금지). 재시도 목록은 브라우저에 보관.
+const LINK_PENDING_KEY = 'blogrank_link_pending';
+
+function linkPendingGet(){
+  try{ const v=JSON.parse(localStorage.getItem(LINK_PENDING_KEY)||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; }
+}
+function linkPendingSet(list){
+  try{ localStorage.setItem(LINK_PENDING_KEY, JSON.stringify(list.slice(0,100))); }catch(e){}
+}
+function linkPendingAdd(item){
+  const list=linkPendingGet();
+  if(list.some(x=>String(x.store_id)===String(item.store_id)&&x.keyword===item.keyword&&x.target===item.target)) return;
+  list.push({...item, at:Date.now()});
+  linkPendingSet(list);
+}
+function linkPendingRemove(item){
+  linkPendingSet(linkPendingGet().filter(x=>!(String(x.store_id)===String(item.store_id)&&x.keyword===item.keyword&&x.target===item.target)));
+}
+
+// 결과 코드(added/exists/limit:N/failed)를 사람이 읽는 문장으로
+function linkResultText(other, code, storeName){
+  const tab = other==='place' ? '플레이스 순위 추적' : '매장 블로그 순위';
+  if(code==='added')  return `${tab}에도 함께 등록했습니다.`;
+  if(code==='exists') return `${tab}에는 이미 등록돼 있습니다.`;
+  if(String(code||'').indexOf('limit:')===0){
+    const n=String(code).split(':')[1];
+    return `${tab} 한도 ${n}개 초과로 연동되지 않았습니다.`;
+  }
+  return null;
+}
+
+function linkNote(where, html, fail){
+  const el=document.getElementById(where==='place'?'linkNotePlace':'linkNoteBlog');
+  if(!el) return;
+  if(!html){ el.style.display='none'; el.innerHTML=''; return; }
+  el.className='link-note'+(fail?' fail':'');
+  el.innerHTML=html;
+  el.style.display='';
+}
+
+// 대기 중인 연동 실패를 화면에 계속 보여준다(새로고침해도 남는다)
+function linkRenderPending(where){
+  const list=linkPendingGet();
+  if(!list.length){ return false; }
+  const names=list.slice(0,5).map(x=>escapeHtml(x.keyword)).join(', ');
+  linkNote(where, `연동 실패 ${list.length}건 — 재시도 대기: ${names}${list.length>5?' 외 '+(list.length-5)+'건':''}`
+    + `<span class="lk-retry" onclick="linkRetryPending('${where}')">지금 재시도</span>`, true);
+  return true;
+}
+
+// 등록 1건: 양쪽 반영 + 결과 안내. 반환값으로 "내가 등록한 쪽"의 성공 여부를 알린다.
+async function linkAddKeyword(storeId, keyword, origin){
+  let r=null;
+  try{ r=await dbCall('add_linked_keyword',{store_id:storeId, keyword, origin}); }
+  catch(e){ r={ok:false, error:String(e&&e.message||e)}; }
+  const where = origin==='place' ? 'place' : 'blog';
+  const other = origin==='place' ? 'blog' : 'place';
+
+  if(!r||!r.ok) return {ok:false, error:(r&&r.error)||'등록 실패'};
+
+  const code=(r.result||{})[other];
+  if(code==='failed'||r.link_error){
+    linkPendingAdd({store_id:storeId, keyword, target:other});
+    linkRenderPending(where);
+  }else{
+    const msg=linkResultText(other, code);
+    linkNote(where, msg?escapeHtml(msg):'', false);
+    if(!linkPendingGet().length && !msg) linkNote(where,'');
+  }
+  return {ok:true, result:r.result||{}};
+}
+
+// 탭에 들어올 때: 대기 중인 연동이 있으면 바로 보여주고 1회 자동 재시도
+function linkOnEnter(where){
+  if(!linkPendingGet().length){ linkNote(where,''); return; }
+  linkRenderPending(where);
+  setTimeout(()=>{ linkRetryPending(where).catch(()=>{}); }, 1500);
+}
+
+// 대기 중인 연동을 다시 시도한다(탭 진입 시 자동 1회 + 사용자가 눌렀을 때)
+async function linkRetryPending(where){
+  const list=linkPendingGet();
+  if(!list.length){ linkNote(where,''); return; }
+  linkNote(where, `연동 재시도 중… (${list.length}건)`, false);
+  let done=0, fail=0;
+  for(const item of list.slice(0,20)){
+    try{
+      const r=await dbCall('add_linked_keyword',{store_id:item.store_id, keyword:item.keyword, origin:item.target});
+      const code=(r&&r.result||{})[item.target];
+      if(r&&r.ok&&(code==='added'||code==='exists'||String(code||'').indexOf('limit:')===0)){ linkPendingRemove(item); done++; }
+      else fail++;
+    }catch(e){ fail++; }
+  }
+  if(linkPendingGet().length) linkRenderPending(where);
+  else linkNote(where, `연동 재시도 완료 — ${done}건 처리${fail?` · 실패 ${fail}건`:''}`, false);
+  // 화면 숫자 맞추기
+  if(where==='place'&&typeof ptLoad==='function') ptLoad().catch(()=>{});
+  if(where==='blog'&&typeof selectStore==='function'&&curStoreId) selectStore(curStoreId).catch(()=>{});
+}
+
 // ---------- 키워드 관리 ----------
 async function addKeyword(){
   const kw=document.getElementById('kwInput').value.trim();
@@ -3613,8 +3721,9 @@ async function addKeyword(){
   if(keywords.includes(kw)){alert('이미 등록된 키워드입니다');return;}
   if(keywords.length>=MAX_KEYWORDS){alert(`키워드는 최대 ${MAX_KEYWORDS}개까지 등록 가능합니다`);return;}
 
-  // DB 저장
-  await dbCall('add_store_keyword',{store_id:curStoreId,keyword:kw});
+  // DB 저장 — 플레이스 순위 추적에도 함께 등록(실패해도 블로그 등록은 유지)
+  const lr=await linkAddKeyword(curStoreId,kw,'blog');
+  if(!lr.ok){ alert('등록 실패: '+lr.error); return; }
   keywords.push(kw);
   storeKeywords[curStoreId]=keywords;
   document.getElementById('kwInput').value='';
@@ -3624,6 +3733,10 @@ async function addKeyword(){
   // 등록 즉시 순위 조회(순차 큐 — 연속 등록해도 동시 발사 없음) + 월 검색량 로드
   btEnqueueCheck(curStoreId,kw);
   loadKeywordVolumes(curStoreId,[kw]);
+  // 플레이스 쪽 즉시 수집은 그 탭이 같은 매장을 보고 있을 때만(아니면 탭 진입 시 '이어하기'가 처리)
+  if(lr.result&&lr.result.place==='added'&&typeof ptEnqueueCollect==='function'&&String(ptStoreId)===String(curStoreId)){
+    ptKeywords.push(kw); ptUpdateCount(); ptRenderChips(); ptEnqueueCollect(kw,curStoreId);
+  }
 }
 
 async function removeKeyword(kw){
@@ -4617,12 +4730,14 @@ async function ptAddKeyword(){
   if(ptKeywords.length>=PT_MAX_KW){ ptErr(`키워드는 최대 ${PT_MAX_KW}개까지 등록할 수 있습니다.`); return; }
   if(ptKeywords.includes(kw)){ ptErr('이미 등록된 키워드입니다.'); inp.value=''; return; }
   const btn=document.getElementById('ptAddBtn'); btn.disabled=true; btn.textContent='등록 중...';
-  const r=await dbCall('add_store_place_keyword',{store_id:ptStoreId,keyword:kw});
-  if(!r||!r.ok){ ptErr('등록 실패: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='등록'; return; }
+  const lr=await linkAddKeyword(ptStoreId,kw,'place');   // 매장 블로그 순위에도 함께 등록
+  if(!lr.ok){ ptErr('등록 실패: '+lr.error); btn.disabled=false; btn.textContent='등록'; return; }
   inp.value='';
   ptKeywords.push(kw); ptUpdateCount(); ptRenderChips();
   // 카드를 즉시 띄우고 순차 수집 큐에 등록(연속 등록해도 동시 발사 없이 하나씩 처리)
   ptEnqueueCollect(kw);
+  // 블로그 쪽에도 생겼으면 블로그 순위도 바로 확인(큐가 분리돼 있어 서로 막지 않는다)
+  if(lr.result&&lr.result.blog==='added'&&typeof btEnqueueCheck==='function') btEnqueueCheck(ptStoreId,kw);
   btn.disabled=false; btn.textContent='등록';   // 버튼은 바로 풀어 다음 키워드 입력 가능
   loadPtVolumes([kw]);   // 신규 키워드 월검색량
 }
