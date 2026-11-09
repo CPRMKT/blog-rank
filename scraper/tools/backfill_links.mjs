@@ -24,6 +24,17 @@ const RUN = has('run');
 const ts = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
 const log = (m) => { const line = `[${ts()} KST] ${m}`; console.log(line); if (RUN) { try { fs.appendFileSync(LOG, line + '\n'); } catch {} } };
 
+// get_place_snapshot처럼 result 밖의 필드를 쓰는 액션용(응답 전체를 돌려준다)
+async function dbRaw(action, data = {}) {
+  const r = await fetch(`${BASE}/api/db`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-cron-secret': SECRET },
+    body: JSON.stringify({ action, data }),
+    signal: AbortSignal.timeout(45000),
+  });
+  return r.json();
+}
+
 async function db(action, data = {}) {
   const r = await fetch(`${BASE}/api/db`, {
     method: 'POST',
@@ -106,12 +117,28 @@ for (const st of stores) {
 }
 
 // 오타 의심 제외
+// 주의: "최근 4회차 0곳"만으로는 오타로 단정할 수 없다. 2026-10-30 이후 수집이 중간에 끊기면서
+// 멀쩡한 키워드(명륜역 미용실 — 10/29에 300곳)도 매 회차 0곳으로 찍혔다.
+// 그래서 "마지막으로 결과가 있던 날이 30일 이상 전"인 것만 오타로 본다.
 const deadKw = alwaysZeroKeywords();
 const volZero = await zeroVolume([...new Set(targets.filter((t) => !t.skip).map((t) => t.keyword))]);
+// 0곳이 이어지는 키워드라도 최근에 결과가 있었으면 수집 문제이지 오타가 아니다
+const lastOk = {};
+for (const kw of deadKw) {
+  try {
+    const r = await dbRaw('get_place_snapshot', { keyword: kw }).catch(() => null);
+    lastOk[kw] = (r && r.checked_date) || null;
+  } catch { lastOk[kw] = null; }
+}
+const DEAD_DAYS = 30;
 for (const t of targets) {
   if (t.skip) continue;
-  if (deadKw.has(t.keyword)) t.skip = '최근 4회차 내내 0곳';
-  else if (volZero.has(t.keyword)) t.skip = '월 검색량 0';
+  if (deadKw.has(t.keyword)) {
+    const d = lastOk[t.keyword];
+    const days = d ? Math.round((Date.now() - new Date(d)) / 86400000) : 9999;
+    if (days >= DEAD_DAYS) t.skip = `계속 0곳 + 마지막 결과 ${d || '없음'}(${days}일 전)`;
+  }
+  if (!t.skip && volZero.has(t.keyword)) t.skip = '월 검색량 0';
 }
 
 const doable = targets.filter((t) => !t.skip);
