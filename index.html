@@ -4514,7 +4514,7 @@ async function ptLoadFailBanner(){
     const parts=[];
     if(p&&(p.errors||p.held)) parts.push('플레이스 '+(p.errors+p.held)+'/'+p.total);
     if(b&&b.errors) parts.push('블로그 '+b.errors+'/'+b.total);
-    if(notRun) parts.push('미수집 '+notRun+'/'+denom);
+    if(notRun) parts.push('미수집 '+notRun+'/'+((p?p.total:0)+notRun));   // 미수집은 플레이스 회차의 분모로만 센다(블로그 건수 섞지 않기)
     const details=(r.failures||[]).filter(l=>l.indexOf('[테스트]')<0).slice(-30);
     const bits=[];
     if(errors) bits.push('실패 '+errors);
