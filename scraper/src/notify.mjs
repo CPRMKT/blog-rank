@@ -8,6 +8,7 @@
 // 규칙
 //  - 정상일 때는 아무것도 보내지 않는다.
 //  - 하루 최대 3통. 같은 종류(kind)는 하루 1통만(브라우저 재기동 반복 시 도배 방지).
+//  - 종류: place-held(0곳 30%↑) / place-notrun(미수집 2일 연속) / errors / browser / cron / weekly
 //  - 주간 요약(월요일)은 상한과 별개로 1통 보낸다(kind='weekly', force).
 import fs from 'fs';
 
@@ -75,11 +76,15 @@ export async function notifyBatchResult(label, summary) {
 
   const heldPct = Math.round((held / total) * 100);
   const lines = [];
+  const streak = summary.notRunStreak || 0;
   if (held && heldPct >= 30) lines.push(`0곳 보류 ${held}/${total}건 (${heldPct}%) — 네이버 응답 없음`);
   if (errors >= 10) lines.push(`수집 실패 ${errors}/${total}건`);
-  if (summary.aborted) lines.push(`백오프 소진으로 중단 — 남은 ${summary.remaining}개는 다음 수집`);
+  if (summary.aborted) lines.push(`실행 상한으로 중단 — 미수집 ${summary.remaining}개는 다음 수집`);
+  // 미수집이 이틀 연속이면 하루 1회 갱신이 깨지는 중 — 보류율이 낮아도 알린다.
+  if (streak >= 2) lines.push(`미수집 ${streak}일 연속 — 하루 1회 갱신이 깨지는 중(저녁 상한 자동 상향)`);
   if (!lines.length) return;
 
-  await notify(held && heldPct >= 30 ? 'place-held' : 'errors',
+  const kind = streak >= 2 ? 'place-notrun' : (held && heldPct >= 30 ? 'place-held' : 'errors');
+  await notify(kind,
     [`⚠️ ${label} 점검 필요`, ...lines, '', `저장 ${summary.saved || 0}건 · ${kst()}`].join('\n'));
 }

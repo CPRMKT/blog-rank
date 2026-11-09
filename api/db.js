@@ -350,6 +350,26 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result });
     }
 
+    // 날짜 칸 구분용: 키워드별로 "그날 수집이 실제로 있었는지"를 돌려준다(rank 1 행 존재 여부).
+    // 우리 매장 행이 없는 날이 '정상 미노출'인지 '수집 기록 없음'인지 화면에서 가릴 수 없어서 필요하다.
+    // 0곳 응답으로 보류된 날도 저장 자체가 없으므로 "수집 기록 없음"으로 잡힌다(의도된 동작).
+    if (action === 'get_place_collected_dates') {
+      const days = data.days || 31;
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const kws = Array.isArray(data.keywords) ? data.keywords : [];
+      if (kws.length === 0) return res.status(200).json({ ok: true, result: {} });
+      const all = await Promise.all(
+        kws.map((k) =>
+          supaFetch(
+            `/place_rankings?keyword=eq.${encodeURIComponent(k)}&rank=eq.1&checked_date=gte.${since}&select=checked_date`
+          ).catch(() => [])
+        )
+      );
+      const out = {};
+      kws.forEach((k, i) => { out[k] = [...new Set((all[i] || []).map((r) => r.checked_date))]; });
+      return res.status(200).json({ ok: true, result: out });
+    }
+
     // 키워드의 최근 N일 순위 이력
     if (action === 'get_place_rankings') {
       const days = data.days || 31;
@@ -459,7 +479,7 @@ export default async function handler(req, res) {
       const r = await fetch(`${base.replace(/\/$/, '')}/failures`, { headers: { Authorization: `Bearer ${key}` } });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j) return res.status(200).json({ ok: false, error: `스크래퍼 ${r.status}` });
-      return res.status(200).json({ ok: true, failures: j.failures || [], held: j.held || null, lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
+      return res.status(200).json({ ok: true, failures: j.failures || [], held: j.held || null, heldCount: j.heldCount || 0, notRunCount: j.notRunCount || 0, lastPlace: j.lastPlace || null, lastBlog: j.lastBlog || null });
     }
 
     // 키워드별 최근 수집일(빠름) — "한 번도 수집 안 된" 키워드 판별용(재진입 이어하기).

@@ -302,6 +302,7 @@ tr:hover td{background:var(--surface-3)}
 .pt-held{font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap}
 /* 실행 시간/차단으로 오늘 시도조차 못 한 키워드. 보류(0곳 응답)와 구분 */
 .pt-notrun{font-size:10px;font-weight:500;color:var(--faint);white-space:nowrap}
+.pt-nocollect{font-size:10px;font-weight:500;color:var(--faint);white-space:nowrap;border-bottom:1px dashed var(--faint)}
 /* 블로그 순위표: 키워드 등록일 이전 날짜 칸 음영(플레이스 탭 .pt-day.pre와 동일 규칙) */
 td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
 /* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
@@ -1203,7 +1204,8 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
 
         <div class="notice" style="font-size:12px;color:var(--muted);line-height:1.7;padding:14px 16px;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--r-card);margin-top:var(--sp-2)">
           플레이스 순위는 매일 새벽·저녁에 자동 수집됩니다. 카드의 <b>새로고침(⟳)</b> 또는 <b>지금 수집</b>으로 오늘 순위를 즉시 반영합니다.<br>
-          기본 <b>최근 12일</b>(6일 × 2줄)을 보여주며, <b>더보기(▼)</b>로 최근 30일까지 펼칠 수 있습니다. 우리 매장이 검색 50위 밖이면 <b>미노출(-)</b>, 저장수는 네이버 표기 기준(100·1,000 단위 반올림)입니다.
+          기본 <b>최근 12일</b>(6일 × 2줄)을 보여주며, <b>더보기(▼)</b>로 최근 30일까지 펼칠 수 있습니다. 저장수는 네이버 표기 기준(100·1,000 단위 반올림)입니다.<br>
+          날짜 칸 표시: <b>숫자</b> 순위 · <b>-</b> 수집은 됐지만 300위 안에 없음(미노출) · <b>보류</b> 네이버가 빈 응답을 보내 저장을 보류함 · <b>오늘 미수집</b> 오늘 차례가 오기 전에 배치가 끝남 · <b>수집 안 됨</b> 그날 수집 기록 자체가 없음(순위가 없었다는 뜻이 아닙니다).
         </div>
       </div>
     </div>
@@ -4467,6 +4469,8 @@ const ptQueue=[]; let ptQBusy=false;
 const ptFailedKw=new Set();  // "storeId|키워드" — 수집 최종 실패(오늘 칸 "재시도 대기")
 let ptHeldKw=new Set();     // 키워드 — 오늘 배치가 0곳 응답을 받아 저장 보류(오늘 칸 "보류")
 let ptNotRunKw=new Set();   // 키워드 — 오늘 배치가 시도조차 못 함(중단). '-'(미노출)와 구분해 "오늘 미수집"
+let ptCollected={};         // 키워드 -> Set(수집 기록이 있는 날짜). 우리 매장 행이 없는 날이
+                            // '정상 미노출'인지 '수집 기록 없음'인지 가르는 유일한 근거다.
 const ptRetryCnt={};         // key -> 자동 재시도 횟수(최대 3회, 이후엔 새벽 크론이 채움)
 const ptKey=(sid,kw)=>sid+'|'+kw;
 function ptStore(){ return (stores||[]).find(s=>String(s.id)===String(ptStoreId)); }
@@ -4500,14 +4504,23 @@ async function ptLoadFailBanner(){
     const p=parse(r.lastPlace), b=parse(r.lastBlog);
     const errors=(p?p.errors:0)+(b?b.errors:0);
     const held=(p?p.held:0)+(b?b.held:0);   // 0곳 보류: 에러는 아니지만 데이터 공백 → 배너에 표시
+    // 미수집: 차례가 오기 전에 배치가 끝난 키워드. 보류(응답 없음)와 성격이 달라 따로 센다.
+    const notRun=(r.held&&r.held.date===todayKst)?((Array.isArray(r.held.notRun)?r.held.notRun.length:0)||(r.notRunCount||0)):0;
     const total=(p?p.total:0)+(b?b.total:0);
-    if((!errors&&!held)||!total){ el.style.display='none'; return; }   // 평소(실패·보류 0)엔 조용히
-    const rate=Math.round((errors+held)/total*100);
+    const problems=errors+held+notRun;
+    if(!problems||!total){ el.style.display='none'; return; }   // 평소(실패·보류·미수집 0)엔 조용히
+    const denom=total+notRun;   // 미수집은 "키워드 N"에 안 들어가므로 분모에 더해야 비율이 맞다
+    const rate=Math.round(problems/denom*100);
     const parts=[];
     if(p&&(p.errors||p.held)) parts.push('플레이스 '+(p.errors+p.held)+'/'+p.total);
     if(b&&b.errors) parts.push('블로그 '+b.errors+'/'+b.total);
+    if(notRun) parts.push('미수집 '+notRun+'/'+denom);
     const details=(r.failures||[]).filter(l=>l.indexOf('[테스트]')<0).slice(-30);
-    el.innerHTML='⚠️ 최근 수집 문제 <b>'+(errors+held).toLocaleString()+'건</b> ('+(errors?'실패 '+errors:'')+(errors&&held?' · ':'')+(held?'0곳보류 '+held:'')+' · 비율 '+rate+'% · '+parts.join(' · ')+') — '
+    const bits=[];
+    if(errors) bits.push('실패 '+errors);
+    if(held) bits.push('0곳보류 '+held);
+    if(notRun) bits.push('오늘 미수집 '+notRun);
+    el.innerHTML='⚠️ 최근 수집 문제 <b>'+problems.toLocaleString()+'건</b> ('+bits.join(' · ')+' · 비율 '+rate+'% · '+parts.join(' · ')+') — '
       +'<a onclick="ptToggleFailDetail()">상세 보기</a>'
       +'<div class="fb-detail" id="ptFailDetail">'+(details.length?details.map(escapeHtml).join('\n'):'개별 실패 기록이 없습니다. 다음 배치부터 키워드별 사유가 기록됩니다.')+'</div>';
     el.style.display='';
@@ -4658,7 +4671,8 @@ async function ptLoad(){
   if(st && ptKeywords.length){
     const rr=await dbCall('get_store_place_rankings',{place_id:st.place_id,keywords:ptKeywords,days:PT_DAYS_EXPANDED+1});
     ptRows=(rr&&rr.result)?rr.result:[];
-  }else{ ptRows=[]; }
+    await ptLoadCollected();
+  }else{ ptRows=[]; ptCollected={}; }
   await ptEnsureBlogData(ptStoreId);   // 같은 매장 블로그 순위 저장분 로드(옆 패널용)
   ptRenderCards();
   loadPtVolumes(ptKeywords);   // 월검색량 비동기 로드 후 재렌더
@@ -4672,12 +4686,24 @@ async function ptLoad(){
   }
 }
 
+// 키워드별 '그날 수집이 있었는지' 로드. 실패하면 비워 둔다(= 전부 "수집 기록 없음"으로 보수적 표시).
+async function ptLoadCollected(){
+  ptCollected={};
+  if(!ptKeywords.length) return;
+  try{
+    const r=await dbCall('get_place_collected_dates',{keywords:ptKeywords,days:PT_DAYS_EXPANDED+1});
+    const m=(r&&r.result)||{};
+    for(const k of ptKeywords) ptCollected[k]=new Set(m[k]||[]);
+  }catch(e){ for(const k of ptKeywords) ptCollected[k]=new Set(); }
+}
+
 // 순위만 가볍게 재조회(키워드/매장정보/월검색량 재조회 생략) — 수집 직후 갱신용
 async function ptReloadRankings(){
   const st=ptStore();
   if(st && ptKeywords.length){
     const rr=await dbCall('get_store_place_rankings',{place_id:st.place_id,keywords:ptKeywords,days:PT_DAYS_EXPANDED+1});
     ptRows=(rr&&rr.result)?rr.result:[];
+    await ptLoadCollected();
   }
   ptRenderCards();
 }
@@ -4937,7 +4963,8 @@ function ptRenderCards(){
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row && d===allDates[0] && ptHeldKw.has(kw)){ inner=`<div class="pt-day-body"><span class="pt-held" title="수집 보류 — 네이버 응답 없음, 다음 수집에서 재시도">보류</span></div>`; }  // 배치 0곳: 미노출과 절대 같은 모양이면 안 됨
       else if(!row && d===allDates[0] && ptNotRunKw.has(kw)){ inner=`<div class="pt-day-body"><span class="pt-notrun" title="오늘 수집 차례가 오기 전에 배치가 끝났습니다 — 다음 수집에서 먼저 처리됩니다">오늘 미수집</span></div>`; }
-      else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }
+      else if(!row && ptCollected[kw] && !ptCollected[kw].has(d)){ inner=`<div class="pt-day-body"><span class="pt-nocollect" title="이 날은 수집 기록이 없습니다 — 순위가 없었다는 뜻이 아닙니다">수집 안 됨</span></div>`; }  // 가짜 미노출 방지
+      else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }  // 수집은 됐고 300위 안에 없음 = 정상 미노출
       else{
         // 변동 기준: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날(prior)
         const gi=allDates.indexOf(d); let prior=null;

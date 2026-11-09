@@ -25,7 +25,12 @@ const BACKOFF_MS = 35 * 60 * 1000;  // 회복 대기(과거 관측상 약 35분�
 // 백오프 횟수는 제한하지 않는다. 횟수로 끊으면(기존 3회) 키워드가 늘어난 만큼
 // 매번 뒤쪽이 통째로 굶는다(2026-11 기준 358개 중 143개 미수집).
 // 대신 총 실행 시간에 상한을 두고, 넘으면 안전하게 멈춘다.
-const RUN_LIMIT_MS = parseInt(process.env.PLACE_RUN_LIMIT_MS || String(10 * 60 * 60 * 1000), 10);
+const RUN_LIMIT_BASE = parseInt(process.env.PLACE_RUN_LIMIT_MS || String(10 * 60 * 60 * 1000), 10);
+// 저녁 회차 자동 상향: '오늘 미수집'이 이틀 연속 생기면 하루 1회 갱신이 깨지는 중이므로
+// 저녁 상한을 4시간 → 6시간으로 늘린다(아침 8시간 회차는 건드리지 않는다).
+const EVENING_LIMIT_MS = 4 * 60 * 60 * 1000;
+const EVENING_RAISED_MS = 6 * 60 * 60 * 1000;
+let RUN_LIMIT_MS = RUN_LIMIT_BASE;
 const backoffMin = () => Math.max(1, Math.round(BACKOFF_MS / 60000));
 const LOG_DIR = '/var/log/blog-rank-scraper';
 const FAIL_LOG = `${LOG_DIR}/failures.log`; // 실패 전용 로그(스크립트 공통)
@@ -46,6 +51,21 @@ function loadLastCollected() {
   } catch {}
   return map;
 }
+// held-<date>.json: 그 날짜 '마지막' 회차의 결과. 없으면 null(모름)을 돌려준다.
+function readHeld(date) {
+  try { return JSON.parse(fs.readFileSync(`${LOG_DIR}/held-${date}.json`, 'utf8')); } catch { return null; }
+}
+function notRunCount(date) {
+  const j = readHeld(date);
+  if (!j) return null;
+  return Array.isArray(j.notRun) ? j.notRun.length : 0;
+}
+const shiftDate = (date, n) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+
 function saveLastCollected(map) {
   try { fs.writeFileSync(LAST_FILE, JSON.stringify(map)); } catch {}
 }
@@ -110,6 +130,19 @@ async function main() {
     try { fs.unlinkSync(LOCK); } catch {}
   }
   fs.writeFileSync(LOCK, String(process.pid));
+
+  // 실행 날짜는 시작 시점으로 고정한다. 6시간 상향 시 자정을 넘길 수 있고,
+  // 그때 kstDate()를 다시 부르면 다음 날 파일을 덮어써 화면 표시가 어긋난다.
+  const runDate = kstDate();
+  if (RUN_LIMIT_BASE === EVENING_LIMIT_MS) {
+    const a = notRunCount(runDate);               // 오늘 아침 회차
+    const b = notRunCount(shiftDate(runDate, 1)); // 어제 마지막 회차
+    if (a > 0 && b > 0) {
+      RUN_LIMIT_MS = EVENING_RAISED_MS;
+      log(`미수집 2일 연속(오늘 ${a}건 / 어제 ${b}건) -> 저녁 실행 상한 4시간 -> 6시간 자동 상향`);
+      logFail('place', '[상한]', `미수집 2일 연속(오늘 ${a} / 어제 ${b}) — 저녁 상한 4h→6h 자동 상향`);
+    }
+  }
 
   let lastMapRef = null;
   const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0, notRun: [] };
@@ -253,20 +286,61 @@ async function main() {
       log(`⚠ 실패 키워드(${summary.errors}): ${summary.failed.slice(0, 20).join(', ')}${summary.failed.length > 20 ? ' 외 ' + (summary.failed.length - 20) + '개' : ''}`);
       logFail('place', `[요약]`, `실패 ${summary.errors}/${summary.keywords}건 (date=${today})`);
     }
+    if (summary.remaining > 0) {
+      logFail('place', '[요약]', `오늘 미수집 ${summary.remaining}건 (date=${runDate}) — 다음 회차에서 먼저 처리`);
+    }
+    // 미수집 연속 일수(오늘 = 이번 회차 결과, 그 전은 파일). 알림·상향 판단의 근거.
+    {
+      let streak = summary.remaining > 0 ? 1 : 0;
+      if (streak) {
+        for (let i = 1; i <= 7; i++) {
+          const n = notRunCount(shiftDate(runDate, i));
+          if (n == null || n === 0) break;
+          streak++;
+        }
+      }
+      summary.notRunStreak = streak;
+      if (streak >= 2) log(`⚠ 미수집 ${streak}일 연속 — 하루 1회 갱신이 깨지는 중`);
+    }
+    // [백필 게이트] 플레이스 백필 시작 조건을 매 회차 한 줄로 남긴다 — 사장님이 충족 시점을 한눈에 보도록.
+    {
+      const need = 7;
+      const days = [];
+      for (let i = 0; i < need; i++) {
+        const d = shiftDate(runDate, i);
+        const j = i === 0
+          ? { notRun: summary.notRun, total: summary.keywords, held: summary.heldKws.length }
+          : readHeld(d);
+        if (!j) { days.push({ d, ok: false, why: '기록 없음' }); continue; }
+        const nr = Array.isArray(j.notRun) ? j.notRun.length : (j.remaining || 0);
+        const total = j.total || 0;
+        const held = j.held != null ? j.held : (Array.isArray(j.keywords) ? j.keywords.length : 0);
+        const pct = total ? (held / total) * 100 : null;
+        days.push({ d, ok: nr === 0 && pct != null && pct < 5, nr, pct });
+      }
+      const okDays = days.filter((x) => x.ok).length;
+      const todayPct = summary.keywords ? Math.round((summary.heldKws.length / summary.keywords) * 1000) / 10 : 0;
+      const line = `백필 게이트 — 조건 충족 ${okDays}/${need}일 (오늘: 미수집 ${summary.remaining}건, 보류율 ${todayPct}%) => ${okDays >= need ? '충족 — 플레이스 백필 시작 가능' : '미충족'}`;
+      log(line);
+      logFail('place', '[게이트]', line);
+    }
     if (summary.keywords > 0 && summary.errors >= Math.max(5, summary.keywords * 0.3)) {
       log(`🚨 실패율 ${Math.round((summary.errors / summary.keywords) * 100)}% — 스크래퍼/네트워크 점검 필요 (${FAIL_LOG} 참고)`);
     }
   } catch (e) {
     log(`치명적 오류: ${e.message}`);
     process.exitCode = 1;
-    await notifyBatchResult('플레이스 순위 수집', summary);   // 조건에 걸릴 때만 발송
   } finally {
+    // 정상 종료·예외 모두에서 한 번 판단한다(조건에 안 걸리면 조용히 넘어간다).
+    try { await notifyBatchResult('플레이스 순위 수집', summary); } catch {}
     // 오늘 보류된 키워드 목록을 파일로 남긴다 — 화면에서 '-'(미노출)와 구분해 "보류"로 표시하는 근거.
     // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
     try {
-      fs.writeFileSync(`${LOG_DIR}/held-${kstDate()}.json`,
-        JSON.stringify({ date: kstDate(), at: new Date().toISOString(), keywords: summary.heldKws,
-          aborted: summary.aborted, remaining: summary.remaining, notRun: summary.notRun }));
+      fs.writeFileSync(`${LOG_DIR}/held-${runDate}.json`,
+        JSON.stringify({ date: runDate, at: new Date().toISOString(), keywords: summary.heldKws,
+          aborted: summary.aborted, remaining: summary.remaining, notRun: summary.notRun,
+          total: summary.keywords, saved: summary.saved, held: summary.heldKws.length,
+          limitMs: RUN_LIMIT_MS, raised: RUN_LIMIT_MS !== RUN_LIMIT_BASE }));
     } catch {}
     try { if (lastMapRef) saveLastCollected(lastMapRef); } catch {}
     try { fs.unlinkSync(LOCK); } catch {}

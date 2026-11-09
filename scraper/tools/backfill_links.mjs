@@ -21,6 +21,19 @@ const DAILY = parseInt(arg('n', '30'), 10);
 const ONLY = arg('only', '');
 const RUN = has('run');
 
+// 플레이스 쪽 백필 게이트: 직전 수집 회차에 '미수집'이 1건이라도 있으면 그날은 건너뛴다.
+// 하루 1회 갱신도 못 채우는 상태에서 키워드를 더 넣으면 미수집이 눈덩이처럼 커진다.
+function lastRunNotRun() {
+  const dir = '/var/log/blog-rank-scraper';
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => /^held-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort(); } catch { return null; }
+  if (!files.length) return null;
+  try {
+    const j = JSON.parse(fs.readFileSync(`${dir}/${files[files.length - 1]}`, 'utf8'));
+    return { date: j.date, notRun: Array.isArray(j.notRun) ? j.notRun.length : (j.remaining || 0) };
+  } catch { return null; }
+}
+
 const ts = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
 const log = (m) => { const line = `[${ts()} KST] ${m}`; console.log(line); if (RUN) { try { fs.appendFileSync(LOG, line + '\n'); } catch {} } };
 
@@ -166,6 +179,16 @@ if (!RUN) {
   }
   console.log('\n(--dry 미리보기입니다. 실제 등록은 --run)');
   process.exit(0);
+}
+
+// 플레이스에 키워드를 더하는 백필은 수집 여유가 있을 때만 돈다(블로그 쪽 백필은 플레이스 부하와 무관).
+if (ONLY !== 'blog') {
+  const lr = lastRunNotRun();
+  if (lr && lr.notRun > 0) {
+    log(`건너뜀 — 직전 회차(${lr.date})에 미수집 ${lr.notRun}건. 미수집 0인 날에만 플레이스 백필을 진행한다.`);
+    process.exit(0);
+  }
+  if (!lr) log('주의 — 직전 회차 기록(held-*.json)을 찾지 못했다. 미수집 확인 없이 진행한다.');
 }
 
 const batch = doable.filter((t) => !ONLY || t.target === ONLY).slice(0, DAILY);

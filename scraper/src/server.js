@@ -241,6 +241,9 @@ app.get('/failures', (req, res) => {
       ok: true,
       failures,
       held,
+      // 보류와 미수집은 성격이 다르다(응답 없음 vs 차례가 오지 않음) → 건수를 따로 내려준다.
+      heldCount: Array.isArray(held.keywords) ? held.keywords.length : 0,
+      notRunCount: Array.isArray(held.notRun) ? held.notRun.length : (held.remaining || 0),
       lastPlace: lastMatch(readTail(`${LOG_DIR}/place-collect.log`), '완료 —'),
       lastBlog: lastMatch(readTail(`${LOG_DIR}/collect.log`), '완료 —'),
     });
