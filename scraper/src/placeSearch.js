@@ -15,6 +15,22 @@ const MOBILE_UA =
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
 
+// 페이지(50건) 사이 딜레이 350ms. 150ms로 줄였던 9/18~19에 수집 45분차부터 약 35분간 네이버가 빈 목록을
+// 연속 반환(0곳보류 10→55→56건, 이전 5회 연속 0건). 짧은 A/B로는 누적 속도 제한이 재현되지 않으므로
+// 낮추려면 전체 크론 1회분(300여 키워드) 규모로 검증할 것.
+const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
+
+// 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
+// 업종 vertical 경로로 접근해야 검색 결과가 렌더된다. 기본은 restaurant.
+function listPath(keyword) {
+  const k = String(keyword || '');
+  if (/미용실|헤어|네일|왁싱|피부관리|에스테틱|뷰티|메이크업|반영구|속눈썹/.test(k)) return 'hairshop';
+  if (/병원|의원|치과|한의원|약국|정형외과|피부과|이비인후|안과|산부인과/.test(k)) return 'hospital';
+  if (/카페|커피|디저트|베이커리|빵집|브런치/.test(k)) return 'cafe';
+  return 'restaurant';
+}
+
+
 export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   const b = await initBrowser();
   const context = await b.newContext({
