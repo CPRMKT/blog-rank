@@ -4617,23 +4617,18 @@ async function ptLoadFailBanner(){
     let trackTotal=0;
     try{ const t=await dbCall('list_all_place_tracking',{}); trackTotal=new Set(((t&&t.result)||[]).map(x=>x.keyword)).size; }catch(e){}
     const placeTotal=trackTotal||(p?p.total:0);
-    const denom=placeTotal+(b?b.total:0);
-    const rate=Math.round(problems/Math.max(1,denom)*100);
     const parts=[];
     if(p||notRun){
       const pp=[];
       if(p&&p.held) pp.push('보류 '+p.held);
       if(p&&p.errors) pp.push('실패 '+p.errors);
       pp.push('미수집 '+notRun);                                  // 0이어도 보여준다 — '오늘은 괜찮다'를 숫자로 확인할 수 있게
-      parts.push('플레이스 '+pp.join(' · ')+' / 전체 '+placeTotal);
+      const pRate=placeTotal?Math.round(((p?p.held+p.errors:0)+notRun)/placeTotal*100):0;
+      parts.push('플레이스 '+pp.join(' · ')+' / 전체 '+placeTotal+' ('+pRate+'%)');
     }
     if(b&&b.errors) parts.push('블로그 실패 '+b.errors+' / 키워드 '+b.total);
     const details=(r.failures||[]).filter(l=>l.indexOf('[테스트]')<0).slice(-30);
-    const bits=[];
-    if(errors) bits.push('실패 '+errors);
-    if(held) bits.push('0곳보류 '+held);
-    if(notRun) bits.push('오늘 미수집 '+notRun);
-    el.innerHTML='⚠️ 최근 수집 문제 <b>'+problems.toLocaleString()+'건</b> ('+bits.join(' · ')+' · 비율 '+rate+'% · '+parts.join(' · ')+') — '
+    el.innerHTML='⚠️ 최근 수집 문제 <b>'+problems.toLocaleString()+'건</b> — '+parts.join(' · ')+' '
       +'<a onclick="ptToggleFailDetail()">상세 보기</a>'
       +'<div class="fb-detail" id="ptFailDetail">'+(details.length?details.map(escapeHtml).join('\n'):'개별 실패 기록이 없습니다. 다음 배치부터 키워드별 사유가 기록됩니다.')+'</div>';
     el.style.display='';
