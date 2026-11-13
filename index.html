@@ -3736,6 +3736,7 @@ function linkResultText(other, code, storeName){
   const tab = other==='place' ? '플레이스 순위 추적' : '매장 블로그 순위';
   if(code==='added')  return `${tab}에도 함께 등록했습니다.`;
   if(code==='exists') return `${tab}에는 이미 등록돼 있습니다.`;
+  if(code==='unsupported') return `${tab}은 카페·디저트·베이커리 업종을 아직 지원하지 않아 연동하지 않았습니다.`;
   if(String(code||'').indexOf('limit:')===0){
     const n=String(code).split(':')[1];
     return `${tab} 한도 ${n}개 초과로 연동되지 않았습니다.`;
@@ -4611,12 +4612,22 @@ async function ptLoadFailBanner(){
       el.style.display=''; return;
     }
     if(!problems||!total){ el.style.display='none'; return; }   // 평소(실패·보류·미수집 0)엔 조용히
-    const denom=total+notRun;   // 미수집은 "키워드 N"에 안 들어가므로 분모에 더해야 비율이 맞다
-    const rate=Math.round(problems/denom*100);
+    // 분모는 '마지막 회차가 처리한 수'가 아니라 전체 추적 키워드 수다. 저녁 회차가 상한에 걸려 297개만
+    // 돌면 "플레이스 10/297"로 보여 키워드가 줄어든 것처럼 읽혔다(2026-11-14 사장님 지적).
+    let trackTotal=0;
+    try{ const t=await dbCall('list_all_place_tracking',{}); trackTotal=new Set(((t&&t.result)||[]).map(x=>x.keyword)).size; }catch(e){}
+    const placeTotal=trackTotal||(p?p.total:0);
+    const denom=placeTotal+(b?b.total:0);
+    const rate=Math.round(problems/Math.max(1,denom)*100);
     const parts=[];
-    if(p&&(p.errors||p.held)) parts.push('플레이스 '+(p.errors+p.held)+'/'+p.total);
-    if(b&&b.errors) parts.push('블로그 '+b.errors+'/'+b.total);
-    if(notRun) parts.push('미수집 '+notRun+'/'+((p?p.total:0)+notRun));   // 미수집은 플레이스 회차의 분모로만 센다(블로그 건수 섞지 않기)
+    if(p||notRun){
+      const pp=[];
+      if(p&&p.held) pp.push('보류 '+p.held);
+      if(p&&p.errors) pp.push('실패 '+p.errors);
+      pp.push('미수집 '+notRun);                                  // 0이어도 보여준다 — '오늘은 괜찮다'를 숫자로 확인할 수 있게
+      parts.push('플레이스 '+pp.join(' · ')+' / 전체 '+placeTotal);
+    }
+    if(b&&b.errors) parts.push('블로그 실패 '+b.errors+' / 키워드 '+b.total);
     const details=(r.failures||[]).filter(l=>l.indexOf('[테스트]')<0).slice(-30);
     const bits=[];
     if(errors) bits.push('실패 '+errors);

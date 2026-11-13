@@ -23,6 +23,7 @@ const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
 // 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
 // 업종 vertical 경로로 접근해야 검색 결과가 렌더된다. 기본은 restaurant.
 function listPath(keyword) {
+  if (process.env.PLACE_FORCE_PATH) return process.env.PLACE_FORCE_PATH;   // 진단용: 다른 vertical로 열어보기
   const k = String(keyword || '');
   if (/미용실|헤어|네일|왁싱|피부관리|에스테틱|뷰티|메이크업|반영구|속눈썹/.test(k)) return 'hairshop';
   if (/병원|의원|치과|한의원|약국|정형외과|피부과|이비인후|안과|산부인과/.test(k)) return 'hospital';
@@ -110,6 +111,8 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     // 캡처 실패 = 스크랩 실패다. 빈 배열(정상 0곳)로 위장하면 저장 로직이
     // 기존 스냅샷을 0곳으로 덮어쓴다(9/6 저녁 37건 파괴 사건) → 명시적 에러로 승격.
     if (!cap) {
+      // 카페류: /cafe/list 가 404라 애초에 목록 요청이 뜨지 않는다(2026-11-14 실측).
+      if (listPath(keyword) === 'cafe') throw new Error('카페·디저트·베이커리 업종은 아직 지원하지 않습니다 — 네이버가 이 업종 목록 페이지(m.place.naver.com/cafe/list)를 제공하지 않습니다');
       const seen = [...seenOps].join(', ') || '없음';
       // 이름을 봤는데 허용 목록에 없다 = 네이버가 쿼리를 바꾼 것. 0곳으로 넘기지 않고 에러로 올린다.
       throw new Error(seenOps.size

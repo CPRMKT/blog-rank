@@ -176,6 +176,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
     if (action === 'add_place_keyword') {
+      if (/카페|커피|디저트|베이커리|빵집|브런치/.test(String(data.keyword || ''))) {
+        return res.status(200).json({ ok: false, error: '카페·디저트·베이커리 업종은 플레이스 순위 추적을 아직 지원하지 않습니다(네이버가 이 업종 목록 페이지를 제공하지 않습니다).', unsupported: 'cafe' });
+      }
       const result = await supaFetch('/place_keywords', {
         method: 'POST',
         body: JSON.stringify({ keyword: data.keyword }),
@@ -230,6 +233,10 @@ export default async function handler(req, res) {
     // 실패한 쪽만 재시도 대기로 표시"가 요구사항이라, 전부 되돌리면 오히려 어긋난다.
     if (action === 'add_linked_keyword') {
       const BLOG_MAX = 40, PLACE_MAX = 40;   // 두 탭 한도를 같게(2026-11-09)
+      // 카페·디저트 업종: m.place.naver.com/cafe/list 가 404라 플레이스 순위를 받아올 방법이 없다
+      // (2026-11-14 실측). 등록은 막고 안내 문구로 돌려준다 — 등록해두면 회차마다 에러만 쌓인다.
+      const CAFE_RE = /카페|커피|디저트|베이커리|빵집|브런치/;
+      const CAFE_MSG = '카페·디저트·베이커리 업종은 플레이스 순위 추적을 아직 지원하지 않습니다(네이버가 이 업종 목록 페이지를 제공하지 않습니다). 블로그 순위 추적은 됩니다.';
       const storeId = data.store_id;
       const keyword = String(data.keyword || '').trim();
       const origin = data.origin === 'place' ? 'place' : 'blog';   // 사용자가 실제로 등록한 쪽
@@ -251,6 +258,10 @@ export default async function handler(req, res) {
       const hasPlace = placeKws.some((k) => norm(k) === nk);
 
       const out = { blog: hasBlog ? 'exists' : null, place: hasPlace ? 'exists' : null };
+      if (CAFE_RE.test(keyword)) {
+        if (origin === 'place') return res.status(200).json({ ok: false, error: CAFE_MSG, unsupported: 'cafe' });
+        out.place = 'unsupported';   // 블로그 쪽만 등록하고 플레이스 연동은 건너뛴다
+      }
 
       const addBlog = async () => {
         if (hasBlog) return;
@@ -259,7 +270,7 @@ export default async function handler(req, res) {
         out.blog = 'added';
       };
       const addPlace = async () => {
-        if (hasPlace) return;
+        if (hasPlace || out.place === 'unsupported') return;
         if (placeKws.length >= PLACE_MAX) { out.place = `limit:${PLACE_MAX}`; return; }
         await supaFetch('/store_place_keywords', {
           method: 'POST',
