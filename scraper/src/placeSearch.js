@@ -5,9 +5,9 @@
 
 import fs from 'fs';
 import { initBrowser } from './scraper.js';
-import { LIST_OPS, isListOp, inspectCapture } from './captureSelect.js';
+import { LIST_OPS, isListOp, inspectCapture, findInput } from './captureSelect.js';
 
-export { LIST_OPS, isListOp, inspectCapture };   // 기존 import 경로 유지
+export { LIST_OPS, isListOp, inspectCapture, findInput };   // 기존 import 경로 유지
 
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
