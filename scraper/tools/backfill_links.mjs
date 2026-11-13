@@ -34,6 +34,26 @@ function lastRunNotRun() {
   } catch { return null; }
 }
 
+// 3일 게이트: 최근 회차 기록 3일치가 모두 '미수집 0 + 보류율 5% 미만'이어야 플레이스 백필을 시작한다.
+// (2026-11-14 결정: 7일 → 3일로 완화. 오염 정리 완료 후 적용.) 조건을 못 채우면 그날은 아무것도 등록하지 않는다.
+function placeGate(need = parseInt(process.env.BACKFILL_GATE_DAYS || '3', 10)) {
+  const dir = '/var/log/blog-rank-scraper';
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => /^held-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort(); } catch { return { ok: false, why: '회차 기록 없음', rows: [] }; }
+  files = files.slice(-need);
+  if (files.length < need) return { ok: false, why: `회차 기록 ${files.length}/${need}일`, rows: [] };
+  const rows = [];
+  for (const f of files) {
+    let j; try { j = JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8')); } catch { return { ok: false, why: `${f} 읽기 실패`, rows }; }
+    const nr = Array.isArray(j.notRun) ? j.notRun.length : (j.remaining || 0);
+    const total = j.total || 0;
+    const held = j.held != null ? j.held : (Array.isArray(j.keywords) ? j.keywords.length : 0);
+    const pct = total ? Math.round((held / total) * 1000) / 10 : 100;
+    rows.push({ d: j.date || f, nr, pct, ok: nr === 0 && total > 0 && pct < 5 });
+  }
+  return { ok: rows.every((r) => r.ok), rows };
+}
+
 const ts = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
 const log = (m) => { const line = `[${ts()} KST] ${m}`; console.log(line); if (RUN) { try { fs.appendFileSync(LOG, line + '\n'); } catch {} } };
 
@@ -189,6 +209,13 @@ if (ONLY !== 'blog') {
     process.exit(0);
   }
   if (!lr) log('주의 — 직전 회차 기록(held-*.json)을 찾지 못했다. 미수집 확인 없이 진행한다.');
+  const g = placeGate();
+  const detail = g.rows.map((r) => `${r.d} 미수집 ${r.nr}·보류율 ${r.pct}%${r.ok ? '' : ' ✗'}`).join(' / ') || g.why;
+  if (!g.ok) {
+    log(`건너뜀 — 백필 게이트 미충족 (${detail}). 3일 연속 '미수집 0 + 보류율 5% 미만'이면 자동으로 시작한다.`);
+    process.exit(0);
+  }
+  log(`게이트 충족 (${detail}) → 플레이스 백필 진행`);
 }
 
 const batch = doable.filter((t) => !ONLY || t.target === ONLY).slice(0, DAILY);
