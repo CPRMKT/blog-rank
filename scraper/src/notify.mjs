@@ -70,13 +70,12 @@ export async function notify(kind, text, opt = {}) {
 /** 수집 배치 1회분 결과를 보고 보낼지 판단한다(조건에 안 걸리면 조용히 넘어간다). */
 export const HELD_PCT_ALERT = parseInt(process.env.HELD_PCT_ALERT || '10', 10);
 
-export async function notifyBatchResult(label, summary) {
+export async function notifyBatchResult(label, summary, opt = {}) {
   // 카나리 실패는 처리 건수가 0이라 아래 비율 규칙에 안 걸린다 → 따로 먼저 본다.
   if (summary && summary.canaryFail) {
     const txt = (summary.canary || []).map((c) => `${c.keyword}: ${c.n < 0 ? '에러' : c.n + '곳'}`).join(' / ');
-    await notify('canary', [`🚨 ${label} 중단 — 대조 키워드 점검 실패`, txt,
-      '네이버가 정상 목록을 주지 않습니다. 저장은 한 건도 하지 않았습니다.', '', kst()].join('\n'));
-    return;
+    return await notify('canary', [`🚨 ${label} 중단 — 대조 키워드 점검 실패`, txt,
+      '네이버가 정상 목록을 주지 않습니다. 저장은 한 건도 하지 않았습니다.', '', kst()].join('\n'), opt);
   }
   const total = summary.keywords || 0;
   const held = summary.zeroHeld || 0;
@@ -96,6 +95,6 @@ export async function notifyBatchResult(label, summary) {
   if (!lines.length) return;
 
   const kind = summary.canaryFail ? 'canary' : streak >= 2 ? 'place-notrun' : (held && heldPct >= HELD_PCT_ALERT ? 'place-held' : 'errors');
-  await notify(kind,
-    [`⚠️ ${label} 점검 필요`, ...lines, '', `저장 ${summary.saved || 0}건 · ${kst()}`].join('\n'));
+  return await notify(kind,
+    [`⚠️ ${label} 점검 필요`, ...lines, '', `저장 ${summary.saved || 0}건 · ${kst()}`].join('\n'), opt);
 }

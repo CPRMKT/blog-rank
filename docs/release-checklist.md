@@ -34,6 +34,8 @@
 - `node scraper/tools/check_module_refs.mjs` — 모듈 분리 후 import 누락 검사(node --check로는 안 잡힘)
 - **캡처 선택 로직(placeSearch.js / captureSelect.js)을 건드렸으면 `node scraper/tests/capture.test.mjs`** —
   녹화본으로 '신규 오픈' 모듈 쿼리가 순위 목록으로 채택되지 않는지 확인(2026-10-30~11-09 오염 1,199건의 원인)
+- **순위 데이터를 지우는 작업은 `tools/contam_cleanup.mjs` 로만** — `--backup` → `--dry`(건수 일치 확인)
+  → `--delete --backup-file=...` 순서. 백업 없이는 삭제가 막힌다. 되돌리기는 `--restore=<백업>`.
 - 큐 예외 처리 테스트: 정상·잘못된 입력·예외·무응답을 섞어 큐를 돌려 **실패가 있어도 끝까지 처리되고
   버튼이 풀리는지** 확인(무음 중단·영구 대기 방지)
 

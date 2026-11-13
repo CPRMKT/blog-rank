@@ -6,8 +6,32 @@
 //  3) 방금 만든 봇을 텔레그램에서 찾아 아무 말이나 한 번 보낸다(이걸 해야 chat_id가 생긴다).
 //  4) node tools/telegram_setup.mjs  → 출력된 TELEGRAM_CHAT_ID 를 .env 에 추가
 //  5) node tools/telegram_setup.mjs  → 이번엔 시험 메시지가 도착한다.
+//
+// 토큰이 들어온 뒤 알림 4종이 실제로 울리는지 한 번에 확인:
+//   node tools/telegram_setup.mjs --test-all
+//   → 보류율 10%↑ / 미수집 2일 연속 / 에러 10건↑ / 카나리 실패 를 [테스트] 표시로 1통씩 보낸다.
+//     하루 상한(3통)·같은 종류 1통 규칙은 이 모드에서만 건너뛴다. 저장 데이터는 건드리지 않는다.
+import { notifyBatchResult } from '../src/notify.mjs';
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const chat = process.env.TELEGRAM_CHAT_ID;
+
+if (process.argv.includes('--test-all')) {
+  if (!token || !chat) { console.log('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 가 .env 에 모두 있어야 합니다.'); process.exit(1); }
+  const cases = [
+    ['보류율 10%↑', { keywords: 365, zeroHeld: 40, saved: 325 }],
+    ['미수집 2일 연속', { keywords: 365, zeroHeld: 5, notRunStreak: 2, aborted: true, remaining: 68, saved: 297 }],
+    ['에러 10건↑', { keywords: 365, errors: 12, saved: 353 }],
+    ['카나리 실패', { canaryFail: true, canary: [{ keyword: '동래 맛집', n: 0 }, { keyword: '해운대 맛집', n: -1, error: '타임아웃' }] }],
+  ];
+  for (const [name, summary] of cases) {
+    const r = await notifyBatchResult('[테스트] 플레이스 수집', summary, { force: true });
+    console.log(`${r && r.sent ? '✅ 발송' : '❌ 미발송'} — ${name}${r && r.reason ? ' (' + r.reason + ')' : ''}`);
+    await new Promise((f) => setTimeout(f, 1200));
+  }
+  console.log('텔레그램에 4통이 도착했는지 확인해 주세요.');
+  process.exit(0);
+}
 
 if (!token) {
   console.log('TELEGRAM_BOT_TOKEN 이 .env 에 없습니다. 1~2단계를 먼저 해주세요.');
