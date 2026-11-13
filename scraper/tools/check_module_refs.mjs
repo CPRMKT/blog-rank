@@ -18,7 +18,11 @@ for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from/g)) {
 for (const m of src.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from/g)) declared.add(m[1]);
 
 const capNames = new Set();
-for (const m of cap.matchAll(/(?:export\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)) capNames.add(m[1]);
+// 최상위 선언만 본다. 함수 안의 지역 변수(name 등)까지 세면 멀쩡한 이름이 잡힌다.
+for (const line of cap.split(/\r?\n/)) {
+  const m = line.match(/^(?:export\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/);
+  if (m) capNames.add(m[1]);
+}
 
 const used = new Set();
 for (const m of src.matchAll(/[A-Za-z_$][\w$]*/g)) used.add(m[0]);

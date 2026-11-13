@@ -31,6 +31,7 @@
   "최대 동시 요청=1, 전량 저장, 실패는 재시도 대기" 확인 (CRLF 주의: 추출 전 \r 제거)
 - `node --check` scraper/*.mjs, scraper/src/*.js + index.html 인라인 스크립트 구문 검사
 - `node scraper/tools/check_dom_refs.mjs index.html` — 없는 요소 참조 검사(0건이어야 통과)
+- `node scraper/tools/check_module_refs.mjs` — 모듈 분리 후 import 누락 검사(node --check로는 안 잡힘)
 - **캡처 선택 로직(placeSearch.js / captureSelect.js)을 건드렸으면 `node scraper/tests/capture.test.mjs`** —
   녹화본으로 '신규 오픈' 모듈 쿼리가 순위 목록으로 채택되지 않는지 확인(2026-10-30~11-09 오염 1,199건의 원인)
 - 큐 예외 처리 테스트: 정상·잘못된 입력·예외·무응답을 섞어 큐를 돌려 **실패가 있어도 끝까지 처리되고
