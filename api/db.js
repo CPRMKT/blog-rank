@@ -380,6 +380,47 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
 
+    // [관리] 오염 행 삭제 — '신규 오픈' 캡처 버그(2026-10-30~11-09)로 저장된 (키워드, 날짜) 쌍만 지운다.
+    // 크론 시크릿 전용. dry=true면 세기만 한다. 날짜 하나당 DELETE 한 문장이라 그 날짜 안에서는 원자적이다.
+    // PostgREST에는 여러 문장을 묶는 트랜잭션이 없으므로 '쌍 단위·날짜별 한 문장'이 가능한 최소 단위다.
+    if (action === 'purge_place_rankings') {
+      if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
+      const pairs = Array.isArray(data.pairs) ? data.pairs : [];
+      if (!pairs.length) return res.status(200).json({ ok: true, pairs: 0, rows: 0, per: [] });
+      const byDate = {};
+      for (const p of pairs) {
+        const d = String(p.date || '').slice(0, 10);
+        if (d.length !== 10 || d[4] !== '-' || d[7] !== '-' || !p.keyword) continue;
+        (byDate[d] = byDate[d] || new Set()).add(String(p.keyword));
+      }
+      const inList = (ks) => '(' + ks.map((k) => '"' + encodeURIComponent(k) + '"').join(',') + ')';
+      const count = async (d, ks) => {
+        let c = 0;
+        for (let i = 0; i < ks.length; i += 25) {
+          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 25))}&select=id`);
+          c += Array.isArray(r) ? r.length : 0;
+        }
+        return c;
+      };
+      const per = [];
+      let rows = 0, npair = 0;
+      for (const d of Object.keys(byDate).sort()) {
+        const ks = [...byDate[d]];
+        npair += ks.length;
+        if (data.dry) {
+          const c = await count(d, ks);
+          per.push({ date: d, keywords: ks.length, rows: c });
+          rows += c;
+        } else {
+          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks)}&select=id`, { method: 'DELETE' });
+          const c = Array.isArray(r) ? r.length : 0;
+          per.push({ date: d, keywords: ks.length, rows: c, left: await count(d, ks) });
+          rows += c;
+        }
+      }
+      return res.status(200).json({ ok: true, dry: !!data.dry, pairs: npair, rows, per });
+    }
+
     // ===== 블로그 진단 =====
     // 블로그 공개정보(RSS+본문 통계) — NCP /blog-profile 프록시. 새 서버리스 함수 없이 db.js 안에서 처리.
     if (action === 'blog_profile') {
