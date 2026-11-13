@@ -1786,8 +1786,8 @@ async function onAuthed(){
   const st0=urlState();
   const target=(st0.page&&document.getElementById('page-'+st0.page))?st0.page:'home';
   if(st0.page&&target!==st0.page) console.warn('[딥링크] 주소의 tab='+st0.page+' 은 없는 탭입니다 → 홈으로 엽니다.');
-  pendingUrlStore=st0.store||null;
-  showPage(target,{replace:true});
+  pendingUrlStore=st0.store||null; pendingUrlApply=true;
+  showPage(target,{fromUrl:true});
 }
 async function initAuth(){
   try{
@@ -1808,7 +1808,8 @@ window.addEventListener('DOMContentLoaded',initAuth);
 const TAB_SLUG={placetrack:'place',seoreport:'seo'};              // 그 외 탭은 페이지 id를 그대로 쓴다
 const SLUG_TAB={place:'placetrack',seo:'seoreport'};
 const STORE_TABS=['placetrack','store','seoreport','blogdiag'];   // 매장을 고르는 탭
-let pendingUrlStore=null;   // 주소에서 읽은 매장 id. 해당 탭이 한 번 쓰고 비운다.
+let pendingUrlStore=null;   // 주소에서 읽은 매장 id(문자열). 해당 탭이 한 번 쓰고 비운다.
+let pendingUrlApply=false;  // 주소를 화면에 적용해야 하는 상태(첫 로드·뒤로/앞으로)
 
 const pageSlug=(p)=>TAB_SLUG[p]||p;
 const slugPage=(x)=>SLUG_TAB[x]||x;
@@ -1837,22 +1838,27 @@ function currentStoreIdFor(page){
   if(page==='blogdiag'){ const el=document.getElementById('bdStoreSel'); return el&&el.value?el.value:null; }
   return null;
 }
-// 주소의 store 값이 그 탭에서 쓸 수 있는 매장인지 확인한다. 아니면 null(= 첫 매장으로 대체)
-// 조용히 넘어가지 않고 콘솔 경고를 남긴다.
+// 주소의 store를 이 탭의 매장 목록과 맞춰 본다. 한 번 쓰면 소모된다.
+//   undefined = 적용할 주소 상태가 아님(평소 탭 이동)
+//   'none'    = 주소에 store가 없음 → 탭의 기본값(선택 해제 또는 첫 매장)
+//   null      = 주소에 있는데 이 탭에서 못 씀 → 첫 매장으로 대체 + 주소 교정(+경고)
+//   그 외      = 그 매장 id
 function resolveUrlStore(list){
-  const want=pendingUrlStore; pendingUrlStore=null;
-  if(!want) return null;
+  if(!pendingUrlApply) return undefined;
+  const want=pendingUrlStore;
+  pendingUrlStore=null; pendingUrlApply=false;
+  if(!want) return 'none';
   const hit=(list||[]).find(x=>String(x.id)===String(want));
   if(hit) return hit.id;
-  console.warn('[딥링크] 주소의 store='+want+' 가 이 탭에서 유효하지 않습니다 → 첫 매장으로 대체하고 주소를 교정합니다.');
+  console.warn('[딥링크] 주소의 store='+want+' 는 이 탭에서 쓸 수 없는 매장입니다 → 첫 매장으로 대체하고 주소를 교정합니다.');
   return null;
 }
 // 뒤로/앞으로: 주소를 '정답'으로 보고 화면을 맞춘다. 복원 중 일어나는 갱신은 전부 replace라
 // 주소가 그대로면 urlWrite가 no-op이 되어 기록이 더 쌓이지 않는다.
 window.addEventListener('popstate',()=>{
   const st=urlState();
-  pendingUrlStore=st.store||null;
-  showPage(st.page||'home',{replace:true});
+  pendingUrlStore=st.store||null; pendingUrlApply=true;
+  showPage(st.page||'home',{fromUrl:true});
 });
 
 function showPage(page,opt){
@@ -1870,9 +1876,10 @@ function showPage(page,opt){
   if(page==='admin') initAdmin();
   if(page==='kwtool') initKwTool();
   const c=document.querySelector('.content'); if(c) c.scrollTop=0;
-  // 탭을 옮기면 tab 값을 갱신한다. 매장 값은 각 탭이 선택을 마칠 때 다시 쓴다.
-  // 주소가 비어 있는 첫 진입(홈)은 깨끗한 주소를 유지한다.
-  if(!(page==='home'&&!location.search)) urlWrite(page,currentStoreIdFor(page),!!(opt&&opt.replace));
+  // 주소에서 복원하는 중이면 주소가 정답이다 — 화면의 옛 선택으로 덮어쓰면 뒤로가기가 먹힌다.
+  // 탭 이동은 replace. 기록(뒤로가기 지점)은 '사용자가 매장을 고른 순간'에만 남긴다.
+  if(opt&&opt.fromUrl) return;
+  if(!(page==='home'&&!location.search)) urlWrite(page,currentStoreIdFor(page),true);
 }
 
 // ============ 포인트 충전 (발주 2단계) ============
@@ -2248,11 +2255,13 @@ async function initBlogDiag(){
   if(!Array.isArray(stores)||!stores.length){ try{ const r=await dbCall('list_stores',{}); if(r&&r.result) stores=r.result; }catch(e){} }
   const sel=document.getElementById('bdStoreSel');
   if(sel&&!sel.options.length) sel.innerHTML='<option value="">매장에서 키워드 불러오기</option>'+stores.map(s=>`<option value="${s.id}">${escapeHtml(s.name||('매장 '+s.id))}</option>`).join('');
-  if(sel&&pendingUrlStore){
+  if(sel){
     const wanted=resolveUrlStore(stores);
-    sel.value=(wanted!=null)?String(wanted):(stores[0]?String(stores[0].id):'');
-    // 이 탭의 매장 선택은 '키워드 불러오기' 트리거다. 주소 복원만으로 키워드를 끼워 넣지는 않는다.
-    urlWrite('blogdiag',sel.value||null,true);
+    if(wanted!==undefined){
+      sel.value=(wanted==='none')?'':(wanted!=null?String(wanted):(stores[0]?String(stores[0].id):''));
+      // 이 탭의 매장 선택은 '키워드 불러오기' 트리거다. 주소 복원만으로 키워드를 끼워 넣지는 않는다.
+      urlWrite('blogdiag',sel.value||null,true);
+    }
   }
   const ta=document.getElementById('bdBloggers');
   if(ta&&!ta._bound){ ta._bound=1; ta.addEventListener('input',()=>{ document.getElementById('bdCount').textContent=bdBloggerList().length+'명'; }); }
@@ -2745,10 +2754,12 @@ async function initSeoReport(){
   const opt=(s)=>`<option value="${s.id}">${escapeHtml(s.name||('매장 '+s.id))}</option>`;
   sel.innerHTML='<option value="">매장을 선택하세요</option>'+inPlace.map(opt).join('')+rest.map(opt).join('');
   if(cur) sel.value=cur;
-  if(pendingUrlStore){
+  {
     const wanted=resolveUrlStore(stores);
-    sel.value=(wanted!=null)?String(wanted):(stores[0]?String(stores[0].id):'');
-    urlWrite('seoreport',sel.value||null,true);   // 자동 선택·교정
+    if(wanted!==undefined){
+      sel.value=(wanted==='none')?'':(wanted!=null?String(wanted):(stores[0]?String(stores[0].id):''));
+      urlWrite('seoreport',sel.value||null,true);   // 자동 선택·교정은 기록을 남기지 않는다
+    }
   }
 }
 // 사용자가 직접 고른 것 → pushState
@@ -3466,11 +3477,14 @@ async function loadStores(){
   renderStoreDropdown();
   // 자동 선택하지 않음 — 사용자가 드롭다운에서 직접 매장을 선택해야 함.
   // 다만 주소에 store가 있으면 그 매장을 연다(딥링크). 유효하지 않으면 첫 매장 + 주소 교정.
-  if(pendingUrlStore){
+  {
     const bs=blogStores();
-    const wanted=resolveUrlStore(bs);
-    const pick=(wanted!=null)?wanted:(bs[0]&&bs[0].id);
-    if(pick!=null){ await selectStore(pick,{replace:true}); return; }
+    const wanted=resolveUrlStore(bs);   // undefined면 평소 동작
+    if(wanted!==undefined){
+      if(wanted==='none') curStoreId=null;                       // 주소에 매장이 없으면 선택 해제
+      else { const pick=(wanted!=null)?wanted:(bs[0]&&bs[0].id);  // 무효면 첫 매장 + 주소 교정
+             if(pick!=null){ await selectStore(pick,{replace:true}); return; } }
+    }
   }
   const exists=curStoreId?stores.find(s=>s.id===curStoreId):null;
   if(exists){
@@ -4628,10 +4642,10 @@ async function ptApplyStoreState(){
   }
   document.getElementById('ptNoStore').style.display='none';
   document.getElementById('ptBody').style.display='';
-  // 주소에 store가 있으면 그걸 먼저 쓴다. 없거나 이 탭에 없는 매장이면 첫 매장으로 대체.
+  // 주소에 store가 있으면 그걸 먼저 쓴다. 없거나 이 탭에 없는 매장이면 첫 매장(이 탭은 자동 선택 탭).
   const wanted=resolveUrlStore(ps);
-  if(wanted!=null) ptStoreId=wanted;
-  else if(!ptStore()||ptStore().in_place===false) ptStoreId=ps[0].id;
+  if(wanted!==undefined&&wanted!==null&&wanted!=='none') ptStoreId=wanted;
+  else if(wanted===null||wanted==='none'||!ptStore()||ptStore().in_place===false) ptStoreId=ps[0].id;
   ptSetStoreBtnName();
   urlWrite('placetrack',ptStoreId,true);   // 자동 선택·주소 교정은 기록을 남기지 않는다
   await ptLoad();
