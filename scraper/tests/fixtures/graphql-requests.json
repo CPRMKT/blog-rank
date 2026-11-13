@@ -1,0 +1,46 @@
+{
+  "_설명": "m.place.naver.com 리스트 페이지에서 실제로 가로챈 GraphQL POST 본문(변수 부분). 2026-11-10 ~ 11-14 녹화. capture.test.mjs가 캡처 선택 로직을 이 고정값으로 검증한다. 네이버가 쿼리 이름을 바꾸면 여기에 새 녹화본을 추가하고 placeSearch.js의 LIST_OPS를 갱신할 것.",
+
+  "정상_restaurant": [{
+    "operationName": "getRestaurants",
+    "variables": { "callAdBusinesses": true, "isNmap": false, "isBounds": false,
+      "input": { "query": "동래 맛집", "x": "126.9783882", "y": "37.5666103", "start": 1, "display": 100, "isNmap": false, "deviceType": "mobile" } }
+  }],
+
+  "정상_hairshop": [{
+    "operationName": "getPlaceListBeauty",
+    "variables": { "isNmap": false, "isBounds": false, "businessType": "hairshop",
+      "input": { "query": "명륜역 미용실", "display": 100, "start": 1, "filterBooking": "false", "filterCoupon": "false", "filterNpay": "false", "filterOpening": "false", "filterBookingPromotion": "false", "filterWheelchairEntrance": "false", "sortingOrder": "precision", "x": "126.9783882", "y": "37.5666103", "deviceType": "mobile", "bypassStyleClous": false, "businessType": "hairshop" },
+      "brandsInput": { "query": "명륜역 미용실", "display": 100, "start": 1, "sortingOrder": "precision", "x": "126.9783882", "y": "37.5666103", "deviceType": "mobile" } }
+  }],
+
+  "정상_hospital": [{
+    "operationName": "getNxList",
+    "variables": { "isNmap": false, "isBounds": false, "useReverseGeocode": false,
+      "input": { "query": "수영구 치과", "display": 100, "start": 1, "sortingOrder": "precision", "x": "126.9783882", "y": "37.5666103", "deviceType": "mobile", "businessType": "hospital" } }
+  }],
+
+  "신규오픈_변종1_입력없음": [{
+    "operationName": "getNxNewOpeningList",
+    "variables": { "isNmap": false,
+      "openingInput": { "bypassStyleClous": true, "query": "명륜역 미용실", "x": "126.9783882", "y": "37.5666103", "filterOpening": "true", "display": 9, "businessType": "hairshop" } }
+  }],
+
+  "신규오픈_변종2_입력있음": [{
+    "operationName": "getOpeningRestaurants",
+    "variables": { "isNmap": false, "callAdBusinesses": false,
+      "input": { "query": "동래배네스트cc 맛집", "x": "126.9783882", "y": "37.5666103", "start": 1, "display": 9, "filterOpening": "true", "isNmap": false, "deviceType": "mobile", "isNx": false } }
+  }],
+
+  "이름만바뀐가짜_오픈모듈": [{
+    "operationName": "getSomethingElse",
+    "variables": { "input": { "query": "동래 맛집", "start": 1, "display": 50, "filterOpening": "true", "businessType": "restaurant" } }
+  }],
+
+  "배치요청_오픈먼저_목록뒤": [
+    { "operationName": "getOpeningRestaurants", "variables": { "input": { "query": "동래 맛집", "start": 1, "display": 9, "filterOpening": "true" } } },
+    { "operationName": "getRestaurants", "variables": { "callAdBusinesses": true, "input": { "query": "동래 맛집", "start": 1, "display": 100, "deviceType": "mobile" } } }
+  ],
+
+  "변수없음": [{ "operationName": "getRestaurants" }]
+}

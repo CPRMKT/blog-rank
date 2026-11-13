@@ -68,7 +68,16 @@ export async function notify(kind, text, opt = {}) {
 }
 
 /** 수집 배치 1회분 결과를 보고 보낼지 판단한다(조건에 안 걸리면 조용히 넘어간다). */
+export const HELD_PCT_ALERT = parseInt(process.env.HELD_PCT_ALERT || '10', 10);
+
 export async function notifyBatchResult(label, summary) {
+  // 카나리 실패는 처리 건수가 0이라 아래 비율 규칙에 안 걸린다 → 따로 먼저 본다.
+  if (summary && summary.canaryFail) {
+    const txt = (summary.canary || []).map((c) => `${c.keyword}: ${c.n < 0 ? '에러' : c.n + '곳'}`).join(' / ');
+    await notify('canary', [`🚨 ${label} 중단 — 대조 키워드 점검 실패`, txt,
+      '네이버가 정상 목록을 주지 않습니다. 저장은 한 건도 하지 않았습니다.', '', kst()].join('\n'));
+    return;
+  }
   const total = summary.keywords || 0;
   const held = summary.zeroHeld || 0;
   const errors = summary.errors || 0;
@@ -77,14 +86,16 @@ export async function notifyBatchResult(label, summary) {
   const heldPct = Math.round((held / total) * 100);
   const lines = [];
   const streak = summary.notRunStreak || 0;
-  if (held && heldPct >= 30) lines.push(`0곳 보류 ${held}/${total}건 (${heldPct}%) — 네이버 응답 없음`);
+  // 기준 30% → 10%(2026-11-14). 캡처 버그처럼 '일부 키워드만 조용히 비는' 고장은
+  // 30%까지 올라가지 않아서 11일 동안 아무 알림도 울리지 않았다.
+  if (held && heldPct >= HELD_PCT_ALERT) lines.push(`0곳 보류 ${held}/${total}건 (${heldPct}%) — 네이버 응답 없음`);
   if (errors >= 10) lines.push(`수집 실패 ${errors}/${total}건`);
   if (summary.aborted) lines.push(`실행 상한으로 중단 — 미수집 ${summary.remaining}개는 다음 수집`);
   // 미수집이 이틀 연속이면 하루 1회 갱신이 깨지는 중 — 보류율이 낮아도 알린다.
   if (streak >= 2) lines.push(`미수집 ${streak}일 연속 — 하루 1회 갱신이 깨지는 중(저녁 상한 자동 상향)`);
   if (!lines.length) return;
 
-  const kind = streak >= 2 ? 'place-notrun' : (held && heldPct >= 30 ? 'place-held' : 'errors');
+  const kind = summary.canaryFail ? 'canary' : streak >= 2 ? 'place-notrun' : (held && heldPct >= HELD_PCT_ALERT ? 'place-held' : 'errors');
   await notify(kind,
     [`⚠️ ${label} 점검 필요`, ...lines, '', `저장 ${summary.saved || 0}건 · ${kst()}`].join('\n'));
 }

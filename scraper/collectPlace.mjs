@@ -31,6 +31,11 @@ const RUN_LIMIT_BASE = parseInt(process.env.PLACE_RUN_LIMIT_MS || String(10 * 60
 const EVENING_LIMIT_MS = 4 * 60 * 60 * 1000;
 const EVENING_RAISED_MS = 6 * 60 * 60 * 1000;
 let RUN_LIMIT_MS = RUN_LIMIT_BASE;
+// 카나리: 회차 시작 전에 대조 키워드를 조회해 '네이버가 정상 목록을 주는지'를 먼저 확인한다.
+// 2026-10-30~11-09에 잘못된 GraphQL을 잡아 11일 동안 아무도 모르게 오염된 값이 저장됐다.
+// 기준 미달이면 그 회차는 시작하지 않는다(저장 없음 — 한 건도 건드리지 않고 멈추는 게 안전하다).
+const CANARY_KWS = String(process.env.PLACE_CANARY_KEYWORDS || '동래 맛집,해운대 맛집').split(',').map((x) => x.trim()).filter(Boolean);
+const CANARY_MIN = parseInt(process.env.PLACE_CANARY_MIN || '10', 10);
 const backoffMin = () => Math.max(1, Math.round(BACKOFF_MS / 60000));
 const LOG_DIR = '/var/log/blog-rank-scraper';
 const FAIL_LOG = `${LOG_DIR}/failures.log`; // 실패 전용 로그(스크립트 공통)
@@ -145,7 +150,7 @@ async function main() {
   }
 
   let lastMapRef = null;
-  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0, notRun: [] };
+  const summary = { keywords: 0, saved: 0, errors: 0, failed: [], zeroHeld: 0, heldKws: [], backoffs: 0, aborted: false, remaining: 0, notRun: [], canary: null, canaryFail: false };
   try {
     log(`플레이스 순위 수집 시작 (date=${kstDate()})`);
     // 전 계정의 (owner_id, keyword) 페어. 계정별로 순위를 별도 저장.
@@ -162,6 +167,7 @@ async function main() {
     log(`추적 키워드 ${byKeyword.size}개 / 계정×키워드 ${pairs.length}건`);
 
     const today = kstDate();
+    const lastMapPeek = loadLastCollected();   // 카나리 실패 시 '오늘 미수집' 판정에 쓴다
     const scrapeOnce = async (keyword) => {
       const endpoint = `${SCRAPER}/place-search?keyword=${encodeURIComponent(keyword)}&count=300`;
       const resp = await fetch(endpoint, { headers: { Authorization: `Bearer ${SCRAPER_KEY}` } });
@@ -169,13 +175,33 @@ async function main() {
       if (!resp.ok) throw new Error(data.error || `스크래퍼 ${resp.status}`);
       return data.items || [];
     };
+    // ── 카나리 ── 저장하지 않는다. 한 건이라도 기준을 넘으면 통과.
+    const canary = [];
+    for (const ck of CANARY_KWS) {
+      try { const r = await scrapeOnce(ck); canary.push({ keyword: ck, n: r.length }); }
+      catch (e) { canary.push({ keyword: ck, n: -1, error: e.message.slice(0, 120) }); }
+      await sleep(KEYWORD_DELAY_MS);
+    }
+    summary.canary = canary;
+    const canaryText = canary.map((c) => `"${c.keyword}" ${c.n < 0 ? '에러(' + c.error + ')' : c.n + '곳'}`).join(' / ');
+    if (!canary.some((c) => c.n >= CANARY_MIN)) {
+      summary.canaryFail = true;
+      summary.aborted = true;
+      summary.notRun = [...byKeyword.keys()].filter((k) => lastMapPeek[k] !== today);
+      summary.remaining = summary.notRun.length;
+      log(`🚨 카나리 실패 — ${canaryText} (기준 ${CANARY_MIN}곳 이상). 이번 회차는 시작하지 않는다(저장 0건).`);
+      logFail('place', '[카나리]', `회차 중단 — ${canaryText} / 기준 ${CANARY_MIN}곳 (date=${today})`);
+      return;   // finally에서 held 파일·알림 처리
+    }
+    log(`카나리 통과 — ${canaryText}`);
+
     let zeroStreak = 0;            // 연속 0곳 카운터(정상 응답 1건이면 0으로 리셋)
     const totalKw = byKeyword.size;
     const startedAt = Date.now();
 
     // 마지막 수집일이 오래된 키워드부터 돈다. 중간에 멈춰도 다음 회차에서 그 뒤가 먼저 처리돼
     // 같은 키워드가 계속 굶지 않는다(한 번도 수집 안 된 키워드가 맨 앞).
-    const lastMap = loadLastCollected();
+    const lastMap = lastMapPeek;
     lastMapRef = lastMap;
     const ordered = [...byKeyword.entries()].sort((a, b) => {
       const la = lastMap[a[0]] || '';
@@ -191,10 +217,13 @@ async function main() {
       // 총 실행 시간 상한: 넘으면 남은 키워드는 다음 회차(오래된 순이라 다음에 먼저 처리됨)
       if (Date.now() - startedAt > RUN_LIMIT_MS) {
         summary.aborted = true;
-        summary.notRun = queue.slice(idx);
+        // 이번 회차에서 처리 못 했어도 오늘 아침 회차가 이미 수집했으면 '오늘 미수집'이 아니다.
+        // (저녁 회차는 매일 60~70개를 못 돌지만 아침이 전부 돌았으므로 하루 1회 갱신은 지켜진다)
+        const rest = queue.slice(idx);
+        summary.notRun = rest.filter((k) => lastMap[k] !== today);
         summary.remaining = summary.notRun.length;
-        log(`  \u25a0 총 실행 시간 ${Math.round(RUN_LIMIT_MS / 3600000)}시간 초과 -> 안전 중단(남은 ${summary.remaining}개는 다음 수집에서 먼저 처리)`);
-        logFail('place', '[중단]', `실행 시간 상한 초과 — 남은 ${summary.remaining}개 다음 크론으로 (date=${today})`);
+        log(`  \u25a0 총 실행 시간 ${Math.round(RUN_LIMIT_MS / 3600000)}시간 초과 -> 안전 중단(이번 회차 미처리 ${rest.length}개 중 오늘 한 번도 수집 안 된 것 ${summary.remaining}개)`);
+        logFail('place', '[중단]', `실행 시간 상한 초과 — 미처리 ${rest.length}개(오늘 미수집 ${summary.remaining}개) (date=${today})`);
         break;
       }
       summary.keywords++;
@@ -304,7 +333,7 @@ async function main() {
     }
     // [백필 게이트] 플레이스 백필 시작 조건을 매 회차 한 줄로 남긴다 — 사장님이 충족 시점을 한눈에 보도록.
     {
-      const need = 7;
+      const need = 3;   // 2026-11-14 결정: 7일 → 3일로 완화
       const days = [];
       for (let i = 0; i < need; i++) {
         const d = shiftDate(runDate, i);
@@ -340,6 +369,7 @@ async function main() {
         JSON.stringify({ date: runDate, at: new Date().toISOString(), keywords: summary.heldKws,
           aborted: summary.aborted, remaining: summary.remaining, notRun: summary.notRun,
           total: summary.keywords, saved: summary.saved, held: summary.heldKws.length,
+          canary: summary.canary, canaryFail: summary.canaryFail,
           limitMs: RUN_LIMIT_MS, raised: RUN_LIMIT_MS !== RUN_LIMIT_BASE }));
     } catch {}
     try { if (lastMapRef) saveLastCollected(lastMapRef); } catch {}

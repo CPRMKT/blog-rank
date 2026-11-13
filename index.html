@@ -4508,6 +4508,12 @@ async function ptLoadFailBanner(){
     const notRun=(r.held&&r.held.date===todayKst)?((Array.isArray(r.held.notRun)?r.held.notRun.length:0)||(r.notRunCount||0)):0;
     const total=(p?p.total:0)+(b?b.total:0);
     const problems=errors+held+notRun;
+    // 카나리 실패 = 대조 키워드조차 결과가 없어 그 회차를 아예 시작하지 않은 상태. 최우선으로 알린다.
+    if(r.held&&r.held.canaryFail&&r.held.date===todayKst){
+      const c=(r.held.canary||[]).map(x=>escapeHtml(x.keyword)+' '+(x.n<0?'에러':x.n+'곳')).join(' · ');
+      el.innerHTML='🚨 <b>수집 중단</b> — 대조 키워드 점검 실패('+c+'). 네이버가 정상 목록을 주지 않아 오늘 회차를 시작하지 않았습니다. <b>저장된 데이터는 건드리지 않았습니다.</b>';
+      el.style.display=''; return;
+    }
     if(!problems||!total){ el.style.display='none'; return; }   // 평소(실패·보류·미수집 0)엔 조용히
     const denom=total+notRun;   // 미수집은 "키워드 N"에 안 들어가므로 분모에 더해야 비율이 맞다
     const rate=Math.round(problems/denom*100);

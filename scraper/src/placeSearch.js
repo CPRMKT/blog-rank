@@ -5,26 +5,15 @@
 
 import fs from 'fs';
 import { initBrowser } from './scraper.js';
+import { LIST_OPS, isListOp, inspectCapture } from './captureSelect.js';
+
+export { LIST_OPS, isListOp, inspectCapture };   // 기존 import 경로 유지
 
 const MOBILE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) ' +
   'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
-// 페이지(50건) 사이 딜레이 350ms. 150ms로 줄였던 9/18~19에 수집 45분차부터 약 35분간 네이버가 빈 목록을
-// 연속 반환(0곳보류 10→55→56건, 이전 5회 연속 0건). 짧은 A/B로는 누적 속도 제한이 재현되지 않으므로
-// 낮추려면 전체 크론 1회분(300여 키워드) 규모로 검증할 것.
-const PAGE_DELAY_MS = parseInt(process.env.PLACE_PAGE_DELAY_MS || '350', 10);
-
-// 키워드로 플레이스 vertical(리스트 경로) 판별. m.place는 generic list가 없어
-// 업종 vertical 경로로 접근해야 검색 결과가 렌더된다. 기본은 restaurant.
-function listPath(keyword) {
-  const k = String(keyword || '');
-  if (/미용실|헤어|네일|왁싱|피부관리|에스테틱|뷰티|메이크업|반영구|속눈썹/.test(k)) return 'hairshop';
-  if (/병원|의원|치과|한의원|약국|정형외과|피부과|이비인후|안과|산부인과/.test(k)) return 'hospital';
-  if (/카페|커피|디저트|베이커리|빵집|브런치/.test(k)) return 'cafe';
-  return 'restaurant';
-}
 
 export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   const b = await initBrowser();
@@ -78,32 +67,16 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   };
   // GraphQL 요청 템플릿(쿼리·헤더·쿠키) 캡처 → 이후 start 오프셋만 바꿔 직접 호출.
   // 모바일 스크롤 UI는 ~110위에서 자동로딩을 멈추지만, GraphQL은 start로 300위까지 페이지네이션됨.
-  const findInput = (v) =>
-    (v && (v.input || v.restaurantListInput || v.businessListInput || v.hairShopListInput || v.hospitalListInput || v.cafeListInput)) || null;
-  // '신규 오픈' 모듈(getNxNewOpeningList / getOpeningRestaurants …)은 같은 리스트 페이지에서 함께 뜨고
-  // 일부는 input(start/display)까지 갖고 있어 모양만으로는 목록 요청과 구분되지 않는다.
-  // 구분 표식: 오픈 모듈은 filterOpening='true', 진짜 목록은 'false' + sortingOrder를 갖는다.
-  const isListOp = (op) => {
-    if (!op || !op.variables) return false;
-    if (/opening/i.test(String(op.operationName || ''))) return false;
-    const inp = findInput(op.variables);
-    if (!inp) return false;
-    if (String(inp.filterOpening) === 'true') return false;
-    return true;
-  };
   let cap = null;
+  const seenOps = new Set();   // 실패 시 "무엇을 봤는지"를 로그에 남기기 위해 모아 둔다
   page.on('request', (req) => {
     if (cap) return;
     if (!req.url().includes('api.place.naver.com/graphql') || req.method() !== 'POST') return;
     const pd = req.postData();
     if (!pd || !/PlaceList|business/i.test(pd)) return;
-    // 목록 요청만 채택한다. 리스트 페이지에는 '신규 오픈'(getNxNewOpeningList, openingInput) 같은
-    // 다른 모듈의 GraphQL도 뜨는데, 그쪽을 먼저 잡으면 start/display를 넣을 자리가 없어
-    // 페이지네이션이 통째로 실패하고 결과가 0곳이 된다(2026-10-30~ 보류 다발의 원인).
-    let b;
-    try { b = JSON.parse(pd); } catch { return; }
-    const arr = Array.isArray(b) ? b : [b];
-    if (!arr.some((op) => op && op.variables && isListOp(op))) return;
+    const v = inspectCapture(pd);
+    for (const n of v.ops) seenOps.add(n);
+    if (!v.accept) return;
     cap = { url: req.url(), headers: req.headers(), body: pd };
   });
 
@@ -120,7 +93,13 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     }
     // 캡처 실패 = 스크랩 실패다. 빈 배열(정상 0곳)로 위장하면 저장 로직이
     // 기존 스냅샷을 0곳으로 덮어쓴다(9/6 저녁 37건 파괴 사건) → 명시적 에러로 승격.
-    if (!cap) throw new Error('GraphQL 캡처 실패(페이지 미로드·차단 의심)');
+    if (!cap) {
+      const seen = [...seenOps].join(', ') || '없음';
+      // 이름을 봤는데 허용 목록에 없다 = 네이버가 쿼리를 바꾼 것. 0곳으로 넘기지 않고 에러로 올린다.
+      throw new Error(seenOps.size
+        ? `순위 목록 GraphQL 미채택 — 본 쿼리: ${seen} (허용: ${[...LIST_OPS].join(', ')})`
+        : 'GraphQL 캡처 실패(페이지 미로드·차단 의심)');
+    }
     // 진단용: 캡처된 GraphQL 요청 변수(쿼리 해석·좌표 등)를 1회 기록
     if (process.env.PLACE_DEBUG_FILE) {
       try {
