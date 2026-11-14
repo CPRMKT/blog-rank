@@ -637,7 +637,9 @@ export default async function handler(req, res) {
       try {
         hit = await supaFetch(`/embed_tokens?token=eq.${encodeURIComponent(token)}&enabled=is.true&select=store_id`);
       } catch (e) {
-        if (MISSING(e)) return res.status(200).json({ ok: false, error: '임베드 설정이 아직 끝나지 않았습니다.', setup_needed: true });
+        // 테이블이 아직 없어도 밖에서는 똑같이 보여야 한다(설정 상태를 알려주지 않는다).
+        // 준비가 안 됐다는 안내는 로그인한 관리자에게만(embed_admin) 보여준다.
+        if (MISSING(e)) return res.status(200).json(DENY);
         throw e;
       }
       if (!Array.isArray(hit) || !hit.length) return res.status(200).json(DENY);
