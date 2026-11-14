@@ -414,6 +414,18 @@ export default async function handler(req, res) {
         }
         return c;
       };
+      // export: 삭제 전 백업용. 날짜 하나씩, 삭제와 똑같은 필터로 행을 그대로 돌려준다.
+      // (get_place_rankings는 키워드당 기본 1,000행에서 조용히 잘려 백업이 비는 일이 있었다.)
+      if (data.export) {
+        const d = String(data.export).slice(0, 10);
+        const ks = byDate[d] ? [...byDate[d]] : [];
+        const out = [];
+        for (let i = 0; i < ks.length; i += 5) {
+          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 5))}&limit=5000`);
+          if (Array.isArray(r)) out.push(...r);
+        }
+        return res.status(200).json({ ok: true, date: d, keywords: ks.length, rows: out.length, result: out });
+      }
       const per = [];
       let rows = 0, npair = 0;
       for (const d of Object.keys(byDate).sort()) {

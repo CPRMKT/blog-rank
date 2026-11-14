@@ -38,12 +38,14 @@ console.log(`대상: ${pairs.length}쌍 / 키워드 ${keywords.length}개 (${pai
 if (arg('backup')) {
   const out = arg('backup');
   const bag = [];
-  for (let i = 0; i < keywords.length; i++) {
-    const kw = keywords[i];
-    const r = await dbCall('get_place_rankings', { keyword: kw, days: 40 });
+  // 날짜별로, 삭제와 똑같은 필터(purge_place_rankings --export)로 받아 적는다.
+  // 키워드별 조회는 1,000행 상한에 조용히 잘려 백업이 빌 수 있다(2026-11-14 확인).
+  const dates = [...new Set(pairs.map((p) => p.date))].sort();
+  for (const d of dates) {
+    const r = await dbCall('purge_place_rankings', { pairs, export: d });
     const rows = (r && r.result) || [];
-    for (const row of rows) if (want.has(row.keyword + '|' + row.checked_date)) bag.push(row);
-    if ((i + 1) % 20 === 0) console.log(`  ... ${i + 1}/${keywords.length} 키워드, 누적 ${bag.length}행`);
+    bag.push(...rows);
+    console.log(`  ${d} — 키워드 ${r.keywords}개 / ${rows.length}행 (누적 ${bag.length})`);
   }
   const seen = new Set(bag.map((r) => r.keyword + '|' + r.checked_date));
   const body = {
