@@ -407,8 +407,9 @@ export default async function handler(req, res) {
       const inList = (ks) => '(' + ks.map((k) => '"' + encodeURIComponent(k) + '"').join(',') + ')';
       const count = async (d, ks) => {
         let c = 0;
-        for (let i = 0; i < ks.length; i += 25) {
-          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 25))}&select=id`);
+        // 10개씩: 한 요청의 결과 행이 Supabase 기본 상한(1,000행)에 닿으면 조용히 잘려 과소 계산된다.
+        for (let i = 0; i < ks.length; i += 10) {
+          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 10))}&select=id&limit=5000`);
           c += Array.isArray(r) ? r.length : 0;
         }
         return c;
