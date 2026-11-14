@@ -130,7 +130,8 @@ td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:va
       h += '<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>키워드</th><th style="text-align:right">순위</th><th style="text-align:right">확인일</th></tr></thead><tbody>';
       (j.blogKeywords||[]).forEach(function(k){
         var r = bLatest[k];
-        h += '<tr><td>'+esc(k)+'</td><td class="r">'+(r&&r.rank!=null?r.rank+'위':'<span style="color:var(--faint);font-weight:600">미노출</span>')+'</td>'
+        // 블로그 순위는 0이 '미노출'이다(index.html과 같은 약속).
+        h += '<tr><td>'+esc(k)+'</td><td class="r">'+(r&&r.rank>0?r.rank+'위':'<span style="color:var(--faint);font-weight:600">미노출</span>')+'</td>'
           +  '<td class="r" style="font-weight:400;color:var(--muted)">'+(r?wd(r.checked_date):'-')+'</td></tr>';
       });
       h += '</tbody></table></div>';
