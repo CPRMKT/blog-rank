@@ -46,6 +46,22 @@ export default async function handler(req, res) {
     }).then(async r => {
       const text = await r.text();
       let json;
+  // Supabase는 한 요청에 1,000행까지만 돌려주고 **잘렸다는 표시를 하지 않는다**.
+  // 31일치 300위 키워드는 9,000행이라, 그냥 받으면 최근 3~12일치만 받고도 다 받은 줄 안다
+  // (2026-11-14 확인: "부산 사직 맛집" 46일 요청 → 12일치 1,000행만 돌아옴).
+  // 많이 나올 수 있는 조회는 전부 이 함수로 끝까지 받는다.
+  const supaFetchAll = async (path, pageSize = 1000, maxRows = 60000) => {
+    const out = [];
+    for (let off = 0; off < maxRows; off += pageSize) {
+      const sep = path.includes('?') ? '&' : '?';
+      const rows = await supaFetch(`${path}${sep}limit=${pageSize}&offset=${off}`);
+      if (!Array.isArray(rows) || !rows.length) break;
+      out.push(...rows);
+      if (rows.length < pageSize) break;
+    }
+    return out;
+  };
+
       try { json = JSON.parse(text); } catch { json = text; }
       if (!r.ok) throw new Error(json?.message || json?.error || `HTTP ${r.status}: ${text}`);
       return json;
@@ -170,8 +186,8 @@ export default async function handler(req, res) {
     if (action === 'get_store_rankings') {
       const days = data.days || 31;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-      const result = await supaFetch(`/store_rankings?store_id=eq.${data.store_id}&checked_date=gte.${since}&order=checked_date.desc`);
-      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+      const result = await supaFetchAll(`/store_rankings?store_id=eq.${data.store_id}&checked_date=gte.${since}&order=checked_date.desc`);
+      return res.status(200).json({ ok: true, result });
     }
 
     // ===== 플레이스 키워드 분석 =====
@@ -390,10 +406,10 @@ export default async function handler(req, res) {
     if (action === 'get_place_rankings') {
       const days = data.days || 31;
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-      const result = await supaFetch(
+      const result = await supaFetchAll(
         `/place_rankings?keyword=eq.${encodeURIComponent(data.keyword)}&checked_date=gte.${since}&order=checked_date.desc,rank.asc`
       );
-      return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
+      return res.status(200).json({ ok: true, result });
     }
 
     // [관리] 오염 행 삭제 — '신규 오픈' 캡처 버그(2026-10-30~11-09)로 저장된 (키워드, 날짜) 쌍만 지운다.
@@ -650,7 +666,7 @@ export default async function handler(req, res) {
         supaFetch(`/stores?id=eq.${sid}&select=id,name,place_id,category,address`).catch(() => []),
         supaFetch(`/store_place_keywords?store_id=eq.${sid}&select=keyword,created_at&order=created_at.asc`).catch(() => []),
         supaFetch(`/store_keywords?store_id=eq.${sid}&select=keyword&order=created_at.asc`).catch(() => []),
-        supaFetch(`/store_rankings?store_id=eq.${sid}&checked_date=gte.${since}&order=checked_date.desc`).catch(() => []),
+        supaFetchAll(`/store_rankings?store_id=eq.${sid}&checked_date=gte.${since}&order=checked_date.desc`).catch(() => []),
       ]);
       const store = (Array.isArray(stRows) && stRows[0]) || null;
       if (!store) return res.status(200).json(DENY);
