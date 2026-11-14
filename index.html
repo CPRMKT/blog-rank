@@ -1270,7 +1270,7 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
       </div>
       <div class="pr-card">
         <div class="pr-empty" id="prCmpEmpty">추적 키워드를 선택하세요. (매일 새벽 6시 자동 수집 데이터가 쌓이면 비교됩니다)</div>
-        <div style="overflow-x:auto"><table id="prCmpTable" style="display:none"><thead><tr>
+        <div style="overflow-x:auto"><div id="prBadBase" style="display:none;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:10px"></div><table id="prCmpTable" style="display:none"><thead><tr>
           <th style="width:48px">순위</th><th>매장명</th><th>업종</th>
           <th style="text-align:right">방문자리뷰</th><th style="text-align:right">블로그</th><th style="width:70px">변동</th>
         </tr></thead><tbody id="prCmpBody"></tbody></table></div>
@@ -4541,8 +4541,17 @@ async function prLoadCompare(){
   if(prCmpData.dates.length===0){ empty.style.display=''; table.style.display='none'; empty.textContent='아직 수집된 데이터가 없습니다. 내일 새벽 6시 이후 다시 확인하세요.'; return; }
   prRenderCompare(prSelectedBaseline);
 }
+// 2026-10-29~11-09은 '신규 오픈' 캡처 버그로 저장된 값이 섞여 있던 기간이다. 오염이 확실한 행은
+// 지웠지만(1,798쌍) 경계(C등급)로 남겨 둔 날짜가 있어, 그 날짜가 비교 기준으로 잡히면 표시해 준다.
+const PR_BAD_FROM='2026-10-29', PR_BAD_TO='2026-11-09';
+const prBadDate=(d)=>!!d&&d>=PR_BAD_FROM&&d<=PR_BAD_TO;
 function renderPrDateTabs(){
-  document.getElementById('prDateTabs').innerHTML=[1,5,10,20,30].map(d=>`<div class="pr-date ${d===prSelectedBaseline?'active':''}" onclick="prSelectedBaseline=${d};renderPrDateTabs();prRenderCompare(${d})">${d}일전</div>`).join('');
+  document.getElementById('prDateTabs').innerHTML=[1,5,10,20,30].map(d=>{
+    let warn='';
+    try{ if(prCmpData&&prCmpData.dates&&prCmpData.dates.length&&prBadDate(prFindBaselineDate(d))) warn=' ⚠'; }catch(e){}
+    const tip=warn?' title="이 기준일은 2026-10-29~11-09 수집 오류 기간입니다. 값이 실제와 다를 수 있습니다."':'';
+    return `<div class="pr-date ${d===prSelectedBaseline?'active':''}"${tip} onclick="prSelectedBaseline=${d};renderPrDateTabs();prRenderCompare(${d})">${d}일전${warn}</div>`;
+  }).join('');
 }
 function prFindBaselineDate(daysAgo){
   const target=new Date(Date.now()-daysAgo*86400000).toISOString().slice(0,10);
@@ -4556,6 +4565,14 @@ function prRenderCompare(daysAgo){
   const baseDate=prFindBaselineDate(daysAgo);
   const baseRank={}; if(baseDate&&baseDate!==today){ for(const r of prCmpData.byDate[baseDate]) baseRank[String(r.place_id)]=r.rank; }
   empty.style.display='none'; table.style.display='';
+  // 기준일이 수집 오류 기간이면 숫자를 그대로 믿지 않도록 알린다(날짜를 숨기지는 않는다 —
+  // 숨기면 "그날 데이터가 아예 없다"로 읽힌다).
+  const warnEl=document.getElementById('prBadBase');
+  if(warnEl){
+    const bad=prBadDate(baseDate);
+    warnEl.style.display=bad?'':'none';
+    if(bad) warnEl.textContent='⚠ 비교 기준일 '+baseDate+'은 수집 오류 기간(2026-10-29~11-09)입니다. 이 날짜와의 비교값은 실제와 다를 수 있습니다.';
+  }
   const mine=prMyPlaceIds();
   document.getElementById('prCmpBody').innerHTML=todayList.map(r=>{
     const pid=String(r.place_id); const prev=baseRank[pid]; let chg;
