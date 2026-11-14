@@ -365,11 +365,20 @@ async function main() {
     // 오늘 보류된 키워드 목록을 파일로 남긴다 — 화면에서 '-'(미노출)와 구분해 "보류"로 표시하는 근거.
     // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
     try {
+      // 하루에 두 회차(아침·저녁)가 돈다. 저녁 회차는 4시간 상한이라 365개를 다 못 돌고,
+      // 그대로 덮어쓰면 아침에 이미 수집한 키워드가 '미수집'으로 뒤집힌다.
+      // → 같은 날짜 기록이 있으면 합친다. '미수집'은 그날 어느 회차도 못 받은 키워드(교집합)만.
+      const prev = readHeld(runDate);
+      const merge = (a, b) => { const B = new Set(b || []); return (a || []).filter((x) => B.has(x)); };
+      const notRun = prev ? merge(summary.notRun, prev.notRun) : summary.notRun;
+      const heldKws = prev ? merge(summary.heldKws, prev.keywords) : summary.heldKws;
       fs.writeFileSync(`${LOG_DIR}/held-${runDate}.json`,
-        JSON.stringify({ date: runDate, at: new Date().toISOString(), keywords: summary.heldKws,
-          aborted: summary.aborted, remaining: summary.remaining, notRun: summary.notRun,
-          total: summary.keywords, saved: summary.saved, held: summary.heldKws.length,
+        JSON.stringify({ date: runDate, at: new Date().toISOString(), keywords: heldKws,
+          aborted: summary.aborted, remaining: summary.remaining, notRun,
+          total: Math.max(summary.keywords, (prev && prev.total) || 0),
+          saved: summary.saved, held: heldKws.length,
           canary: summary.canary, canaryFail: summary.canaryFail,
+          runs: ((prev && prev.runs) || 0) + 1, lastRunNotRun: summary.notRun.length,
           limitMs: RUN_LIMIT_MS, raised: RUN_LIMIT_MS !== RUN_LIMIT_BASE }));
     } catch {}
     try { if (lastMapRef) saveLastCollected(lastMapRef); } catch {}
