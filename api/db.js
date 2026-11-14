@@ -16,11 +16,16 @@ export default async function handler(req, res) {
   const isCron = !!process.env.CRON_SECRET && cronSecret === process.env.CRON_SECRET;
   const authHeader = (req.headers['authorization'] || req.headers['Authorization'] || '').toString();
   const userToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!isCron && !userToken) return res.status(401).json({ ok: false, error: '인증이 필요합니다. 다시 로그인해 주세요.' });
+  // 임베드 조회는 토큰 하나로만 호출된다(아래 embed_data에서 토큰을 직접 검증한다).
+  // 토큰이 유효해도 그 매장의 읽기 전용 데이터 말고는 아무것도 할 수 없다.
+  const TOKEN_ONLY_ACTIONS = new Set(['embed_data']);
+  if (!isCron && !userToken && !TOKEN_ONLY_ACTIONS.has(action)) return res.status(401).json({ ok: false, error: '인증이 필요합니다. 다시 로그인해 주세요.' });
+  if (String(action || '').startsWith('embed_')) res.setHeader('Cache-Control', 'no-store, max-age=0');
 
   // 계정분리 제외(공용 레거시: 포스팅 순위 조회)는 service_role로.
   const SHARED_ACTIONS = new Set(['save_blogs', 'get_blogs', 'save_posts', 'save_rank', 'get_rank_history']);
-  const useServiceRole = isCron || SHARED_ACTIONS.has(action);
+  // 임베드: 토큰 테이블은 service_role 전용이고, 조회도 토큰으로 특정된 매장 것만 돌려준다.
+  const useServiceRole = isCron || SHARED_ACTIONS.has(action) || String(action || '').startsWith('embed_');
   // 사용자 모드: anon key + 사용자 JWT → PostgREST가 RLS(owner_id=auth.uid())로 자동 격리.
   //             insert owner_id는 컬럼 default auth.uid()가 채움(직접 지정 안 함).
   // 크론 모드: service_role(RLS 우회) + owner_id 직접 지정.
@@ -617,6 +622,98 @@ export default async function handler(req, res) {
     if (action === 'admin_set_order_status') {
       const result = await supaFetch('/rpc/admin_set_order_status', { method: 'POST', body: JSON.stringify({ p_order_id: data.order_id, p_status: data.status }) });
       return res.status(200).json({ ok: true, result });
+    }
+
+    // ===== 임베드(끼워 넣기) =====
+    // 토큰 하나로 호출되는 읽기 전용 액션. 로그인도 크론 시크릿도 필요 없고, 대신
+    //  - 토큰으로 매장을 정한다(요청에 store_id가 와도 무시한다),
+    //  - 없는 토큰과 꺼진 토큰에 같은 응답을 준다(존재 여부를 알려주지 않는다),
+    //  - 그 매장 화면에 필요한 값만 담는다.
+    if (action === 'embed_data') {
+      const token = String((data && data.token) || '').trim();
+      const DENY = { ok: false, error: '표시할 수 없는 링크입니다.' };
+      if (token.length < 32 || token.length > 128 || !/^[A-Za-z0-9_-]+$/.test(token)) return res.status(200).json(DENY);
+      let hit;
+      try {
+        hit = await supaFetch(`/embed_tokens?token=eq.${encodeURIComponent(token)}&enabled=is.true&select=store_id`);
+      } catch (e) {
+        if (MISSING(e)) return res.status(200).json({ ok: false, error: '임베드 설정이 아직 끝나지 않았습니다.', setup_needed: true });
+        throw e;
+      }
+      if (!Array.isArray(hit) || !hit.length) return res.status(200).json(DENY);
+      const sid = hit[0].store_id;
+      const days = 31;
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const [stRows, pkRows, bkRows, blogRank] = await Promise.all([
+        supaFetch(`/stores?id=eq.${sid}&select=id,name,place_id,category,address`).catch(() => []),
+        supaFetch(`/store_place_keywords?store_id=eq.${sid}&select=keyword,created_at&order=created_at.asc`).catch(() => []),
+        supaFetch(`/store_keywords?store_id=eq.${sid}&select=keyword&order=created_at.asc`).catch(() => []),
+        supaFetch(`/store_rankings?store_id=eq.${sid}&checked_date=gte.${since}&order=checked_date.desc`).catch(() => []),
+      ]);
+      const store = (Array.isArray(stRows) && stRows[0]) || null;
+      if (!store) return res.status(200).json(DENY);
+      const placeKws = (Array.isArray(pkRows) ? pkRows : []).map((r) => r.keyword);
+      const pid = encodeURIComponent(String(store.place_id || ''));
+      let placeRows = [], collected = {};
+      if (pid && placeKws.length) {
+        const got = await Promise.all(placeKws.map((k) => supaFetch(
+          `/place_rankings?place_id=eq.${pid}&keyword=eq.${encodeURIComponent(k)}&checked_date=gte.${since}&select=keyword,checked_date,rank,saves,visitor_reviews,blog_reviews&order=checked_date.desc`
+        ).catch(() => [])));
+        placeRows = got.flat().filter(Boolean);
+        const dates = await Promise.all(placeKws.map((k) => supaFetch(
+          `/place_rankings?keyword=eq.${encodeURIComponent(k)}&rank=eq.1&checked_date=gte.${since}&select=checked_date`
+        ).catch(() => [])));
+        placeKws.forEach((k, i) => { collected[k] = [...new Set((dates[i] || []).map((r) => r.checked_date))]; });
+      }
+      return res.status(200).json({
+        ok: true,
+        store: { name: store.name, category: store.category || '', address: store.address || '' },
+        placeKeywords: (Array.isArray(pkRows) ? pkRows : []).map((r) => ({ keyword: r.keyword, created_at: r.created_at })),
+        placeRows,
+        collected,
+        blogKeywords: (Array.isArray(bkRows) ? bkRows : []).map((r) => r.keyword),
+        blogRows: (Array.isArray(blogRank) ? blogRank : []).map((r) => ({ keyword: r.keyword, checked_date: r.checked_date, rank: r.rank, matches: r.matches })),
+      });
+    }
+
+    // 임베드 링크 관리(발급·재발급·끄기) — 관리자만. 관리자 여부는 사용자 JWT로 본인 profiles를
+    // 읽어 서버에서 확인한다(서명 검증은 Supabase가 한다). 토큰 테이블 자체는 service_role로만 만진다.
+    if (action === 'embed_admin') {
+      // 크론 시크릿(서버 자신)도 관리자로 본다 — 점검 도구(tools/embed_test.mjs)가 쓰는 길이다.
+      // 사용자가 보내는 경로는 아래처럼 JWT로 본인 profiles.is_admin을 확인해야만 통과한다.
+      if (!userToken && !isCron) return res.status(403).json({ ok: false, error: '관리자만 쓸 수 있습니다.' });
+      let admin = isCron;
+      try {
+        if (admin) throw { skip: true };
+        const me = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,is_admin&limit=1`, {
+          headers: { apikey: ANON_KEY, Authorization: `Bearer ${userToken}` },
+        }).then((r) => (r.ok ? r.json() : null));
+        admin = Array.isArray(me) && me[0] && me[0].is_admin === true;
+      } catch (e) { if (!(e && e.skip)) admin = false; }
+      if (!admin) return res.status(403).json({ ok: false, error: '관리자만 쓸 수 있습니다.' });
+      const op = String(data.op || 'get');
+      const sid = parseInt(data.store_id, 10);
+      if (!sid) return res.status(200).json({ ok: false, error: '매장을 고르세요.' });
+      const newToken = () => { const b = new Uint8Array(24); globalThis.crypto.getRandomValues(b); return Buffer.from(b).toString('base64url'); };
+      try {
+        if (op === 'get') {
+          const rows = await supaFetch(`/embed_tokens?store_id=eq.${sid}&enabled=is.true&select=token,created_at,rotated_at`);
+          return res.status(200).json({ ok: true, result: (Array.isArray(rows) && rows[0]) || null });
+        }
+        if (op === 'issue' || op === 'rotate') {
+          await supaFetch(`/embed_tokens?store_id=eq.${sid}&enabled=is.true`, { method: 'PATCH', body: JSON.stringify({ enabled: false, rotated_at: new Date().toISOString() }) });
+          const row = await supaFetch('/embed_tokens', { method: 'POST', body: JSON.stringify({ store_id: sid, token: newToken(), owner_id: data.owner_id || null }) });
+          return res.status(200).json({ ok: true, result: Array.isArray(row) ? row[0] : row });
+        }
+        if (op === 'disable') {
+          await supaFetch(`/embed_tokens?store_id=eq.${sid}&enabled=is.true`, { method: 'PATCH', body: JSON.stringify({ enabled: false, rotated_at: new Date().toISOString() }) });
+          return res.status(200).json({ ok: true, result: null });
+        }
+      } catch (e) {
+        if (MISSING(e)) return res.status(200).json({ ok: false, error: 'embed_tokens 테이블이 아직 없습니다. sql/2026-11-14_embed_tokens.sql을 한 번 실행해 주세요.', setup_needed: true });
+        throw e;
+      }
+      return res.status(200).json({ ok: false, error: '알 수 없는 작업' });
     }
 
     return res.status(400).json({ ok: false, error: 'Unknown action' });

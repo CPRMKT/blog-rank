@@ -1127,12 +1127,29 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
     <div class="main">
       <!-- 최근 배치 수집 실패 배너: 실패 0건이면 숨김(평소엔 조용히) -->
       <div class="pt-failbanner" id="ptFailBanner" style="display:none"></div>
+      <div id="emPanel" style="display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-2);margin-bottom:var(--sp-2);box-shadow:var(--sh)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <div style="font-weight:700;color:var(--ink)">🔗 임베드 링크 <span style="font-weight:400;color:var(--muted);font-size:12px" id="emStoreName"></span></div>
+          <button class="pt-storebtn" onclick="emClose()">닫기</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">이 주소를 CPR OS에 iframe으로 끼워 넣으면 이 매장의 순위만 보입니다. 로그인 없이 열리니 링크 관리에 주의하세요. 읽기 전용이라 이 링크로는 아무것도 바꿀 수 없습니다.</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          <input type="text" id="emUrl" readonly placeholder="아직 발급되지 않았습니다" style="flex:1;min-width:240px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:var(--r-input);padding:0 12px;height:38px;font-size:12.5px">
+          <button class="pt-storebtn" id="emCopy" onclick="emCopyUrl()">복사</button>
+          <button class="pt-storebtn" id="emIssue" onclick="emAdmin('issue')">발급</button>
+          <button class="pt-storebtn" id="emRotate" onclick="emAdmin('rotate')">재발급</button>
+          <button class="pt-storebtn" id="emDisable" onclick="emAdmin('disable')">끄기</button>
+        </div>
+        <div id="emNote" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+      </div>
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <div>
           <div class="h-lg">📍 플레이스 순위 추적</div>
           <div class="card-sub" style="margin:5px 0 0">매장별로 키워드를 등록하고, 네이버 플레이스 검색 순위·저장·리뷰를 날짜별로 추적합니다.</div>
         </div>
         <div class="pt-storepick" id="ptStorePick">
+          <!-- 임베드(끼워 넣기) 링크 — 관리자에게만 보인다 -->
+          <button class="pt-storebtn" id="emBtn" onclick="emOpen()" style="display:none;margin-right:6px" title="CPR OS에 끼워 넣을 링크">🔗 임베드 링크</button>
           <button class="pt-storebtn" id="ptStoreBtn" onclick="ptToggleDropdown(event)">
             <span id="ptStoreBtnName">매장 선택</span><span class="arrow">▼</span>
           </button>
@@ -4634,11 +4651,57 @@ async function ptLoadFailBanner(){
     el.style.display='';
   }catch(e){ el.style.display='none'; }
 }
+// ── 임베드(끼워 넣기) 링크 — 관리자 전용 ──
+// 발급/재발급/끄기는 서버(db.js embed_admin)에서 관리자 여부를 다시 확인한다.
+// 여기 버튼 숨김은 편의일 뿐, 권한 판단은 서버가 한다.
+let emToken=null;
+function emUrlOf(t){ return location.origin+'/api/embed?token='+encodeURIComponent(t); }
+function emSync(){
+  const b=document.getElementById('emBtn'); if(!b) return;
+  const on=!!(IS_ADMIN&&ptStoreId); b.style.display=on?'':'none'; if(!on) emClose();
+}
+function emClose(){ const p=document.getElementById('emPanel'); if(p) p.style.display='none'; }
+function emNote(t,bad){ const n=document.getElementById('emNote'); if(n){ n.textContent=t||''; n.style.color=bad?'var(--danger, #dc2626)':'var(--muted)'; } }
+async function emOpen(){
+  const p=document.getElementById('emPanel'); if(!p||!ptStoreId) return;
+  p.style.display='';
+  const st=(stores||[]).find(x=>String(x.id)===String(ptStoreId));
+  document.getElementById('emStoreName').textContent=st?st.name:'';
+  await emRefresh();
+}
+async function emRefresh(){
+  emNote('확인 중…');
+  const r=await dbCall('embed_admin',{op:'get',store_id:ptStoreId});
+  const box=document.getElementById('emUrl');
+  if(!r||!r.ok){ emToken=null; box.value=''; emNote((r&&r.error)||'불러오지 못했습니다',true); return; }
+  emToken=r.result&&r.result.token||null;
+  box.value=emToken?emUrlOf(emToken):'';
+  emNote(emToken?('발급 '+String(r.result.created_at||'').slice(0,10)+' · 이 링크 하나만 켜져 있습니다'):'아직 발급되지 않았습니다. [발급]을 누르세요.');
+}
+async function emAdmin(op){
+  if(!ptStoreId) return;
+  if(op==='rotate'&&!confirm('새 링크를 발급하고 지금 링크는 즉시 막습니다. CPR OS에 끼워 둔 화면이 있으면 주소를 바꿔야 합니다. 진행할까요?')) return;
+  if(op==='disable'&&!confirm('이 링크를 끕니다. 끼워 둔 화면은 바로 빈 화면이 됩니다. 진행할까요?')) return;
+  emNote('처리 중…');
+  const r=await dbCall('embed_admin',{op,store_id:ptStoreId});
+  if(!r||!r.ok){ emNote((r&&r.error)||'실패했습니다',true); return; }
+  await emRefresh();
+  if(op==='disable') emNote('껐습니다. 이 매장의 임베드 화면은 이제 열리지 않습니다.');
+}
+function emCopyUrl(){
+  const box=document.getElementById('emUrl');
+  if(!box.value){ emNote('먼저 발급하세요',true); return; }
+  box.select();
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(box.value).then(()=>emNote('복사했습니다.'),()=>emNote('복사하지 못했습니다. 주소를 직접 선택해 복사하세요.',true));
+  else { try{ document.execCommand('copy'); emNote('복사했습니다.'); }catch(e){ emNote('복사하지 못했습니다.',true); } }
+}
+
 function ptToggleFailDetail(){ const d=document.getElementById('ptFailDetail'); if(d) d.classList.toggle('show'); }
 
 // stores(전역) 기준으로 플레이스 탭 매장 상태 반영(진입·등록·삭제 후 공통 호출)
 async function ptApplyStoreState(){
   ptRenderStoreDropdown();
+  emSync();                       // 임베드 버튼 노출만 갱신(수집·큐 로직은 건드리지 않는다)
   const ps=placeStores();
   if(ps.length===0){
     document.getElementById('ptNoStore').style.display='';
