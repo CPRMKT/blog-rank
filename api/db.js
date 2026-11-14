@@ -46,6 +46,12 @@ export default async function handler(req, res) {
     }).then(async r => {
       const text = await r.text();
       let json;
+
+      try { json = JSON.parse(text); } catch { json = text; }
+      if (!r.ok) throw new Error(json?.message || json?.error || `HTTP ${r.status}: ${text}`);
+      return json;
+    });
+
   // Supabase는 한 요청에 1,000행까지만 돌려주고 **잘렸다는 표시를 하지 않는다**.
   // 31일치 300위 키워드는 9,000행이라, 그냥 받으면 최근 3~12일치만 받고도 다 받은 줄 안다
   // (2026-11-14 확인: "부산 사직 맛집" 46일 요청 → 12일치 1,000행만 돌아옴).
@@ -61,11 +67,6 @@ export default async function handler(req, res) {
     }
     return out;
   };
-
-      try { json = JSON.parse(text); } catch { json = text; }
-      if (!r.ok) throw new Error(json?.message || json?.error || `HTTP ${r.status}: ${text}`);
-      return json;
-    });
 
   try {
     // 기존 액션 (포스팅 순위 조회)
