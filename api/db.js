@@ -748,19 +748,43 @@ export default async function handler(req, res) {
         'store_rankings', 'place_rankings', 'store_place_fetches', 'store_blog_posts',
         'blogs', 'posts', 'rank_history', 'blog_diagnoses', 'blog_predictions',
         'profiles', 'orders', 'point_transactions', 'tax_invoice_requests', 'embed_tokens'];
+      const countOf = async (q) => {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/${q}`, {
+          headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'count=exact' },
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const n = parseInt(String(r.headers.get('content-range') || '').split('/')[1], 10);
+        return Number.isFinite(n) ? n : null;
+      };
+      // 큰 표(place_rankings 등)는 한 번에 세면 Postgres 제한시간(HTTP 500)에 걸린다.
+      // 그때는 checked_date 로 달을 끊어 세고 더한다 — 추정치가 아니라 여전히 정확한 수다.
+      const byMonth = async (t) => {
+        let total = 0, months = 0;
+        for (let y = 2026; y <= new Date().getFullYear(); y++) {
+          for (let m = 1; m <= 12; m++) {
+            const from = `${y}-${String(m).padStart(2, '0')}-01`;
+            const to = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+            if (from > new Date().toISOString().slice(0, 10)) continue;
+            total += await countOf(`${t}?select=id&checked_date=gte.${from}&checked_date=lt.${to}&limit=0`);
+            months++;
+          }
+        }
+        return { total, months };
+      };
       const one = async (t) => {
         try {
-          const r = await fetch(`${SUPABASE_URL}/rest/v1/${t}?select=*&limit=0`, {
-            headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'count=exact' },
-          });
-          if (!r.ok) return { table: t, error: `HTTP ${r.status}` };
-          const cr = r.headers.get('content-range') || '';
-          const n = parseInt(String(cr).split('/')[1], 10);
-          return { table: t, rows: Number.isFinite(n) ? n : null };
-        } catch (e) { return { table: t, error: String(e.message || e).slice(0, 80) }; }
+          return { table: t, rows: await countOf(`${t}?select=*&limit=0`) };
+        } catch (e) {
+          const msg = String(e.message || e);
+          if (/HTTP 5/.test(msg)) {
+            try { const b = await byMonth(t); return { table: t, rows: b.total, how: `달별 ${b.months}구간 합산` }; }
+            catch (e2) { return { table: t, error: `${msg} → 달별 합산도 실패: ${String(e2.message || e2).slice(0, 50)}` }; }
+          }
+          return { table: t, error: msg.slice(0, 80) };
+        }
       };
       const result = [];
-      for (let i = 0; i < TABLES.length; i += 6) result.push(...await Promise.all(TABLES.slice(i, i + 6).map(one)));
+      for (let i = 0; i < TABLES.length; i += 3) result.push(...await Promise.all(TABLES.slice(i, i + 3).map(one)));
       return res.status(200).json({ ok: true, at: new Date().toISOString(), result });
     }
 
