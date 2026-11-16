@@ -424,21 +424,24 @@ export default async function handler(req, res) {
       const inList = (ks) => '(' + ks.map((k) => '"' + encodeURIComponent(k) + '"').join(',') + ')';
       const count = async (d, ks) => {
         let c = 0;
-        // 10개씩: 한 요청의 결과 행이 Supabase 기본 상한(1,000행)에 닿으면 조용히 잘려 과소 계산된다.
+        // 10개씩 + 끝까지 받기. limit=5000을 줘도 Supabase가 1,000행으로 깎는다
+        // (2026-11-16 실측: 1,500행짜리 요청 → 1,000행만 돌아옴). 세는 값이 적게 나오면
+        // 백업이 빈 채로 삭제가 나가므로, 반드시 supaFetchAll로 끝까지 받는다.
         for (let i = 0; i < ks.length; i += 10) {
-          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 10))}&select=id&limit=5000`);
+          const r = await supaFetchAll(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 10))}&select=id&order=id.asc`);
           c += Array.isArray(r) ? r.length : 0;
         }
         return c;
       };
       // export: 삭제 전 백업용. 날짜 하나씩, 삭제와 똑같은 필터로 행을 그대로 돌려준다.
       // (get_place_rankings는 키워드당 기본 1,000행에서 조용히 잘려 백업이 비는 일이 있었다.)
+      // 여기도 limit= 로는 1,000행을 못 넘는다 — supaFetchAll로 페이지를 넘겨 받는다.
       if (data.export) {
         const d = String(data.export).slice(0, 10);
         const ks = byDate[d] ? [...byDate[d]] : [];
         const out = [];
         for (let i = 0; i < ks.length; i += 5) {
-          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 5))}&limit=5000`);
+          const r = await supaFetchAll(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks.slice(i, i + 5))}&order=id.asc`);
           if (Array.isArray(r)) out.push(...r);
         }
         return res.status(200).json({ ok: true, date: d, keywords: ks.length, rows: out.length, result: out });
