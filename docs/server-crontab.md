@@ -15,6 +15,16 @@ MAILTO=""
 50 5 * * * /usr/bin/pm2 restart blog-rank-scraper >/dev/null 2>&1
 ```
 
+## 임시 카페류 대조 크론 — 2026-11-17 추가, 11/20 만료
+심야 02:10에 카페·디저트 키워드 대조(조회 전용·저장 0건), 02:50에 블로그 순위 불일치 확인.
+요청 상한과 안전장치는 `docs/cafe-support-2026-11.md`에 정리했다(하루 12건 + 4건).
+도구 자체에 유효기간(`EXPIRES=2026-11-20`)이 있어 지나면 돌지 않는다. **결론 나면 이 2줄은 삭제한다.**
+
+```
+10 2 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/cafe_compare.mjs >> /var/log/blog-rank-scraper/cafe-compare.log 2>&1
+50 2 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/blogrank_probe.mjs --keyword="해운대 연말모임" --store=4 >> /var/log/blog-rank-scraper/blogrank-probe.log 2>&1
+```
+
 ## 임시 버스트 테스트 크론 — 2026-09-28 제거 완료
 2026-09-23~09-28 6일치 데이터를 모으고 3줄(10:10 / 15:10 / 19:20) 모두 삭제했다.
 
