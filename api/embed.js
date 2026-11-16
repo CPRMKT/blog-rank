@@ -82,6 +82,9 @@ td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:va
   function tellHeight(){
     if (!parentOrigin) return;
     var h = Math.ceil(document.documentElement.scrollHeight);
+    // 0은 보내지 않는다. 부모 페이지가 아직 그려지는 중일 때 0이 측정된 적이 있고(2026-11-16 확인),
+    // 부모가 그 값을 그대로 쓰면 틀이 접혀서 아무것도 안 보인다. 0이면 직전 높이를 그대로 둔다.
+    if (!h) return;
     try{ parent.postMessage({ type: 'blogrank-embed-height', height: h }, parentOrigin); }catch(e){}
   }
 
