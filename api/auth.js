@@ -126,7 +126,15 @@ async function handleChargeConfirm(req, res) {
     const ins = await svc('/point_transactions', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ owner_id: uid, type: '충전', amount, memo }) });
     if (!ins.ok) { const t = await ins.text(); return res.status(500).json({ ok: false, error: '포인트 적립 실패: ' + t.slice(0, 150) }); }
   }
-  const rows = await svc(`/point_transactions?select=amount&owner_id=eq.${uid}`).then((r) => r.json());
-  const balance = (Array.isArray(rows) ? rows : []).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  // 잔액은 원장 전체 합이다. Supabase는 한 요청에 1,000행만 주고 잘렸다는 표시를 하지 않아서,
+  // 충전 이력이 1,000줄을 넘으면 사장님께 보여 주는 잔액이 적게 나온다 → 페이지를 넘겨 끝까지 받는다.
+  const rows = [];
+  for (let off = 0; off < 200000; off += 1000) {
+    const page = await svc(`/point_transactions?select=amount&owner_id=eq.${uid}&order=id.asc&limit=1000&offset=${off}`).then((r) => r.json());
+    if (!Array.isArray(page) || !page.length) break;
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  const balance = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   return res.status(200).json({ ok: true, charged: amount, balance });
 }

@@ -339,15 +339,18 @@ export default async function handler(req, res) {
     }
     // 크론용: 전 매장에서 추적 중인 distinct 키워드 목록
     if (action === 'list_all_store_place_keywords') {
-      const result = await supaFetch('/store_place_keywords?select=keyword');
+      // 끝까지 받는다. 한 요청은 1,000행에서 조용히 끊기므로, 추적 키워드가 1,000개를
+      // 넘는 순간 크론이 일부 키워드를 아예 수집하지 않게 된다(2026-11-16 점검).
+      const result = await supaFetchAll('/store_place_keywords?select=keyword&order=id.asc');
       const kws = [...new Set((Array.isArray(result) ? result : []).map((r) => r.keyword).filter(Boolean))];
       return res.status(200).json({ ok: true, result: kws });
     }
     // 크론용: 전 계정의 플레이스 추적 (owner_id, keyword) 페어 — place_keywords + store_place_keywords 합집합
     if (action === 'list_all_place_tracking') {
       const [pk, spk] = await Promise.all([
-        supaFetch('/place_keywords?select=owner_id,keyword').catch(() => []),
-        supaFetch('/store_place_keywords?select=owner_id,keyword').catch(() => []),
+        // 여기도 끝까지 받는다 — 잘리면 그 계정의 키워드가 수집 대상에서 조용히 빠진다.
+        supaFetchAll('/place_keywords?select=owner_id,keyword&order=owner_id.asc,keyword.asc').catch(() => []),
+        supaFetchAll('/store_place_keywords?select=owner_id,keyword&order=id.asc').catch(() => []),
       ]);
       const seen = new Set();
       const pairs = [];
@@ -529,7 +532,9 @@ export default async function handler(req, res) {
       // 최근 30일 중 검증 완료(verified_rank 채워짐)분으로 적중률 계산
       const since = new Date(Date.now() - 30 * 86400000).toISOString();
       try {
-        const rows = await supaFetch(`/blog_predictions?select=probability,verified_rank,verified_at&verified_at=not.is.null&created_at=gte.${since}&limit=1000`);
+        // limit=1000은 '1,000행까지만'이 아니라 '여기서 끊긴다'는 뜻이었다. 적중률은 전수 집계라
+        // 잘리면 수치가 틀린다 → supaFetchAll로 끝까지 받는다.
+        const rows = await supaFetchAll(`/blog_predictions?select=probability,verified_rank,verified_at&verified_at=not.is.null&created_at=gte.${since}&order=id.asc`);
         const list = Array.isArray(rows) ? rows : [];
         const high = list.filter((r) => Number(r.probability) >= 60);
         const hit = high.filter((r) => r.verified_rank != null && r.verified_rank > 0 && r.verified_rank <= 7).length;
@@ -594,7 +599,8 @@ export default async function handler(req, res) {
     // ===== 포인트(발주) =====
     // 내 포인트 잔액(원장 합산) — RLS로 본인 것만
     if (action === 'get_point_balance') {
-      const rows = await supaFetch('/point_transactions?select=amount');
+      // 돈 계산이다. 원장이 1,000줄을 넘으면 한 요청으로는 잔액이 적게 나온다 → 끝까지 받는다.
+      const rows = await supaFetchAll('/point_transactions?select=amount&order=id.asc');
       const balance = (Array.isArray(rows) ? rows : []).reduce((s, r) => s + (Number(r.amount) || 0), 0);
       return res.status(200).json({ ok: true, balance });
     }
