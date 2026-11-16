@@ -739,6 +739,31 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: false, error: '알 수 없는 작업' });
     }
 
+    // 표별 행 수 — 이전(프로젝트 옮기기) 전후 대조용 기준값. 크론 시크릿 전용, 읽기만 한다.
+    // count=exact + limit=0 이라 행을 받아오지 않고 Content-Range 헤더의 총계만 읽는다
+    // (1,000행 상한과 무관하다 — 세는 일을 Postgres가 한다).
+    if (action === 'table_counts') {
+      if (!isCron) return res.status(403).json({ ok: false, error: '권한 없음' });
+      const TABLES = ['stores', 'store_keywords', 'store_place_keywords', 'place_keywords',
+        'store_rankings', 'place_rankings', 'store_place_fetches', 'store_blog_posts',
+        'blogs', 'posts', 'rank_history', 'blog_diagnoses', 'blog_predictions',
+        'profiles', 'orders', 'point_transactions', 'tax_invoice_requests', 'embed_tokens'];
+      const one = async (t) => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/${t}?select=*&limit=0`, {
+            headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'count=exact' },
+          });
+          if (!r.ok) return { table: t, error: `HTTP ${r.status}` };
+          const cr = r.headers.get('content-range') || '';
+          const n = parseInt(String(cr).split('/')[1], 10);
+          return { table: t, rows: Number.isFinite(n) ? n : null };
+        } catch (e) { return { table: t, error: String(e.message || e).slice(0, 80) }; }
+      };
+      const result = [];
+      for (let i = 0; i < TABLES.length; i += 6) result.push(...await Promise.all(TABLES.slice(i, i + 6).map(one)));
+      return res.status(200).json({ ok: true, at: new Date().toISOString(), result });
+    }
+
     return res.status(400).json({ ok: false, error: 'Unknown action' });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
