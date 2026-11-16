@@ -3753,7 +3753,7 @@ function linkResultText(other, code, storeName){
   const tab = other==='place' ? '플레이스 순위 추적' : '매장 블로그 순위';
   if(code==='added')  return `${tab}에도 함께 등록했습니다.`;
   if(code==='exists') return `${tab}에는 이미 등록돼 있습니다.`;
-  if(code==='unsupported') return `${tab}은 카페·디저트·베이커리 업종을 아직 지원하지 않아 연동하지 않았습니다.`;
+  if(code==='unsupported') return `${tab}은 이 업종을 아직 지원하지 않아 연동하지 않았습니다(네이버가 목록 페이지를 제공하지 않는 업종).`;
   if(String(code||'').indexOf('limit:')===0){
     const n=String(code).split(':')[1];
     return `${tab} 한도 ${n}개 초과로 연동되지 않았습니다.`;
@@ -4992,14 +4992,23 @@ async function ptCollectKeyword(kw){
     // checked_date를 로컬(KST) 오늘로 명시 — db 기본값(UTC)과 카드 날짜(ptDates, 로컬) 불일치 방지
     await dbCall('save_place_rankings',{keyword:kw,checked_date:ptDates(1)[0],rows:items});
   };
+  // 네이버가 목록 페이지를 아예 열어 주지 않는 업종 = 재시도해도 안 된다.
+  // 스크래퍼가 LIST_PAGE_UNAVAILABLE 로 표시해 준다(2026-11-16).
+  const unsup=(e)=>String(e&&e.message||'').indexOf('LIST_PAGE_UNAVAILABLE')>=0;
   try{ await once(); return true; }
   catch(e1){
+    if(unsup(e1)){ ptUnsupReason[kw]=String(e1.message); return 'unsupported'; }
     // 스크래퍼 일시 오류(재기동 직후 등) 흡수: 3초 후 1회 재시도
     await new Promise(r=>setTimeout(r,3000));
     try{ await once(); return true; }
-    catch(e){ console.warn('ptCollectKeyword',kw,e.message); return false; }
+    catch(e){
+      if(unsup(e)){ ptUnsupReason[kw]=String(e.message); return 'unsupported'; }
+      console.warn('ptCollectKeyword',kw,e.message); return false;
+    }
   }
 }
+// 업종 미지원으로 판정된 키워드와 그 사유(화면 안내에 쓴다)
+const ptUnsupReason={};
 
 // ── 순차 수집 큐: 등록/새로고침/지금수집 전부 이 큐를 통해 한 번에 하나씩 처리 ──
 let ptQCurrent=null; // 지금 처리 중인 key(중복 큐잉 방지)
@@ -5033,7 +5042,16 @@ async function ptPumpQueue(){
     const ok=await ptCollectKeyword(kw);
     ptAvgMs=ptAvgMs?Math.round(ptAvgMs*0.7+(Date.now()-t0)*0.3):(Date.now()-t0);
     ptCollecting.delete(key);
-    if(ok){ delete ptRetryCnt[key]; ptFailedKw.delete(key); }
+    if(ok==='unsupported'){
+      // 재시도 대기에 넣지 않는다. 사유를 구분해서 알리고, 등록은 그대로 둔다
+      // (사용자가 "지금 수집"을 다시 누르면 또 시도한다).
+      delete ptRetryCnt[key]; ptFailedKw.delete(key);
+      const why=String(ptUnsupReason[kw]||'').replace('LIST_PAGE_UNAVAILABLE','').trim();
+      ptErr(`"${kw}" — 네이버가 이 키워드의 플레이스 목록 페이지를 열어 주지 않습니다(업종 미지원).`
+        + (why?` 사유: ${why}`:'')
+        + ` 키워드에 든 단어 때문이 아니라 실제 조회에서 목록이 열리지 않아 나온 안내입니다. 블로그 순위 추적은 그대로 됩니다.`);
+    }
+    else if(ok){ delete ptRetryCnt[key]; ptFailedKw.delete(key); }
     else{
       ptRetryCnt[key]=(ptRetryCnt[key]||0)+1;
       ptFailedKw.add(key);   // '-' 대신 "재시도 대기"로 표시

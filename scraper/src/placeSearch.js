@@ -27,7 +27,10 @@ function listPath(keyword) {
   const k = String(keyword || '');
   if (/미용실|헤어|네일|왁싱|피부관리|에스테틱|뷰티|메이크업|반영구|속눈썹/.test(k)) return 'hairshop';
   if (/병원|의원|치과|한의원|약국|정형외과|피부과|이비인후|안과|산부인과/.test(k)) return 'hospital';
-  if (/카페|커피|디저트|베이커리|빵집|브런치/.test(k)) return 'cafe';
+  // 카페·디저트·브런치는 restaurant 경로로 보낸다. /cafe/list 는 404지만,
+  // /restaurant/list 가 카페·디저트 업종까지 같이 돌려준다(2026-11-16 실측:
+  // "해운대 브런치" 50곳, 상위 5곳에 '카페,디저트' 3곳 포함). 네이버 모바일 검색의
+  // '더보기'도 카페 키워드를 /restaurant/list 로 보낸다.
   return 'restaurant';
 }
 
@@ -98,8 +101,10 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
   });
 
   try {
-    const url = `https://m.place.naver.com/${listPath(keyword)}/list?query=${encodeURIComponent(keyword)}`;
-    await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
+    const path = listPath(keyword);
+    const url = `https://m.place.naver.com/${path}/list?query=${encodeURIComponent(keyword)}`;
+    const nav = await page.goto(url, { waitUntil: 'commit', timeout: 45000 });
+    const navStatus = nav ? nav.status() : 0;
     // 고정 2.5초 대기. 이 대기가 키워드 사이 간격 역할도 해서, 캡처 즉시 진행으로 줄이면
     // 요청 속도가 올라가 네이버 누적 속도 제한에 걸린다(9/18~19 0곳 다발).
     await page.waitForTimeout(2500);
@@ -111,8 +116,12 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     // 캡처 실패 = 스크랩 실패다. 빈 배열(정상 0곳)로 위장하면 저장 로직이
     // 기존 스냅샷을 0곳으로 덮어쓴다(9/6 저녁 37건 파괴 사건) → 명시적 에러로 승격.
     if (!cap) {
-      // 카페류: /cafe/list 가 404라 애초에 목록 요청이 뜨지 않는다(2026-11-14 실측).
-      if (listPath(keyword) === 'cafe') throw new Error('카페·디저트·베이커리 업종은 아직 지원하지 않습니다 — 네이버가 이 업종 목록 페이지(m.place.naver.com/cafe/list)를 제공하지 않습니다');
+      // 목록 페이지 자체가 열리지 않은 경우(404 등)만 '업종 미지원'으로 안내한다.
+      // 키워드에 든 단어로 미리 판단하지 않는다 — "해운대 브런치"처럼 식당인데
+      // 카페류 단어가 섞인 키워드를 막아 버렸다(2026-11-16 수정).
+      if (navStatus >= 400) {
+        throw new Error(`LIST_PAGE_UNAVAILABLE 목록 페이지가 열리지 않았습니다 — m.place.naver.com/${path}/list 가 ${navStatus}를 돌려줍니다(네이버가 이 업종 목록을 제공하지 않습니다)`);
+      }
       const seen = [...seenOps].join(', ') || '없음';
       // 이름을 봤는데 허용 목록에 없다 = 네이버가 쿼리를 바꾼 것. 0곳으로 넘기지 않고 에러로 올린다.
       throw new Error(seenOps.size

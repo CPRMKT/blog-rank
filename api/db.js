@@ -198,9 +198,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, result: Array.isArray(result) ? result : [] });
     }
     if (action === 'add_place_keyword') {
-      if (/카페|커피|디저트|베이커리|빵집|브런치/.test(String(data.keyword || ''))) {
-        return res.status(200).json({ ok: false, error: '카페·디저트·베이커리 업종은 플레이스 순위 추적을 아직 지원하지 않습니다(네이버가 이 업종 목록 페이지를 제공하지 않습니다).', unsupported: 'cafe' });
-      }
+      // 2026-11-16: 키워드에 '카페/브런치' 같은 단어가 있다는 이유로 막지 않는다.
+      // 실제로 목록 페이지가 열리지 않는 경우만 스크래퍼가 LIST_PAGE_UNAVAILABLE로 알린다.
       const result = await supaFetch('/place_keywords', {
         method: 'POST',
         body: JSON.stringify({ keyword: data.keyword }),
@@ -255,10 +254,10 @@ export default async function handler(req, res) {
     // 실패한 쪽만 재시도 대기로 표시"가 요구사항이라, 전부 되돌리면 오히려 어긋난다.
     if (action === 'add_linked_keyword') {
       const BLOG_MAX = 40, PLACE_MAX = 40;   // 두 탭 한도를 같게(2026-11-09)
-      // 카페·디저트 업종: m.place.naver.com/cafe/list 가 404라 플레이스 순위를 받아올 방법이 없다
-      // (2026-11-14 실측). 등록은 막고 안내 문구로 돌려준다 — 등록해두면 회차마다 에러만 쌓인다.
-      const CAFE_RE = /카페|커피|디저트|베이커리|빵집|브런치/;
-      const CAFE_MSG = '카페·디저트·베이커리 업종은 플레이스 순위 추적을 아직 지원하지 않습니다(네이버가 이 업종 목록 페이지를 제공하지 않습니다). 블로그 순위 추적은 됩니다.';
+      // 2026-11-16: 키워드 단어로 미리 막던 규칙을 뺐다. "해운대 브런치"(피자·파스타 하는
+      // 식당)가 '브런치'라는 단어 때문에 거부됐다. 지원 여부는 실제 조회 결과로 판단한다
+      // — 목록 페이지가 안 열리면 스크래퍼가 LIST_PAGE_UNAVAILABLE 에러를 올리고,
+      // 화면이 그때 "업종 미지원" 문구를 띄운다. 등록 자체는 막지 않는다.
       const storeId = data.store_id;
       const keyword = String(data.keyword || '').trim();
       const origin = data.origin === 'place' ? 'place' : 'blog';   // 사용자가 실제로 등록한 쪽
@@ -280,10 +279,6 @@ export default async function handler(req, res) {
       const hasPlace = placeKws.some((k) => norm(k) === nk);
 
       const out = { blog: hasBlog ? 'exists' : null, place: hasPlace ? 'exists' : null };
-      if (CAFE_RE.test(keyword)) {
-        if (origin === 'place') return res.status(200).json({ ok: false, error: CAFE_MSG, unsupported: 'cafe' });
-        out.place = 'unsupported';   // 블로그 쪽만 등록하고 플레이스 연동은 건너뛴다
-      }
 
       const addBlog = async () => {
         if (hasBlog) return;
