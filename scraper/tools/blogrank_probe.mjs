@@ -60,6 +60,10 @@ async function main() {
   if (!FORCE && (hh() < 2 || tooLate())) { console.log(`심야(02:00~05:30) 밖이라 돌지 않는다 — 지금 ${kst()} KST.`); return; }
   const busy = collecting();
   if (busy) { console.log(`수집(${busy})이 돌고 있어 중단한다.`); return; }
+  // 오늘 결과가 이미 있으면 다시 돌지 않는다(재시도 크론이 예산을 두 번 쓰지 않게).
+  if (!FORCE && fs.existsSync(`${LOG_DIR}/blogrank-probe-${kstDate()}.json`)) {
+    console.log(`오늘(${kstDate()}) 결과가 이미 있다 — 다시 돌지 않는다.`); return;
+  }
 
   // 매장 정보(DB 읽기 — 네이버 요청 아님)
   const stores = (await db('list_stores')).result || [];

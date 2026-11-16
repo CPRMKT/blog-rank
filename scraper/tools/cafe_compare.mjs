@@ -86,6 +86,10 @@ async function main() {
   if (!FORCE && (kstHour() < 2 || tooLate())) { console.log(`심야(02:00~05:30) 밖이라 돌지 않는다 — 지금 ${kst()} KST.`); return; }
   const busy = collecting();
   if (busy) { console.log(`수집(${busy})이 돌고 있어 중단한다 — 네이버 요청이 겹치면 안 된다.`); return; }
+  // 오늘 결과가 이미 있으면 다시 돌지 않는다. 재시도 크론(03:30)이 예산을 두 번 쓰는 걸 막는다.
+  if (!FORCE && fs.existsSync(`${LOG_DIR}/cafe-compare-${kstDate()}.json`)) {
+    console.log(`오늘(${kstDate()}) 결과가 이미 있다 — 다시 돌지 않는다.`); return;
+  }
 
   log(`카페류 대조 시작 — 키워드 ${KEYWORDS.length}개 × ${ROUNDS}회, 요청 상한 ${MAX_REQ}건, 간격 ${GAP_MS / 1000}초, count=${COUNT} (저장 없음)`);
   const rounds = [];

@@ -20,9 +20,14 @@ MAILTO=""
 요청 상한과 안전장치는 `docs/cafe-support-2026-11.md`에 정리했다(하루 12건 + 4건).
 도구 자체에 유효기간(`EXPIRES=2026-11-20`)이 있어 지나면 돌지 않는다. **결론 나면 이 2줄은 삭제한다.**
 
+03:30 / 04:10은 **재시도**다. 두 도구 모두 "오늘 결과 파일이 있으면 돌지 않는다"라서
+재시도가 예산을 두 번 쓰지 않는다(1차가 성공했으면 재시도는 즉시 종료).
+
 ```
 10 2 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/cafe_compare.mjs >> /var/log/blog-rank-scraper/cafe-compare.log 2>&1
 50 2 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/blogrank_probe.mjs --keyword="해운대 연말모임" --store=4 >> /var/log/blog-rank-scraper/blogrank-probe.log 2>&1
+30 3 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/cafe_compare.mjs >> /var/log/blog-rank-scraper/cafe-compare.log 2>&1
+10 4 * * * cd /opt/blog-rank/scraper && set -a; . ./.env; set +a; /usr/bin/node tools/blogrank_probe.mjs --keyword="해운대 연말모임" --store=4 >> /var/log/blog-rank-scraper/blogrank-probe.log 2>&1
 ```
 
 ## 임시 버스트 테스트 크론 — 2026-09-28 제거 완료
