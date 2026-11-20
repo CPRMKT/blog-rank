@@ -86,6 +86,16 @@ if (STORE) {
     const keys = Object.keys(d1.body || {});
     ok(!keys.some((k) => ['owner_id', 'place_id', 'id'].includes(k)), '응답에 내부 식별자(owner_id 등) 없음', keys.join(','));
 
+    // 높이 메시지 이름 — 사양 이름이 실제로 배포돼 있는지 페이지 본문에서 확인한다.
+    // 2026-12-05 에 옛 이름을 지울 때 아래 '옛 이름' 검사 줄도 같이 지운다.
+    {
+      const page = await fetch(`${BASE}/api/embed?token=${encodeURIComponent(t1)}`, { signal: AbortSignal.timeout(30000) })
+        .then((r) => r.text()).catch(() => '');
+      ok(page.includes("'blog-rank:height'"), '높이 메시지 사양 이름(blog-rank:height) 들어 있음');
+      ok(page.includes("'blogrank-embed-height'"), '높이 메시지 옛 이름도 같이 보냄(2026-12-05 까지)');
+      ok(page.includes('if (!h) return;'), '높이 0은 보내지 않음');
+    }
+
     // 다른 매장 id를 섞어도 토큰이 가리키는 매장만 나와야 한다
     const d2 = await db('embed_data', { token: t1, store_id: STORE + 1 });
     ok(d2.body && d2.body.ok && d2.body.store.name === name, '요청에 다른 매장 id를 넣어도 같은 매장만 나옴');
