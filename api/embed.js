@@ -85,6 +85,10 @@ td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:va
     // 0은 보내지 않는다. 부모 페이지가 아직 그려지는 중일 때 0이 측정된 적이 있고(2026-11-16 확인),
     // 부모가 그 값을 그대로 쓰면 틀이 접혀서 아무것도 안 보인다. 0이면 직전 높이를 그대로 둔다.
     if (!h) return;
+    // 사양 이름은 'blog-rank:height' 다. 옛 이름 'blogrank-embed-height' 를 이미 듣고 있는 쪽이
+    // 있을 수 있어 2026-12-05 까지 두 이름을 같이 보낸다. 그 날짜가 지나면 아래 옛 이름 줄만 지운다.
+    // (기록: docs/embed-2026-11.md)
+    try{ parent.postMessage({ type: 'blog-rank:height', height: h }, parentOrigin); }catch(e){}
     try{ parent.postMessage({ type: 'blogrank-embed-height', height: h }, parentOrigin); }catch(e){}
   }
 

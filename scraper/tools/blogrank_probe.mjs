@@ -24,6 +24,8 @@ const FORCE = has('force');
 const MAX_REQ = Math.min(6, Math.max(1, parseInt(arg('max-requests', '4'), 10)));
 const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.app').replace(/\/$/, '');
 const LOG_DIR = '/var/log/blog-rank-scraper';
+// 유효기간 — 지나면 --force 없이는 돌지 않는다. 임시 측정이 조용히 상주하는 걸 막는다.
+const EXPIRES = '2026-11-25';
 
 const kst = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
 const kstDate = () => kst().slice(0, 10);
@@ -57,6 +59,7 @@ const nameTokens = (name) => {
 
 async function main() {
   if (!KEYWORD) { console.log('--keyword=... 가 필요하다.'); return; }
+  if (!FORCE && kstDate() > EXPIRES) { console.log(`유효기간(${EXPIRES}) 지남 — 돌지 않는다. 다시 쓰려면 --force 또는 EXPIRES 갱신.`); return; }
   if (!FORCE && (hh() < 2 || tooLate())) { console.log(`심야(02:00~05:30) 밖이라 돌지 않는다 — 지금 ${kst()} KST.`); return; }
   const busy = collecting();
   if (busy) { console.log(`수집(${busy})이 돌고 있어 중단한다.`); return; }
@@ -109,6 +112,38 @@ async function main() {
       for (const m of ms.slice(0, 5)) log(`    ${m.rank}위 ${String(m.title || '').replace(/<[^>]+>/g, '').slice(0, 48)} | ${m.link || m.url || ''}`);
     } catch (e) { out.production = { error: e.message }; log(`  운영 경로 실패: ${e.message}`); }
   }
+
+  // ── 지난 회차와 상위 10개 대조 ──
+  // 왜: "화면에서 본 순서와 다르다"는 신고가 시점 차이인지(새 글이 끼어든 것) 아니면
+  // 개인화·목록 자체의 흔들림인지는 같은 키워드를 다른 날 다시 찍어 봐야 갈린다.
+  // 새 글 하나가 끼어들어 아래가 한 칸씩 밀린 모양이면 시점 차이다.
+  try {
+    const prev = fs.readdirSync(LOG_DIR)
+      .filter((f) => /^blogrank-probe-\d{4}-\d{2}-\d{2}\.json$/.test(f) && !f.includes(kstDate()))
+      .sort().reverse()
+      .map((f) => { try { return { f, j: JSON.parse(fs.readFileSync(`${LOG_DIR}/${f}`, 'utf8')) }; } catch { return null; } })
+      .find((x) => x && x.j.keyword === KEYWORD && Array.isArray(x.j.lists && x.j.lists.date));
+    if (prev) {
+      const key = (x) => (x.link || '') + '|' + x.title;
+      for (const sort of ['date', 'rel']) {
+        const a = (prev.j.lists[sort] || []), b = (out.lists[sort] || []);
+        if (!Array.isArray(a) || !Array.isArray(b) || !a.length || !b.length) continue;
+        const aIdx = new Map(a.map((x, i) => [key(x), i + 1]));
+        const bKeys = new Set(b.map(key));
+        const added = b.filter((x) => !aIdx.has(key(x)));
+        const gone = a.filter((x) => !bKeys.has(key(x)));
+        const moved = b.filter((x) => aIdx.has(key(x)) && aIdx.get(key(x)) !== x.rank);
+        log(`  [대조 ${prev.j.date} → ${kstDate()}] ${sort === 'date' ? '최신순' : '관련도순'}: 새 글 ${added.length}개 / 빠진 글 ${gone.length}개 / 자리 바뀜 ${moved.length}개`);
+        for (const x of added) log(`     + ${x.rank}위 ${x.blogId} | ${String(x.title).slice(0, 44)}`);
+        for (const x of gone) log(`     - (지난 ${aIdx.get(key(x))}위) ${x.blogId} | ${String(x.title).slice(0, 44)}`);
+        for (const x of moved) log(`     ~ ${aIdx.get(key(x))}위 → ${x.rank}위 ${x.blogId} | ${String(x.title).slice(0, 36)}`);
+        out.compare = out.compare || {};
+        out.compare[sort] = { prev_date: prev.j.date, added: added.length, gone: gone.length, moved: moved.length,
+          shift_only: gone.length === 0 && moved.every((x) => x.rank - aIdx.get(key(x)) === added.length) };
+      }
+      if (out.compare) log(`  → ${Object.values(out.compare).every((c) => c.shift_only) ? '새 글이 끼어들어 한 칸씩 밀린 모양 = 시점 차이' : '단순 밀림이 아니다 — 개인화·목록 흔들림 쪽을 봐야 한다'}`);
+    } else { log('  [대조] 지난 회차 결과가 없어 대조는 건너뜀'); }
+  } catch (e) { log(`  [대조] 실패: ${e.message}`); }
 
   out.requests_used = used;
   fs.writeFileSync(`${LOG_DIR}/blogrank-probe-${kstDate()}.json`, JSON.stringify(out, null, 1));
