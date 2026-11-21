@@ -303,6 +303,12 @@ tr:hover td{background:var(--surface-3)}
 /* 실행 시간/차단으로 오늘 시도조차 못 한 키워드. 보류(0곳 응답)와 구분 */
 .pt-notrun{font-size:10px;font-weight:500;color:var(--faint);white-space:nowrap}
 .pt-nocollect{font-size:10px;font-weight:500;color:var(--faint);white-space:nowrap;border-bottom:1px dashed var(--faint)}
+/* 2026-10-26~11-10: 수집은 했지만 수집 오류로 판정돼 버린 값(오류 제외) / 오류 여부 확인 중(확인 중).
+   2026-12-11 이후 PLACE_DISC 와 함께 지운다(docs/place-loss-notice-proposal-2026-11.md v2) */
+.pt-discard{font-size:10px;font-weight:700;color:#b91c1c;white-space:nowrap}
+.pt-discard.rev{color:var(--muted);font-weight:600}
+.pt-day.discard{background:repeating-linear-gradient(135deg,#fef2f2 0 6px,transparent 6px 12px)}
+.pt-discnote{background:var(--surface-3,#f8fafc);border:1px solid var(--line,#e2e8f0);color:var(--ink,#334155);border-radius:8px;padding:8px 12px;font-size:12.5px;line-height:1.55;margin-bottom:12px}
 /* 블로그 순위표: 키워드 등록일 이전 날짜 칸 음영(플레이스 탭 .pt-day.pre와 동일 규칙) */
 td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
 /* 최근 배치 수집 실패 배너(실패 있을 때만 표시) */
@@ -1217,12 +1223,13 @@ td.bt-pre{background:var(--surface-2,#f7f8fa);opacity:.55}
           <button class="btn sm" id="ptRefreshBtn" onclick="ptCollectNow()">지금 수집</button>
         </div>
 
+        <div id="ptDiscNote" class="pt-discnote" style="display:none"></div>
         <div id="ptCards"><div class="pt-empty">키워드를 등록하면 순위 추적이 시작됩니다.</div></div>
 
         <div class="notice" style="font-size:12px;color:var(--muted);line-height:1.7;padding:14px 16px;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--r-card);margin-top:var(--sp-2)">
           플레이스 순위는 매일 새벽·저녁에 자동 수집됩니다. 카드의 <b>새로고침(⟳)</b> 또는 <b>지금 수집</b>으로 오늘 순위를 즉시 반영합니다.<br>
           기본 <b>최근 12일</b>(6일 × 2줄)을 보여주며, <b>더보기(▼)</b>로 최근 30일까지 펼칠 수 있습니다. 저장수는 네이버 표기 기준(100·1,000 단위 반올림)입니다.<br>
-          날짜 칸 표시: <b>숫자</b> 순위 · <b>-</b> 수집은 됐지만 300위 안에 없음(미노출) · <b>보류</b> 네이버가 빈 응답을 보내 저장을 보류함 · <b>오늘 미수집</b> 오늘 차례가 오기 전에 배치가 끝남 · <b>수집 안 됨</b> 그날 수집 기록 자체가 없음(순위가 없었다는 뜻이 아닙니다).
+          날짜 칸 표시: <b>숫자</b> 순위 · <b>-</b> 수집은 됐지만 300위 안에 없음(미노출) · <b>보류</b> 네이버가 빈 응답을 보내 저장을 보류함 · <b>오늘 미수집</b> 오늘 차례가 오기 전에 배치가 끝남 · <b style="color:#b91c1c">오류 제외</b> 수집했지만 수집 오류로 판정돼 버린 값 · <b>확인 중</b> 수집 오류인지 확인 중인 값 · <b>수집 안 됨</b> 그날 수집 기록 자체가 없음· <b>수집 안 됨</b> 그날 수집 기록 자체가 없음(순위가 없었다는 뜻이 아닙니다).
         </div>
       </div>
     </div>
@@ -4548,24 +4555,51 @@ async function prLoadCompare(){
   // rank NULL 행 제외: 표에 "null" 노출 방지, 그날 전부 NULL이면 날짜 자체가 비교 후보에서 빠짐
   const byDate={}; for(const row of rows){ if(row.rank==null) continue; (byDate[row.checked_date]=byDate[row.checked_date]||[]).push(row); }
   prCmpData={kw,byDate,dates:Object.keys(byDate).sort().reverse()};
+  // 31일 창이 버린 값 구간에 걸리면 목록을 먼저 받는다(실패해도 비교는 그대로 된다 — 경고만 빠짐)
+  if(prTargetDate(30)<=PLACE_DISC.to) await placeDiscLoad();
+  if(document.getElementById('prCmpKw').value!==kw) return;   // 그 사이 키워드를 바꿨으면 버린다
   renderPrDateTabs();
   if(prCmpData.dates.length===0){ empty.style.display=''; table.style.display='none'; empty.textContent='아직 수집된 데이터가 없습니다. 내일 새벽 6시 이후 다시 확인하세요.'; return; }
   prRenderCompare(prSelectedBaseline);
 }
-// 2026-10-29~11-09은 '신규 오픈' 캡처 버그로 저장된 값이 섞여 있던 기간이다. 오염이 확실한 행은
-// 지웠지만(1,798쌍) 경계(C등급)로 남겨 둔 날짜가 있어, 그 날짜가 비교 기준으로 잡히면 표시해 준다.
-const PR_BAD_FROM='2026-10-29', PR_BAD_TO='2026-11-09';
-const prBadDate=(d)=>!!d&&d>=PR_BAD_FROM&&d<=PR_BAD_TO;
+// ── 2026-10-26~11-10 버린 값 목록(PLACE_DISC) ──
+// 그 16일은 2026-11-21 에 백업에서 되살렸다(행 수 16/16 일치 — 유실된 기록은 없다). 남은 빈 칸은
+// "수집은 했지만 수집 오류로 판정돼 우리가 버린 값"(err) 또는 "오류인지 확인 중"(review)이다.
+// '수집 안 됨'(수집 자체를 안 함)과 구분해 보여 주려고 목록을 /place-discarded-2026-11.json 에서 받는다.
+// 보이는 날짜가 이 구간에 걸릴 때만 한 번 받는다. 2026-12-11 이후(30·31일 창에서 11/10 이 빠짐)
+// 이 블록, 쓰는 곳 3군데(카드 칸·카드 안내 줄·날짜 비교), CSS .pt-discard/.pt-day.discard/.pt-discnote,
+// 화면 설명의 '오류 제외/확인 중' 문구, json 파일을 지운다. (docs/place-loss-notice-proposal-2026-11.md v2)
+const PLACE_DISC={from:'2026-10-26',to:'2026-11-10',url:'/place-discarded-2026-11.json'};
+let placeDiscData=null, placeDiscP=null;
+const placeDiscInWin=(dates)=>(dates||[]).some(d=>d>=PLACE_DISC.from&&d<=PLACE_DISC.to);
+function placeDiscLoad(){   // 실패하면 null 그대로 — 그때는 예전처럼 '수집 안 됨' 으로 보인다
+  if(placeDiscData) return Promise.resolve(placeDiscData);
+  if(!placeDiscP) placeDiscP=fetch(PLACE_DISC.url).then(r=>r.ok?r.json():null).then(j=>{
+    if(!j) return null;
+    const m={}; for(const k of ['err','review']) for(const d in (j[k]||{})) for(const kw of j[k][d]) m[d+'|'+kw]=k;
+    placeDiscData=m; return m;
+  }).catch(()=>null).finally(()=>{ if(!placeDiscData) placeDiscP=null; });
+  return placeDiscP;
+}
+const placeDisc=(d,kw)=>(placeDiscData&&d>=PLACE_DISC.from&&d<=PLACE_DISC.to)?(placeDiscData[d+'|'+kw]||null):null;
+const prMD=(iso)=>{const p=String(iso||'').split('-'); return p.length===3?(+p[1])+'/'+(+p[2]):String(iso||'');};
+function prTargetDate(daysAgo){ return new Date(Date.now()-daysAgo*86400000).toISOString().slice(0,10); }
+// 기준일(N일 전) 자체의 값이 버려져서 더 이른 날짜로 넘어갔는지
+function prDiscBase(daysAgo){
+  if(!prCmpData||!prCmpData.dates||!prCmpData.dates.length) return null;
+  const target=prTargetDate(daysAgo), base=prFindBaselineDate(daysAgo);
+  if(!base||base===target) return null;
+  const k=placeDisc(target,prCmpData.kw); return k?{kind:k,target,base}:null;
+}
 function renderPrDateTabs(){
   document.getElementById('prDateTabs').innerHTML=[1,5,10,20,30].map(d=>{
-    let warn='';
-    try{ if(prCmpData&&prCmpData.dates&&prCmpData.dates.length&&prBadDate(prFindBaselineDate(d))) warn=' ⚠'; }catch(e){}
-    const tip=warn?' title="이 기준일은 2026-10-29~11-09 수집 오류 기간입니다. 값이 실제와 다를 수 있습니다."':'';
+    let warn='', tip='';
+    try{ const x=prDiscBase(d); if(x){ warn=' ⚠'; tip=` title="${prMD(x.target)} 값은 ${x.kind==='err'?'수집 오류로 제외':'수집 오류인지 확인 중'} — ${prMD(x.base)} 기준으로 비교"`; } }catch(e){}
     return `<div class="pr-date ${d===prSelectedBaseline?'active':''}"${tip} onclick="prSelectedBaseline=${d};renderPrDateTabs();prRenderCompare(${d})">${d}일전${warn}</div>`;
   }).join('');
 }
 function prFindBaselineDate(daysAgo){
-  const target=new Date(Date.now()-daysAgo*86400000).toISOString().slice(0,10);
+  const target=prTargetDate(daysAgo);
   for(const d of prCmpData.dates){ if(d<=target) return d; }
   return prCmpData.dates[prCmpData.dates.length-1]; // 없으면 가장 오래된 것
 }
@@ -4576,13 +4610,13 @@ function prRenderCompare(daysAgo){
   const baseDate=prFindBaselineDate(daysAgo);
   const baseRank={}; if(baseDate&&baseDate!==today){ for(const r of prCmpData.byDate[baseDate]) baseRank[String(r.place_id)]=r.rank; }
   empty.style.display='none'; table.style.display='';
-  // 기준일이 수집 오류 기간이면 숫자를 그대로 믿지 않도록 알린다(날짜를 숨기지는 않는다 —
-  // 숨기면 "그날 데이터가 아예 없다"로 읽힌다).
+  // 기준일(N일 전)의 값이 수집 오류로 버려져 더 이른 날짜와 비교하게 되면 그 사실을 알린다.
+  // (예전엔 아무 말 없이 넘어가 "20일 전" 이라 적혀 있어도 실제로는 더 오래된 날과 비교했다)
   const warnEl=document.getElementById('prBadBase');
   if(warnEl){
-    const bad=prBadDate(baseDate);
-    warnEl.style.display=bad?'':'none';
-    if(bad) warnEl.textContent='⚠ 비교 기준일 '+baseDate+'은 수집 오류 기간(2026-10-29~11-09)입니다. 이 날짜와의 비교값은 실제와 다를 수 있습니다.';
+    const x=prDiscBase(daysAgo);
+    warnEl.style.display=x?'':'none';
+    if(x) warnEl.textContent='⚠ '+daysAgo+'일 전('+prMD(x.target)+')은 이 키워드 값이 '+(x.kind==='err'?'수집 오류로 제외된':'수집 오류인지 확인 중인')+' 날입니다. 가장 가까운 이전 수집일 '+prMD(x.base)+' 기준으로 비교합니다.';
   }
   const mine=prMyPlaceIds();
   document.getElementById('prCmpBody').innerHTML=todayList.map(r=>{
@@ -5162,8 +5196,12 @@ function ptRenderCards(){
   const cards=document.getElementById('ptCards');
   const detail=document.getElementById('ptDetail').checked;
   document.getElementById('ptLegend').style.display=detail?'flex':'none';
+  const discNote=document.getElementById('ptDiscNote'); if(discNote) discNote.style.display='none';
   if(!ptKeywords.length){ cards.innerHTML='<div class="pt-empty">키워드를 등록하면 순위 추적이 시작됩니다.</div>'; return; }
   const allDates=ptDates(PT_DAYS_EXPANDED);
+  // 30일 창이 2026-10-26~11-10 에 걸리면 버린 값 목록을 받아 다시 그린다(받기 전엔 '수집 안 됨' 으로 보임)
+  if(!placeDiscData && placeDiscInWin(allDates)){ placeDiscLoad().then(m=>{ if(m) ptRenderCards(); }); }
+  let anyDisc=false;
   const ptStName=escapeHtml((ptStore()||{}).name||'');
   // keyword -> date -> row
   const map={}; for(const kw of ptKeywords) map[kw]={};
@@ -5176,14 +5214,20 @@ function ptRenderCards(){
     const created=ptKwCreated[kw]||null;
     const cells=shown.map((d)=>{
       const row=rowMap[d];
-      let pre=false;
+      let pre=false, disc=false;
       let inner;
       if(ptCollecting.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-loading">${ptProgressLabel(ptKey(ptStoreId,kw))}</span></div>`; }
       else if(ptFailedKw.has(ptKey(ptStoreId,kw)) && d===allDates[0] && !row){ inner=`<div class="pt-day-body"><span class="pt-retrywait" title="수집 실패 — 자동 재시도 예정">재시도 대기</span></div>`; }  // 실패는 '-'로 위장하지 않는다
       else if(!row && created && d<created){ pre=true; inner=`<div class="pt-day-body" title="등록 전"></div>`; }  // 등록 전: '-'(미노출)와 구분해 빈 음영 칸
       else if(!row && d===allDates[0] && ptHeldKw.has(kw)){ inner=`<div class="pt-day-body"><span class="pt-held" title="수집 보류 — 네이버 응답 없음, 다음 수집에서 재시도">보류</span></div>`; }  // 배치 0곳: 미노출과 절대 같은 모양이면 안 됨
       else if(!row && d===allDates[0] && ptNotRunKw.has(kw)){ inner=`<div class="pt-day-body"><span class="pt-notrun" title="오늘 수집 차례가 오기 전에 배치가 끝났습니다 — 다음 수집에서 먼저 처리됩니다">오늘 미수집</span></div>`; }
-      else if(!row && ptCollected[kw] && !ptCollected[kw].has(d)){ inner=`<div class="pt-day-body"><span class="pt-nocollect" title="이 날은 수집 기록이 없습니다 — 순위가 없었다는 뜻이 아닙니다">수집 안 됨</span></div>`; }  // 가짜 미노출 방지
+      else if(!row && ptCollected[kw] && !ptCollected[kw].has(d)){
+        const dk=placeDisc(d,kw);   // 2026-10-26~11-10 에 버린 값이면 '수집 안 됨' 과 구분한다
+        if(dk==='err'){ disc=true; inner=`<div class="pt-day-body"><span class="pt-discard" title="이 날 수집은 됐지만, 네이버가 이 키워드와 다른 결과를 돌려준 수집 오류로 판정돼 값을 버렸습니다 — 순위가 없었다는 뜻이 아닙니다">오류 제외</span></div>`; }
+        else if(dk==='review'){ disc=true; inner=`<div class="pt-day-body"><span class="pt-discard rev" title="수집 오류인지 확인 중인 값이라 아직 표시하지 않습니다">확인 중</span></div>`; }
+        else inner=`<div class="pt-day-body"><span class="pt-nocollect" title="이 날은 수집 기록이 없습니다 — 순위가 없었다는 뜻이 아닙니다">수집 안 됨</span></div>`;  // 가짜 미노출 방지
+        if(disc) anyDisc=true;
+      }
       else if(!row){ inner=`<div class="pt-day-body"><span class="pt-rank none">-</span></div>`; }  // 수집은 됐고 300위 안에 없음 = 정상 미노출
       else{
         // 변동 기준: 전체 30일 범위에서 더 오래된, 데이터 있는 가장 가까운 날(prior)
@@ -5200,7 +5244,7 @@ function ptRenderCards(){
         inner=`<div class="pt-day-body"><span class="pt-rank ${ptRankTier(row.rank)}">${row.rank}</span>${chg}${metrics}</div>`;
       }
       const isToday=(d===allDates[0]);
-      return `<div class="pt-day${isToday?' today':''}${pre?' pre':''}"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
+      return `<div class="pt-day${isToday?' today':''}${pre?' pre':''}${disc?' discard':''}"><div class="pt-day-date">${ptDateHeaderHTML(d)}</div>${inner}</div>`;
     }).join('');
     const vol=storeKwVolumes[kw];
     const volHtml=(vol!=null)?`<span class="pt-kwvol">월 ${vol.toLocaleString()}</span>`:'';
@@ -5224,6 +5268,11 @@ function ptRenderCards(){
       <button class="pt-more${expanded?' expanded':''}" title="${expanded?'접기':'더보기(최근 30일)'}" onclick="ptToggleExpand('${jkw}')">${PT_CHEV_SVG}</button>
     </div>${ptBlogPanelHTML(kw, allDates, expanded?PT_DAYS_EXPANDED:PT_DAYS_COLLAPSED)}</div>`;
   }).join('');
+  // '오류 제외/확인 중' 칸이 화면에 하나라도 보일 때만 안내 한 줄
+  if(discNote && anyDisc){
+    discNote.innerHTML='ⓘ <b>10/26~11/10</b> 순위는 11/21 에 백업에서 되살렸습니다(리뷰 수·저장 수는 백업에 없어 <b>-</b>). 그중 <b>수집 오류로 판정돼 버린 값</b>은 <b style="color:#b91c1c">오류 제외</b>로 표시합니다 — 순위가 없었다는 뜻이 아닙니다.';
+    discNote.style.display='';
+  }
 }
 </script>
 </body>
