@@ -1,0 +1,23 @@
+diff --git a/index.html b/index.html
+index df98b20..cce2678 100644
+--- a/index.html
++++ b/index.html
+@@ -3027,5 +3027,10 @@ async function srRun(){
+         let cmp='';
+         if(snap){
+-          const top10=snap.rows.filter(r=>r.rank!=null&&r.rank<=10&&r.visitor_reviews!=null); // null<=10은 true라 명시 제외
++          const top10all=snap.rows.filter(r=>r.rank!=null&&r.rank<=10&&r.visitor_reviews!=null); // null<=10은 true라 명시 제외
++          // 방문자리뷰 0 인데 블로그리뷰가 있는 매장은 '진짜 0'인지 '값 없음'인지 모른다(수집기가 둘을 0 으로 저장).
++          // 평균을 끌어내려 격차를 작게 보이게 하므로 평균에서 뺀다(2026-11-22 제안).
++          const v0b=(r)=>r.visitor_reviews===0&&(r.blog_reviews||0)>0;
++          const top10=top10all.filter(r=>!v0b(r));
++          const exN=top10all.length-top10.length;
+           if(top10.length){
+             const avg=Math.round(top10.reduce((s,r)=>s+r.visitor_reviews,0)/top10.length);
+@@ -3034,5 +3039,5 @@ async function srRun(){
+             const known=ourVisitor!=null;
+             const gap=known?avg-ourVisitor:null;
+-            cmp='<div class="sr-row"><span class="l">'+escapeHtml(mainKw)+' 상위 10위 평균 방문자리뷰</span><span class="v sr-num">'+srFmt(avg)+'개</span></div>'
++            cmp='<div class="sr-row"><span class="l">'+escapeHtml(mainKw)+' 상위 10위 평균 방문자리뷰'+(exN?'<small>방문자리뷰 0·블로그리뷰 있음 '+exN+'곳은 값 확인 전이라 평균에서 뺐습니다</small>':'')+'</span><span class="v sr-num">'+srFmt(avg)+'개</span></div>'
+                +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(known?srFmt(ourVisitor)+'개'+srRevAsOf():'수집 전')+'</span></div>'
+                +(!known?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-mutev">우리 리뷰 수 수집 전 — 비교 안 함</span></div>'
