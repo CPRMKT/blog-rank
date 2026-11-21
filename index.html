@@ -2889,8 +2889,9 @@ async function srRun(){
     // 키워드별 최신 순위
     const latestByKw={};
     for(const row of ourHist){ if(row.rank==null) continue; if(!latestByKw[row.keyword]||row.checked_date>latestByKw[row.keyword].checked_date) latestByKw[row.keyword]=row; }
-    // 우리 리뷰 수(가장 최근 이력 행)
-    const newest=ourHist.slice().sort((a,b)=>b.checked_date<a.checked_date?-1:1)[0];
+    // 우리 리뷰 수(가장 최근 이력 행) — 리뷰 수가 있는 행 중에서 고른다.
+    // 2026-11 복원 행(10/26~11/10)은 리뷰·저장수가 NULL 이라, 그 행이 '가장 최근'이 되면 값이 사라진다.
+    const newest=ourHist.filter(r=>r.visitor_reviews!=null).sort((a,b)=>b.checked_date<a.checked_date?-1:1)[0];
     if(newest){ ourVisitor=newest.visitor_reviews; ourBlog=newest.blog_reviews; ourSaves=newest.saves; }
 
     // ── B. 후보 키워드 + 월 검색량 → 섹션 2 ──
@@ -3003,12 +3004,15 @@ async function srRun(){
           const top10=snap.rows.filter(r=>r.rank!=null&&r.rank<=10&&r.visitor_reviews!=null); // null<=10은 true라 명시 제외
           if(top10.length){
             const avg=Math.round(top10.reduce((s,r)=>s+r.visitor_reviews,0)/top10.length);
-            const our=ourVisitor==null?0:ourVisitor;
-            const gap=avg-our;
+            // 우리 리뷰 수를 모르면(NULL) 격차를 계산하지 않는다. 예전엔 0 으로 세어 "평균만큼 부족"이라는
+            // 거짓 경고와 할 일이 떴다.
+            const known=ourVisitor!=null;
+            const gap=known?avg-ourVisitor:null;
             cmp='<div class="sr-row"><span class="l">'+escapeHtml(mainKw)+' 상위 10위 평균 방문자리뷰</span><span class="v sr-num">'+srFmt(avg)+'개</span></div>'
-               +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(our)+'개')+'</span></div>'
-               +(gap>0?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-badv">'+srFmt(gap)+'개 부족</span></div>':'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-good">평균 이상</span></div>');
-            if(gap>0) acts.push({p:5,t:'<b>방문자리뷰 격차 '+srFmt(gap)+'개</b> — 방문 손님 리뷰 요청·영수증 리뷰 이벤트로 리뷰 수를 늘리세요.'});
+               +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(known?srFmt(ourVisitor)+'개':'수집 전')+'</span></div>'
+               +(!known?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-mutev">우리 리뷰 수 수집 전 — 비교 안 함</span></div>'
+                 :gap>0?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-badv">'+srFmt(gap)+'개 부족</span></div>':'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-good">평균 이상</span></div>');
+            if(known&&gap>0) acts.push({p:5,t:'<b>방문자리뷰 격차 '+srFmt(gap)+'개</b> — 방문 손님 리뷰 요청·영수증 리뷰 이벤트로 리뷰 수를 늘리세요.'});
           }
         }
         const trend=(ourVisitor==null&&!dates.length)
