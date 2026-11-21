@@ -15,6 +15,21 @@ const MOBILE_UA =
 
 const toNum = (s) => parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10) || 0;
 
+// ── 리뷰 항목 형태 계수(2026-11-22 승인) ──
+// 네이버가 리뷰 0개 매장에 0 을 주는지 항목을 빼는지 알기 위해, 평소 수집 응답 안에서 형태별 개수만 센다.
+// 매장·키워드·이름 같은 내용은 남기지 않는다. 저장값·반환값·순위에는 영향 없음(계수만).
+// 형태: none(항목 없음) / null / empty(빈 문자열) / zero(0 또는 "0") / num(양수) / other(숫자로 못 읽는 값)
+const SHAPE_LOG = process.env.PLACE_SHAPE_LOG || '/var/log/blog-rank-scraper/place-review-shape.jsonl';
+function shapeOf(v) {
+  if (v === undefined) return 'none';
+  if (v === null) return 'null';
+  if (typeof v === 'string' && v.trim() === '') return 'empty';
+  if (v === 0 || (typeof v === 'string' && /^\s*0+\s*$/.test(v))) return 'zero';
+  if ((typeof v === 'number' && v > 0) || (typeof v === 'string' && toNum(v) > 0)) return 'num';
+  return 'other';
+}
+const newShape = () => ({ none: 0, null: 0, empty: 0, zero: 0, num: 0, other: 0 });
+
 // 페이지(50건) 사이 딜레이 350ms. 150ms로 줄였던 9/18~19에 수집 45분차부터 약 35분간 네이버가 빈 목록을
 // 연속 반환(0곳보류 10→55→56건, 이전 5회 연속 0건). 짧은 A/B로는 누적 속도 제한이 재현되지 않으므로
 // 낮추려면 전체 크론 1회분(300여 키워드) 규모로 검증할 것.
@@ -53,11 +68,25 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
 
   const items = [];
   const seen = new Set();
+  // 형태 계수(내용 없이 개수만). skip=리뷰 항목이 둘 다 없어 건너뛴 수,
+  // skipMid=그중 같은 목록에서 뒤에 남은 매장이 있는 것(= 뒤 순위가 한 칸씩 당겨졌을 수 있는 것)
+  const shape = { v: newShape(), b: newShape(), s: newShape(), kept: 0, skip: 0, skipMid: 0, skipAd: 0 };
+  let pendingSkip = 0;   // 현재 items 배열에서 아직 뒤에 남은 매장이 안 나온 건너뛴 수
   const addItem = (it) => {
     if (!it || !it.id || seen.has(String(it.id))) return;
     // 장소 항목만(리뷰수 필드 보유), 광고 항목 제외
-    if (it.visitorReviewCount === undefined && it.blogCafeReviewCount === undefined) return;
+    if (it.visitorReviewCount === undefined && it.blogCafeReviewCount === undefined) {
+      if (it.isAd || it.adId || it.isAdDup) shape.skipAd++; else { shape.skip++; pendingSkip++; }
+      return;
+    }
     if (it.isAd || it.adId || it.isAdDup) return;
+    try {
+      shape.v[shapeOf(it.visitorReviewCount)]++;
+      shape.b[shapeOf(it.blogCafeReviewCount)]++;
+      shape.s[shapeOf(it.saveCount)]++;
+      shape.kept++;
+      shape.skipMid += pendingSkip; pendingSkip = 0;
+    } catch {}
     seen.add(String(it.id));
     items.push({
       placeId: String(it.id),
@@ -79,7 +108,9 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     for (const k in o) {
       const v = o[k];
       if (k === 'items' && Array.isArray(v) && !isAdContainer) {
+        pendingSkip = 0;   // 목록마다 따로 센다
         for (const it of v) addItem(it);
+        pendingSkip = 0;
       } else if (v && typeof v === 'object') {
         walk(v, k);
       }
@@ -188,6 +219,10 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
     if (count >= 200 && items.length > 0 && items.length < 100) {
       console.warn(`[place-search] "${keyword}" 결과 ${items.length}곳뿐 (count=${count}) — 축소 응답 의심`);
     }
+    // 형태 계수 1줄 기록(개수만). 기록 실패는 수집에 영향 주지 않는다.
+    try {
+      fs.appendFileSync(SHAPE_LOG, JSON.stringify({ t: new Date().toISOString(), n: Math.min(items.length, count), ...shape }) + '\n');
+    } catch {}
     return items.slice(0, count).map((it, i) => ({
       rank: i + 1,
       placeId: it.placeId,
