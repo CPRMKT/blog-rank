@@ -41,7 +41,7 @@ where bn = an or bc = ac
 on conflict (place_id) do nothing;
 
 create or replace function public.restore_place_day(
-  p_date date, p_owner uuid, p_rows jsonb, p_expected int, p_reason text
+  p_date date, p_owner uuid, p_rows jsonb, p_expected int, p_reason text, p_dry boolean default false
 ) returns jsonb
 language plpgsql
 security definer
@@ -65,6 +65,7 @@ begin
     raise exception 'restore_place_day: 행 배열이 필요합니다.';
   end if;
 
+  drop table if exists pg_temp._rp;   -- 같은 트랜잭션에서 두 번 불려도 안전하게
   create temp table _rp on commit drop as
     select x.keyword, x.place_id, x.rank
     from jsonb_to_recordset(p_rows) as x(keyword text, place_id text, rank int);
@@ -85,31 +86,40 @@ begin
     raise exception 'restore_place_day: % 에 같은 키워드 행이 이미 %행 있습니다 — 넣지 않았습니다.', p_date, n_exist;
   end if;
 
-  insert into place_rankings (keyword, checked_date, rank, place_id, owner_id, name, category,
-                              visitor_reviews, blog_reviews, saves, created_at)
-  select r.keyword, p_date, r.rank, r.place_id, p_owner, f.name, f.category, null, null, null, t0
-  from _rp r left join restore_2026_11_fill f on f.place_id = r.place_id
-  order by r.keyword, r.rank;
-  get diagnostics n_ins = row_count;
-  if n_ins <> p_expected then
-    raise exception 'restore_place_day: 넣은 %행 ≠ 예상 %행 — 이 날짜 전체를 롤백합니다.', n_ins, p_expected;
-  end if;
-
+  -- 요약은 넣은 행(RETURNING)에서 바로 센다 — checked_date 만으로 운영 표를 다시 훑으면
+  -- (keyword, checked_date) 인덱스를 못 타서 300만 행을 읽게 된다(8초 제한).
+  with ins as (
+    insert into place_rankings (keyword, checked_date, rank, place_id, owner_id, name, category,
+                                visitor_reviews, blog_reviews, saves, created_at)
+    select r.keyword, p_date, r.rank, r.place_id, p_owner, f.name, f.category, null, null, null, t0
+    from _rp r left join restore_2026_11_fill f on f.place_id = r.place_id
+    order by r.keyword, r.rank
+    returning id, keyword, name, category
+  )
   select jsonb_build_object(
     'date', p_date, 'inserted', count(*), 'keywords', count(distinct keyword),
     'min_id', min(id), 'max_id', max(id), 'created_at', t0,
     'name_filled', count(name), 'category_filled', count(category), 'reason', left(btrim(p_reason), 200))
   into r
-  from place_rankings where checked_date = p_date and created_at = t0;
-  return r;
+  from ins;
+  n_ins := (r->>'inserted')::int;
+  if n_ins <> p_expected then
+    raise exception 'restore_place_day: 넣은 %행 ≠ 예상 %행 — 이 날짜 전체를 롤백합니다.', n_ins, p_expected;
+  end if;
+  -- 시험(p_dry): 운영 표에 실제로 넣고 잰 뒤 **예외로 통째로 롤백**한다(남는 행 0). 8초 제한·인덱스 비용을 실제 경로로 재기 위해서다.
+  if p_dry then
+    raise exception 'DRY_RUN_OK %', (r || jsonb_build_object('elapsed_ms', round(extract(epoch from clock_timestamp() - t0) * 1000)))::text
+      using errcode = 'P0001';
+  end if;
+  return r || jsonb_build_object('elapsed_ms', round(extract(epoch from clock_timestamp() - t0) * 1000));
 end $$;
 
-revoke all on function public.restore_place_day(date, uuid, jsonb, int, text) from public, anon, authenticated;
-grant execute on function public.restore_place_day(date, uuid, jsonb, int, text) to service_role;
+revoke all on function public.restore_place_day(date, uuid, jsonb, int, text, boolean) from public, anon, authenticated;
+grant execute on function public.restore_place_day(date, uuid, jsonb, int, text, boolean) to service_role;
 
 -- ───────── 되돌림 ─────────
 -- (a) 함수·채움표 치우기(복원이 끝난 뒤 반드시):
---   drop function if exists public.restore_place_day(date, uuid, jsonb, int, text);
+--   drop function if exists public.restore_place_day(date, uuid, jsonb, int, text, boolean);
 --   drop table if exists public.restore_2026_11_fill;
 -- (b) 커밋된 날짜 하나를 되돌려야 하면(가드와 충돌하지 않는 유일한 경로):
 --   select public.purge_place_pairs('<날짜>', array[<그 날짜에 복원한 키워드들>], <넣은 행 수>, '<사유>');

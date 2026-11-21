@@ -521,7 +521,7 @@ export default async function handler(req, res) {
     // DB 함수가 구간 밖 날짜·행 수 불일치·이미 있는 쌍·잘못된 행을 전부 거부하고, 넣은 수가 다르면 롤백한다.
     if (action === 'restore_place_day') {
       if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
-      const ALLOWED = ['date', 'owner_id', 'rows', 'expected_rows', 'reason'];
+      const ALLOWED = ['date', 'owner_id', 'rows', 'expected_rows', 'reason', 'dry'];
       const unknown = Object.keys(data || {}).filter((k) => !ALLOWED.includes(k));
       if (unknown.length) return res.status(400).json({ ok: false, error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.` });
       const d = String(data.date || '');
@@ -530,11 +530,23 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: '행 배열과 예상 행 수(정수)가 같아야 합니다 — 넣지 않았습니다.' });
       }
       const rows = data.rows.map((r) => ({ keyword: String(r.keyword), place_id: String(r.place_id), rank: Number(r.rank) }));
-      const result = await supaFetch('/rpc/restore_place_day', {
-        method: 'POST',
-        body: JSON.stringify({ p_date: d, p_owner: data.owner_id, p_rows: rows, p_expected: data.expected_rows, p_reason: String(data.reason || '') }),
-      });
-      return res.status(200).json({ ok: true, result });
+      const dry = data.dry === true;
+      const t0 = Date.now();
+      try {
+        const result = await supaFetch('/rpc/restore_place_day', {
+          method: 'POST',
+          body: JSON.stringify({ p_date: d, p_owner: data.owner_id, p_rows: rows, p_expected: data.expected_rows, p_reason: String(data.reason || ''), p_dry: dry }),
+        });
+        return res.status(200).json({ ok: true, result, api_ms: Date.now() - t0 });
+      } catch (e) {
+        // 시험 호출은 DB 가 일부러 예외를 내고 롤백한다 — 그 메시지에 측정값이 들어 있다.
+        const m = String(e.message || '');
+        if (dry && m.startsWith('DRY_RUN_OK ')) {
+          let measured = null; try { measured = JSON.parse(m.slice(11)); } catch {}
+          return res.status(200).json({ ok: true, dry: true, rolled_back: true, measured, api_ms: Date.now() - t0 });
+        }
+        return res.status(200).json({ ok: false, error: m, api_ms: Date.now() - t0 });
+      }
     }
 
     // ===== 블로그 진단 =====

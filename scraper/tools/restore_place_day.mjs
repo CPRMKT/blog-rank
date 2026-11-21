@@ -3,6 +3,7 @@
 //
 //   node tools/restore_place_day.mjs --target=<복구대상.jsonl> --suspect=<suspect_pairs_129.json> --dry
 //   node tools/restore_place_day.mjs --target=... --suspect=... --date=2026-10-26 --expected=25702 --reason="..."
+//   (시간 측정) ... --date=2026-10-26 --limit=1000 --expected=1000 --dry-call --reason="..."  → 운영 표에 넣고 재고 DB 가 롤백
 //
 // 복구 대상 파일은 snapshot_recover_check.mjs --out 이 만든 것(오염 1,782쌍·되살린 16쌍 이미 제외).
 // 여기서 오염 의심 쌍(--suspect)을 한 번 더 뺀다. 날짜의 행 수가 --expected 와 다르면 보내지 않는다.
@@ -32,7 +33,11 @@ if (has('dry')) {
 
 const d = arg('date'); const expected = Number(arg('expected')); const reason = arg('reason', '');
 if (!d || !byDate[d]) { console.log(`날짜 ${d} 의 복구 대상이 없다`); process.exit(1); }
-const rows = byDate[d];
+// --limit=N : 시간 측정용으로 앞 N행만(반드시 --dry-call 과 함께 — 진짜 복원에선 거부)
+const lim = Number(arg('limit', 0));
+const dryCall = has('dry-call');
+if (lim && !dryCall) { console.log('--limit 는 --dry-call 과만 쓴다'); process.exit(1); }
+const rows = lim ? byDate[d].slice(0, lim) : byDate[d];
 if (rows.length !== expected) { console.log(`❌ ${d}: 파일 ${rows.length}행 ≠ 예상 ${expected}행 — 보내지 않았다`); process.exit(1); }
 if (reason.trim().length < 5) { console.log('--reason= (5자 이상) 필요'); process.exit(1); }
 
@@ -40,10 +45,11 @@ const t = Date.now();
 const resp = await fetch(`${BASE}/api/db`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET || '' },
-  body: JSON.stringify({ action: 'restore_place_day', data: { date: d, owner_id: OWNER, rows, expected_rows: expected, reason } }),
+  body: JSON.stringify({ action: 'restore_place_day', data: { date: d, owner_id: OWNER, rows, expected_rows: expected, reason, ...(dryCall ? { dry: true } : {}) } }),
   signal: AbortSignal.timeout(280000),
 });
 const txt = await resp.text();
 let j = null; try { j = JSON.parse(txt); } catch {}
 if (!resp.ok || !j || !j.ok) { console.log(`❌ ${d}: HTTP ${resp.status} ${txt.slice(0, 400)}`); process.exit(1); }
-console.log(`✅ ${d}: ${JSON.stringify(j.result)} (${((Date.now() - t) / 1000).toFixed(1)}초)`);
+if (j.dry) { console.log(`🧪 ${d} 시험(롤백됨): ${rows.length}행 측정 ${JSON.stringify(j.measured)} / API ${j.api_ms}ms / 왕복 ${((Date.now() - t) / 1000).toFixed(1)}초`); process.exit(0); }
+console.log(`✅ ${d}: ${JSON.stringify(j.result)} (왕복 ${((Date.now() - t) / 1000).toFixed(1)}초)`);
