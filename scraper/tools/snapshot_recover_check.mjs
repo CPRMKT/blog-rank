@@ -66,7 +66,12 @@ function loadFile(fp, snap) {
 }
 const st = fs.statSync(IN);
 if (st.isDirectory()) {
-  const files = fs.readdirSync(IN).filter((f) => /\.(json|jsonl|ndjson)$/i.test(f)).sort();
+  // 폴더에 *.place.jsonl 이 있으면 그것만 읽는다(*.store.jsonl = 블로그 순위, MANIFEST.json 은 입력이 아니다).
+  // 예전엔 rank_type 필드 거름망 하나에만 기댔다 — 필드가 빠진 블로그 행이 섞일 수 있었다.
+  const all = fs.readdirSync(IN).filter((f) => /\.(json|jsonl|ndjson)$/i.test(f)).sort();
+  const placeOnly = all.filter((f) => /\.place\.jsonl$/i.test(f));
+  const files = placeOnly.length ? placeOnly : all.filter((f) => !/^MANIFEST\.json$/i.test(f) && !/\.store\.jsonl$/i.test(f));
+  console.log(`입력 파일 선별: 전체 ${all.length}개 중 ${files.length}개 사용${placeOnly.length ? ' (*.place.jsonl 만)' : ''}`);
   for (const f of files) loadFile(path.join(IN, f), f);
   console.log(`입력: 폴더 ${IN} — 파일 ${files.length}개`);
 } else { loadFile(IN, path.basename(IN)); console.log(`입력: 파일 ${IN}`); }
