@@ -2875,6 +2875,11 @@ async function srRun(){
 
   const acts=[];   // 액션 우선순위 수집 {p:우선순위(낮을수록 먼저), t:문구}
   let ourVisitor=null, ourBlog=null, ourSaves=null;   // 우리 매장 리뷰 수(스냅샷에서 발견 시 채움)
+  // 우리 리뷰 수를 가져온 행의 날짜. 어제보다 오래됐으면 화면에 "(MM/DD 기준)" 을 붙인다.
+  // (이력은 31일치만 받으므로 그보다 오래된 값은 애초에 안 쓰인다 → 없으면 "수집 전"/"비교 안 함")
+  let ourRevDate=null;
+  const srRevAsOf=()=>{ if(!ourRevDate) return ''; const y=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date(Date.now()-86400000));
+    return ourRevDate<y?' <span class="sr-mutev">('+ourRevDate.slice(5).replace('-','/')+' 기준)</span>':''; };
 
   try{
     // ── A. 추적 키워드 + 우리 순위 이력(31일) ──
@@ -2892,7 +2897,7 @@ async function srRun(){
     // 우리 리뷰 수(가장 최근 이력 행) — 리뷰 수가 있는 행 중에서 고른다.
     // 2026-11 복원 행(10/26~11/10)은 리뷰·저장수가 NULL 이라, 그 행이 '가장 최근'이 되면 값이 사라진다.
     const newest=ourHist.filter(r=>r.visitor_reviews!=null).sort((a,b)=>b.checked_date<a.checked_date?-1:1)[0];
-    if(newest){ ourVisitor=newest.visitor_reviews; ourBlog=newest.blog_reviews; ourSaves=newest.saves; }
+    if(newest){ ourVisitor=newest.visitor_reviews; ourBlog=newest.blog_reviews; ourSaves=newest.saves; ourRevDate=newest.checked_date||null; }
 
     // ── B. 후보 키워드 + 월 검색량 → 섹션 2 ──
     const cands=srCandidates(store);
@@ -2918,8 +2923,8 @@ async function srRun(){
         +'<tr><td>상호</td><td>'+escapeHtml(store.name||'-')+'</td></tr>'
         +'<tr><td>업종</td><td>'+escapeHtml(store.category||'-')+'</td></tr>'
         +'<tr><td>주소</td><td style="font-weight:600">'+escapeHtml(store.address||'-')+'</td></tr>'
-        +'<tr><td>방문자리뷰</td><td>'+(ourVisitor==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourVisitor)+'개')+'</td></tr>'
-        +'<tr><td>블로그리뷰</td><td>'+(ourBlog==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourBlog)+'개')+'</td></tr>'
+        +'<tr><td>방문자리뷰</td><td>'+(ourVisitor==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourVisitor)+'개'+srRevAsOf())+'</td></tr>'
+        +'<tr><td>블로그리뷰</td><td>'+(ourBlog==null?'<span class="sr-mutev">수집 전</span>':srFmt(ourBlog)+'개'+srRevAsOf())+'</td></tr>'
         +(ourSaves!=null?'<tr><td>저장수</td><td>'+srFmt(ourSaves)+'개</td></tr>':'')
         +'</table>');
     };
@@ -2976,7 +2981,7 @@ async function srRun(){
         s3Rows[k]={placesTxt:places>=300?'300+':String(places),comp};
         // 우리 매장이 이 목록에 있으면 리뷰 수 확보(신규 매장 대비)
         const mine=snap.rows.find(r=>String(r.place_id)===String(store.place_id));
-        if(mine&&(ourVisitor==null)){ ourVisitor=mine.visitor_reviews; ourBlog=mine.blog_reviews; ourSaves=mine.saves; renderS1(); }
+        if(mine&&(ourVisitor==null)){ ourVisitor=mine.visitor_reviews; ourBlog=mine.blog_reviews; ourSaves=mine.saves; ourRevDate=null; renderS1(); }  // 최신 스냅샷 값 = 날짜 표시 불필요
         if(comp.lv==='하'&&volOf(k)>0&&!kws.includes(k)) easy++;
         renderS3();
       }
@@ -3009,7 +3014,7 @@ async function srRun(){
             const known=ourVisitor!=null;
             const gap=known?avg-ourVisitor:null;
             cmp='<div class="sr-row"><span class="l">'+escapeHtml(mainKw)+' 상위 10위 평균 방문자리뷰</span><span class="v sr-num">'+srFmt(avg)+'개</span></div>'
-               +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(known?srFmt(ourVisitor)+'개':'수집 전')+'</span></div>'
+               +'<div class="sr-row"><span class="l">우리 매장 방문자리뷰</span><span class="v sr-num">'+(known?srFmt(ourVisitor)+'개'+srRevAsOf():'수집 전')+'</span></div>'
                +(!known?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-mutev">우리 리뷰 수 수집 전 — 비교 안 함</span></div>'
                  :gap>0?'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-badv">'+srFmt(gap)+'개 부족</span></div>':'<div class="sr-row"><span class="l">상위권 평균 대비</span><span class="v sr-good">평균 이상</span></div>');
             if(known&&gap>0) acts.push({p:5,t:'<b>방문자리뷰 격차 '+srFmt(gap)+'개</b> — 방문 손님 리뷰 요청·영수증 리뷰 이벤트로 리뷰 수를 늘리세요.'});
@@ -3017,7 +3022,7 @@ async function srRun(){
         }
         const trend=(ourVisitor==null&&!dates.length)
           ?'<div class="sr-desc">아직 리뷰 수집 데이터가 없습니다. 추적 키워드를 등록하면 매일 리뷰 수가 함께 수집됩니다.</div>'
-          :'<div class="sr-row"><span class="l">총 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(ourVisitor)+'개')+'</span></div>'
+          :'<div class="sr-row"><span class="l">총 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(ourVisitor)+'개'+srRevAsOf())+'</span></div>'
           +'<div class="sr-row"><span class="l">최근 7일 증가</span><span class="v sr-num">'+(inc7==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc7)+'개')+'</span></div>'
           +'<div class="sr-row"><span class="l">최근 30일 증가</span><span class="v sr-num">'+(inc30==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc30)+'개')+'</span></div>';
         set('srS6',trend+cmp);

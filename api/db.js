@@ -521,6 +521,9 @@ export default async function handler(req, res) {
     // DB 함수가 구간 밖 날짜·행 수 불일치·이미 있는 쌍·잘못된 행을 전부 거부하고, 넣은 수가 다르면 롤백한다.
     if (action === 'restore_place_day') {
       if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
+      // 시간 창: KST 22:30~05:30 만(크론 06~14시·18:30~22:30 과 겹치지 않게). 시험(dry)도 같다.
+      const kst = new Date(Date.now() + 9 * 3600000); const hm = kst.getUTCHours() * 100 + kst.getUTCMinutes();
+      if (!(hm >= 2230 || hm < 530)) return res.status(400).json({ ok: false, error: `복원·시험은 KST 22:30~05:30 에만 — 지금 ${String(hm).padStart(4, '0')}. 아무것도 하지 않았습니다.` });
       const ALLOWED = ['date', 'owner_id', 'rows', 'expected_rows', 'reason', 'dry'];
       const unknown = Object.keys(data || {}).filter((k) => !ALLOWED.includes(k));
       if (unknown.length) return res.status(400).json({ ok: false, error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.` });
