@@ -238,6 +238,79 @@ revoke all on public.place_rankings_delete_audit from anon, authenticated;
 운영 DB의 비밀번호는 아예 필요 없습니다(기존 service_role 키로 넣습니다).
 사장님이 그래도 dblink 를 원하시면 그대로 하되, 비밀번호가 이 대화에 남는다는 점은 기록해 둡니다.
 
+## 4-B. 원인이 확정돼 설계에 추가된 것 (2026-11-21)
+
+원인은 **우리 API 를 전체 키워드 목록으로 호출한 것**으로 확정됐다
+([place-rows-cause-2026-11-14.md](place-rows-cause-2026-11-14.md)).
+세기 의도로 넘긴 `count: true` 가 **코드에 없는 옵션이라 무시되고 삭제가 실행됐다.**
+그래서 DB 쪽 가드만으로는 부족하고 **API 쪽 3개를 같이 넣는다.**
+
+| # | 조치 | 이유 |
+|---|---|---|
+| 1 | **모르는 옵션이 오면 400 으로 거부** (`export`,`dry`,`confirm`,`pairs`,`expected_rows`,`reason` 외 키가 있으면 실행 안 함) | `count:true` 가 조용히 무시된 것이 사고의 직접 원인 |
+| 2 | **기본값을 dry 로 뒤집는다.** 삭제는 `confirm: true` 가 **있을 때만** | 플래그를 빠뜨리면 지우는 게 아니라 세기만 하게 |
+| 3 | **`expected_rows` 필수.** 날짜별 실제와 다르면 그 날짜는 건너뛰고 전체 중단 | 목록이 전체여도 선언 수와 안 맞아서 멈춘다 |
+| 4 | **한 호출 절대 상한 30,000행** (`expected_rows` 가 맞아도 초과면 거부) | 사장님 지시. 정상 작업의 최대치(약 2.5만)보다 크고 하루 전체(약 2.6만)보다 작다 |
+| 5 | **백업 파일 없이는 삭제 불가** — 도구가 아니라 **API 가** 백업 존재를 확인 | 백업·dry 강제가 도구에만 있어서 직접 호출 시 보호가 0이었다 |
+
+호출 ① 에 이 5개를 적용하면 **1번에서 바로 막힌다**(`count` 는 모르는 키).
+1번을 통과했더라도 2번(confirm 없음) → 3번(expected_rows 없음) → 4번(25,802 > 상한 아님이지만 선언 불일치)
+순으로 각각 독립적으로 막는다. **4중 방어다.**
+
+## 4-C. 권한 회수문 (복원과 무관 — 승인 즉시 적용 가능)
+
+프런트엔드(`index.html`)가 Supabase 를 직접 쓰는 곳은 **`SB.from('profiles').select('is_admin')` 한 줄뿐**이고,
+나머지 전부 `/api/db`(service_role)를 거친다. `.delete()` 호출은 **한 건도 없다.**
+또 **PostgREST 에는 TRUNCATE 엔드포인트가 아예 없다** — 즉 anon·authenticated 의 TRUNCATE 권한은
+**어떤 정상 경로에서도 쓰이지 않는다.** 회수해도 깨지는 것이 없다.
+
+```sql
+-- (1) TRUNCATE — public 전체에서 회수. RLS 가 막아 주지 않는 유일한 권한이다.
+do $$ declare t text; begin
+  for t in select tablename from pg_tables where schemaname='public' loop
+    execute format('revoke truncate on public.%I from anon, authenticated', t);
+  end loop;
+end $$;
+
+-- (2) anon 의 쓰기·읽기 — 정책이 0개라 이미 RLS 가 막고 있지만, 권한 자체를 없앤다.
+revoke insert, update, delete, select on
+  public.place_keywords, public.place_rankings, public.store_blog_posts,
+  public.store_keywords, public.store_place_fetches, public.store_place_keywords,
+  public.store_rankings, public.stores
+from anon;
+
+-- (3) authenticated 의 place_rankings DELETE — 옛 경로다(2026-07-27 이후 안 씀, 389회).
+revoke delete on public.place_rankings from authenticated;
+```
+
+확인용(적용 뒤 0행이어야 한다):
+```sql
+select grantee, table_name, privilege_type from information_schema.role_table_grants
+where table_schema='public' and grantee in ('anon','authenticated') and privilege_type='TRUNCATE';
+```
+
+⚠ (2)의 `select` 회수는 혹시 모를 읽기 경로까지 끊는다. 불안하시면 **`select` 만 남기고
+`insert, update, delete` 와 TRUNCATE 만 회수**하는 쪽을 권한다 — 구멍(TRUNCATE)은 그래도 닫힌다.
+
+## 4-D. 키워드 삭제와 순위 이력 (확인 결과)
+
+**이미 ③ 상태다 — 코드를 바꿀 필요가 없다.**
+
+```js
+if (action === 'delete_store_place_keyword') {
+  await supaFetch(`/store_place_keywords?store_id=eq.${data.store_id}&keyword=eq.${...}`, { method: 'DELETE' });
+  return res.status(200).json({ ok: true });
+}
+```
+`store_place_keywords` 한 줄만 지우고 **`place_rankings` 는 건드리지 않는다.**
+저장소 전체에서 `place_rankings` 를 지우는 코드는 `api/db.js:462`(purge 액션) **하나뿐**이다.
+
+그래서 **같은 키워드를 쓰는 다른 매장의 이력이 지워질 위험도 없다.**
+참고로 지금 **2곳 이상이 같이 쓰는 키워드가 20개** 있다(507개 중):
+대연동 밥집·점심·혼밥(매장 40,44) / 대전대흥동 계열 6개(32,33) / 울산 삼산 계열 11개(47,6).
+순위 행은 `(키워드, 날짜)` 로만 저장되고 매장에 묶이지 않으므로, 이 20개는 두 매장이
+**같은 행을 같이 본다.** 한쪽 매장에서 키워드를 빼도 다른 쪽 화면은 그대로다.
+
 ## 5. 적용 순서 제안
 
 복원이 먼저다. 가드를 먼저 켜면 복원 중 문제가 생겼을 때 되돌리기(날짜 단위 삭제)가 막힌다.
