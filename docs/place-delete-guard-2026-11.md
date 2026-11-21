@@ -283,6 +283,32 @@ from anon;
 revoke delete on public.place_rankings from authenticated;
 ```
 
+### 적용 기록 (2026-11-21 적용 완료)
+마이그레이션 `revoke_truncate_and_unused_anon_writes`. 적용 뒤 확인:
+TRUNCATE 남은 것 **0** / anon 쓰기(8개 표) **0** / authenticated place_rankings DELETE **0**.
+anon 의 place_rankings 는 `SELECT, REFERENCES, TRIGGER` 만 남았고,
+authenticated 의 profiles 는 손대지 않았다(로그인 뒤 `is_admin` 조회에 필요).
+
+동작 확인: 사이트 HTTP 200 / `list_stores` 43건 / `list_all_store_place_keywords` 507건 /
+`get_place_rankings` 750건 / 임베드 점검 **18/18 통과**. 네이버로는 한 건도 조회하지 않았다.
+
+### 되돌림 SQL (문제가 생기면 이것만 실행)
+```sql
+do $$ declare t text; begin
+  for t in select tablename from pg_tables where schemaname='public' loop
+    execute format('grant truncate on public.%I to anon, authenticated', t);
+  end loop;
+end $$;
+
+grant insert, update, delete on
+  public.place_keywords, public.place_rankings, public.store_blog_posts,
+  public.store_keywords, public.store_place_fetches, public.store_place_keywords,
+  public.store_rankings, public.stores
+to anon;
+
+grant delete on public.place_rankings to authenticated;
+```
+
 확인용(적용 뒤 0행이어야 한다):
 ```sql
 select grantee, table_name, privilege_type from information_schema.role_table_grants
