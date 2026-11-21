@@ -497,10 +497,16 @@ export default async function handler(req, res) {
       if (typeof data.reason !== 'string' || data.reason.trim().length < 5) {
         return res.status(400).json({ ok: false, error: 'reason(사유, 5자 이상)을 선언해야 삭제합니다.', counted: rows, per });
       }
+      // 2026-11-21 DB 가드 이후: 직접 DELETE 는 한 문장 5,000행에서 막힌다. 승인된 대량 삭제는
+      // 날짜마다 purge_place_pairs(날짜, 키워드들, 예상 행 수, 사유) 로만 한다 — DB 가 다시 세서
+      // 다르면 한 행도 지우지 않고, 감사 기록(place_rankings_delete_audit)을 남긴다.
       for (const p of per) {
         const ks = [...byDate[p.date]];
-        const r = await supaFetch(`/place_rankings?checked_date=eq.${p.date}&keyword=in.${inList(ks)}&select=id`, { method: 'DELETE' });
-        p.deleted = Array.isArray(r) ? r.length : 0;
+        const r = await supaFetch('/rpc/purge_place_pairs', {
+          method: 'POST',
+          body: JSON.stringify({ p_date: p.date, p_keywords: ks, p_expected_rows: p.rows, p_reason: `${data.reason.trim()} | backup=${data.backup_file.trim()}` }),
+        });
+        p.deleted = typeof r === 'number' ? r : Number(r) || 0;
         p.left = await count(p.date, ks);
       }
       const deleted = per.reduce((a, p) => a + (p.deleted || 0), 0);
@@ -508,6 +514,27 @@ export default async function handler(req, res) {
         ok: true, dry: false, pairs: npair, rows: deleted, counted: rows,
         backup_file: data.backup_file, reason: data.reason, per,
       });
+    }
+
+    // ===== 10/26~11/10 플레이스 순위 복원 (2026-11 일회용 — 복원이 끝나면 이 블록과 DB 함수를 지운다) =====
+    // 근거·절차: docs/place-snapshot-recovery-2026-11.md. 날짜 하나 = DB 트랜잭션 하나(restore_place_day).
+    // DB 함수가 구간 밖 날짜·행 수 불일치·이미 있는 쌍·잘못된 행을 전부 거부하고, 넣은 수가 다르면 롤백한다.
+    if (action === 'restore_place_day') {
+      if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
+      const ALLOWED = ['date', 'owner_id', 'rows', 'expected_rows', 'reason'];
+      const unknown = Object.keys(data || {}).filter((k) => !ALLOWED.includes(k));
+      if (unknown.length) return res.status(400).json({ ok: false, error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.` });
+      const d = String(data.date || '');
+      if (!/^2026-1[01]-\d\d$/.test(d) || d < '2026-10-26' || d > '2026-11-10') return res.status(400).json({ ok: false, error: `복원 구간 밖 날짜 ${d}` });
+      if (!Array.isArray(data.rows) || !Number.isInteger(data.expected_rows) || data.rows.length !== data.expected_rows) {
+        return res.status(400).json({ ok: false, error: '행 배열과 예상 행 수(정수)가 같아야 합니다 — 넣지 않았습니다.' });
+      }
+      const rows = data.rows.map((r) => ({ keyword: String(r.keyword), place_id: String(r.place_id), rank: Number(r.rank) }));
+      const result = await supaFetch('/rpc/restore_place_day', {
+        method: 'POST',
+        body: JSON.stringify({ p_date: d, p_owner: data.owner_id, p_rows: rows, p_expected: data.expected_rows, p_reason: String(data.reason || '') }),
+      });
+      return res.status(200).json({ ok: true, result });
     }
 
     // ===== 블로그 진단 =====
