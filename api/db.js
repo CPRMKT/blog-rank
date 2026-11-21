@@ -416,6 +416,22 @@ export default async function handler(req, res) {
     // PostgREST에는 여러 문장을 묶는 트랜잭션이 없으므로 '쌍 단위·날짜별 한 문장'이 가능한 최소 단위다.
     if (action === 'purge_place_rankings') {
       if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
+      // ───── 5중 방어 (2026-11-21) ─────
+      // 2026-11-14 11:16/11:23 UTC, 이 액션을 `count: true`(코드에 없는 옵션)와 "추적 중인 전체
+      // 키워드 목록" 으로 불러 10/26~11/10 16일치 133,140행을 지웠다. 모르는 옵션이 조용히 무시되고
+      // 기본 동작이 삭제였던 것이 직접 원인이다. 백업·dry·행수 대조는 전부 도구 쪽에만 있었고
+      // 액션 자체는 아무 조건 없이 지웠다. 아래 1~5는 그 호출을 각각 독립적으로 막는다.
+      // 경위: docs/place-rows-cause-2026-11-14.md
+      const ALLOWED_KEYS = ['pairs', 'export', 'dry', 'confirm', 'expected_rows', 'reason', 'backup_file'];
+      // (1) 모르는 옵션이 하나라도 있으면 아무것도 하지 않는다
+      const unknown = Object.keys(data || {}).filter((k) => !ALLOWED_KEYS.includes(k));
+      if (unknown.length) {
+        return res.status(400).json({
+          ok: false,
+          error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.`,
+          allowed: ALLOWED_KEYS,
+        });
+      }
       const pairs = Array.isArray(data.pairs) ? data.pairs : [];
       if (!pairs.length) return res.status(200).json({ ok: true, pairs: 0, rows: 0, per: [] });
       const byDate = {};
@@ -437,8 +453,6 @@ export default async function handler(req, res) {
         return c;
       };
       // export: 삭제 전 백업용. 날짜 하나씩, 삭제와 똑같은 필터로 행을 그대로 돌려준다.
-      // (get_place_rankings는 키워드당 기본 1,000행에서 조용히 잘려 백업이 비는 일이 있었다.)
-      // 여기도 limit= 로는 1,000행을 못 넘는다 — supaFetchAll로 페이지를 넘겨 받는다.
       if (data.export) {
         const d = String(data.export).slice(0, 10);
         const ks = byDate[d] ? [...byDate[d]] : [];
@@ -449,23 +463,51 @@ export default async function handler(req, res) {
         }
         return res.status(200).json({ ok: true, date: d, keywords: ks.length, rows: out.length, result: out });
       }
+      // (2) 기본은 "세기"다. 삭제는 confirm === true 일 때만. 플래그를 빠뜨리면 지우지 않는다.
+      const doDelete = data.confirm === true;
+      // 삭제든 아니든 항상 먼저 센다 — 이 숫자가 (3)(4)의 판정 근거다.
       const per = [];
       let rows = 0, npair = 0;
       for (const d of Object.keys(byDate).sort()) {
         const ks = [...byDate[d]];
         npair += ks.length;
-        if (data.dry) {
-          const c = await count(d, ks);
-          per.push({ date: d, keywords: ks.length, rows: c });
-          rows += c;
-        } else {
-          const r = await supaFetch(`/place_rankings?checked_date=eq.${d}&keyword=in.${inList(ks)}&select=id`, { method: 'DELETE' });
-          const c = Array.isArray(r) ? r.length : 0;
-          per.push({ date: d, keywords: ks.length, rows: c, left: await count(d, ks) });
-          rows += c;
-        }
+        const c = await count(d, ks);
+        per.push({ date: d, keywords: ks.length, rows: c });
+        rows += c;
       }
-      return res.status(200).json({ ok: true, dry: !!data.dry, pairs: npair, rows, per });
+      if (!doDelete) return res.status(200).json({ ok: true, dry: true, pairs: npair, rows, per });
+      // (3) 예상 행 수를 선언해야 하고, 실제와 정확히 같아야 한다
+      if (!Number.isInteger(data.expected_rows)) {
+        return res.status(400).json({ ok: false, error: 'expected_rows(정수)를 선언해야 삭제합니다. 한 행도 지우지 않았습니다.', counted: rows, per });
+      }
+      if (data.expected_rows !== rows) {
+        return res.status(400).json({ ok: false, error: `선언 ${data.expected_rows}행 ≠ 실제 ${rows}행 — 한 행도 지우지 않았습니다.`, counted: rows, per });
+      }
+      // (4) 한 호출 절대 상한 — 선언이 맞아도 이 수를 넘으면 거부한다
+      const HARD_CAP = 30000;
+      if (rows > HARD_CAP) {
+        return res.status(400).json({ ok: false, error: `한 호출 상한 ${HARD_CAP}행을 넘습니다(${rows}행). 나눠서 하세요.`, counted: rows, per });
+      }
+      // (5) 백업 경로와 사유를 선언해야 한다
+      //     주의: 이 함수는 Vercel 에서 돌아 스크래퍼 서버의 파일을 볼 수 없다. 경로는 기록만 하고
+      //     파일 존재는 도구(contam_cleanup.mjs)가 확인한다. 실질 방어는 (3)의 행 수 일치다.
+      if (typeof data.backup_file !== 'string' || !data.backup_file.trim()) {
+        return res.status(400).json({ ok: false, error: 'backup_file(백업 경로)을 선언해야 삭제합니다.', counted: rows, per });
+      }
+      if (typeof data.reason !== 'string' || data.reason.trim().length < 5) {
+        return res.status(400).json({ ok: false, error: 'reason(사유, 5자 이상)을 선언해야 삭제합니다.', counted: rows, per });
+      }
+      for (const p of per) {
+        const ks = [...byDate[p.date]];
+        const r = await supaFetch(`/place_rankings?checked_date=eq.${p.date}&keyword=in.${inList(ks)}&select=id`, { method: 'DELETE' });
+        p.deleted = Array.isArray(r) ? r.length : 0;
+        p.left = await count(p.date, ks);
+      }
+      const deleted = per.reduce((a, p) => a + (p.deleted || 0), 0);
+      return res.status(200).json({
+        ok: true, dry: false, pairs: npair, rows: deleted, counted: rows,
+        backup_file: data.backup_file, reason: data.reason, per,
+      });
     }
 
     // ===== 블로그 진단 =====
