@@ -516,6 +516,32 @@ export default async function handler(req, res) {
       });
     }
 
+    // ===== 플레이스 순위 일일 백업·행 수 감시 (읽기 전용, 크론 시크릿 전용) =====
+    // 설계: docs/place-backup-monitor-design-2026-11.md. 서버 도구 scraper/tools/place_backup_watch.mjs 가 부른다.
+    // 둘 다 아무것도 쓰지 않는다. 모르는 옵션은 거부한다(2026-11-14 사고: 무시된 옵션 때문에 삭제가 돌았다).
+    if (action === 'place_day_counts' || action === 'export_place_day') {
+      if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
+      const ALLOWED = action === 'place_day_counts' ? ['from', 'to'] : ['date', 'after_id', 'limit'];
+      const unknown = Object.keys(data || {}).filter((k) => !ALLOWED.includes(k));
+      if (unknown.length) return res.status(400).json({ ok: false, error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.` });
+      const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+      if (action === 'place_day_counts') {
+        // 하루 단위로 부르는 것을 전제로 한다(차가운 디스크에서 14일을 한 번에 세면 8초 제한에 걸린다 — 2026-11-22 실측 7.6초).
+        if (!isDate(data.from) || !isDate(data.to) || data.from > data.to) return res.status(400).json({ ok: false, error: 'from/to(YYYY-MM-DD) 필요' });
+        if ((Date.parse(data.to) - Date.parse(data.from)) / 86400000 > 6) return res.status(400).json({ ok: false, error: '한 번에 7일까지만 셉니다.' });
+        const result = await supaFetch('/rpc/place_day_counts', { method: 'POST', body: JSON.stringify({ p_from: data.from, p_to: data.to }) });
+        return res.status(200).json({ ok: true, result });
+      }
+      // export_place_day: 그날 행을 id 순으로 after_id 다음부터 limit 행(최대 5,000 — 응답 4.5MB 상한 아래로)
+      if (!isDate(data.date)) return res.status(400).json({ ok: false, error: 'date(YYYY-MM-DD) 필요' });
+      const after = Number.isInteger(data.after_id) && data.after_id >= 0 ? data.after_id : 0;
+      const lim = Math.min(5000, Math.max(1, Number.isInteger(data.limit) ? data.limit : 5000));
+      const rows = await supaFetchAll(
+        `/place_rankings?checked_date=eq.${data.date}&id=gt.${after}&order=id.asc&select=id,keyword,checked_date,rank,place_id,owner_id,name,category,visitor_reviews,blog_reviews,saves,created_at`,
+        1000, lim);
+      return res.status(200).json({ ok: true, result: rows, last_id: rows.length ? rows[rows.length - 1].id : after, done: rows.length < lim });
+    }
+
     // ===== 블로그 진단 =====
     // 블로그 공개정보(RSS+본문 통계) — NCP /blog-profile 프록시. 새 서버리스 함수 없이 db.js 안에서 처리.
     if (action === 'blog_profile') {

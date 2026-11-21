@@ -1,0 +1,35 @@
+diff --git a/index.html b/index.html
+index c4e9f53..df98b20 100644
+--- a/index.html
++++ b/index.html
+@@ -3011,6 +3011,19 @@ async function srRun(){
+         const d7=at(7), d30=at(30);
+         const inc=(a,b)=>(a&&b&&a.visitor_reviews!=null&&b.visitor_reviews!=null)?(a.visitor_reviews-b.visitor_reviews):null;
+         const inc7=inc(latest,d7), inc30=inc(latest,d30);
++        // 기준일(N일 전)에 값이 없으면(복원 행은 리뷰 NULL 등) 더 이른 날로 넘어간다. 그때 "최근 30일" 이라고만
++        // 적으면 실제로는 40일 넘는 증가를 30일 증가로 보이게 된다 → 실제 기간을 붙인다. 감소는 '−' 로.
++        const incTxt=(v,base)=>{
++          if(v==null) return '<span class="sr-mutev">데이터 부족</span>';
++          let t=(v>0?'+':v<0?'−':'±')+srFmt(Math.abs(v))+'개';
++          if(base&&latest&&base.checked_date&&latest.checked_date){
++            const span=Math.round((Date.parse(latest.checked_date)-Date.parse(base.checked_date))/86400000);
++            const p=base.checked_date.split('-');
++            t+=' <span class="sr-mutev">('+(+p[1])+'/'+(+p[2])+'부터 '+span+'일)</span>';
++          }
++          return t;
++        };
++        const incSpanOff=(base,days)=>{ if(!base||!latest) return false; const span=Math.round((Date.parse(latest.checked_date)-Date.parse(base.checked_date))/86400000); return Math.abs(span-days)>2; };
+         let cmp='';
+         if(snap){
+           const top10=snap.rows.filter(r=>r.rank!=null&&r.rank<=10&&r.visitor_reviews!=null); // null<=10은 true라 명시 제외
+@@ -3030,8 +3043,8 @@ async function srRun(){
+         const trend=(ourVisitor==null&&!dates.length)
+           ?'<div class="sr-desc">아직 리뷰 수집 데이터가 없습니다. 추적 키워드를 등록하면 매일 리뷰 수가 함께 수집됩니다.</div>'
+           :'<div class="sr-row"><span class="l">총 방문자리뷰</span><span class="v sr-num">'+(ourVisitor==null?'수집 전':srFmt(ourVisitor)+'개'+srRevAsOf())+'</span></div>'
+-          +'<div class="sr-row"><span class="l">최근 7일 증가</span><span class="v sr-num">'+(inc7==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc7)+'개')+'</span></div>'
+-          +'<div class="sr-row"><span class="l">최근 30일 증가</span><span class="v sr-num">'+(inc30==null?'<span class="sr-mutev">데이터 부족</span>':'+'+srFmt(inc30)+'개')+'</span></div>';
++          +'<div class="sr-row"><span class="l">최근 7일 증가</span><span class="v sr-num">'+incTxt(inc7,incSpanOff(d7,7)?d7:null)+'</span></div>'
++          +'<div class="sr-row"><span class="l">최근 30일 증가</span><span class="v sr-num">'+incTxt(inc30,incSpanOff(d30,30)?d30:null)+'</span></div>';
+         set('srS6',trend+cmp);
+       }
+ 
