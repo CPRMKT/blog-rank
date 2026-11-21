@@ -4476,7 +4476,9 @@ async function addSuggestToTracking(){
 // ===== 플레이스 키워드 분석 =====
 let prKeywords=[]; let prCmpData={dates:[],byDate:{}}; let prSelectedBaseline=5; let prPlaceInit=false;
 function prEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
-function prFmt(n){return (Number(n)||0).toLocaleString();}
+// 값이 없으면(NULL·빈칸·숫자 아님) '-'. 예전엔 (Number(n)||0) 이라 없는 값이 "0"으로 찍혔다(거짓 0).
+// 진짜 0 은 그대로 "0". 복원 행(2026-11, 리뷰·저장수 NULL)도 이 함수를 거친다.
+function prFmt(n){ if(n==null||n==='') return '-'; const v=Number(n); return Number.isFinite(v)?v.toLocaleString():'-'; }
 function prMyPlaceIds(){return new Set((stores||[]).map(s=>String(s.place_id)));}
 
 async function initPlaceRank(){
