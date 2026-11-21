@@ -74,16 +74,32 @@ if (has('dry')) {
   console.log(r.pairs === pairs.length ? `✅ 보고서의 ${pairs.length}건과 일치` : `❌ 불일치: 보고서 ${pairs.length} vs dry ${r.pairs}`);
 }
 
-// ── delete: 백업이 있어야만 진행 ──
+// ── delete: 기본 비활성. 백업 + 사유 + 행 수 선언이 다 있어야 진행 ──
+// 2026-11-21: 삭제 경로를 잠갔다. DB 가드 트리거(문장 단위 상한)와 purge_place_pairs 전용 함수가
+// 적용될 때까지 켜지 않는다. 켤 때는 CONTAM_CLEANUP_ENABLE=1 을 명시적으로 줘야 한다.
+// (경위: docs/place-rows-cause-2026-11-14.md)
 if (has('delete')) {
+  if (process.env.CONTAM_CLEANUP_ENABLE !== '1') {
+    console.log('⛔ 삭제는 비활성 상태다 (가드 적용 전). 켜려면 CONTAM_CLEANUP_ENABLE=1 과 --reason= 이 필요하다.');
+    console.log('   --dry 는 그대로 쓸 수 있다.');
+    process.exit(1);
+  }
   const bf = arg('backup-file') || arg('backup');
   if (!bf || !fs.existsSync(bf)) { console.log('❌ --backup-file=<백업json> 이 없으면 삭제하지 않는다'); process.exit(1); }
   const b = JSON.parse(fs.readFileSync(bf, 'utf8'));
   if (b.pairs_requested !== pairs.length) { console.log(`❌ 백업의 쌍 수(${b.pairs_requested}) ≠ 대상(${pairs.length})`); process.exit(1); }
+  const reason = arg('reason');
+  if (!reason || reason.trim().length < 5) { console.log('❌ --reason=<사유 5자 이상> 이 없으면 삭제하지 않는다'); process.exit(1); }
   console.log(`\n백업 확인: ${bf} (쌍 ${b.pairs_found}개 / 행 ${b.rows}개, ${b.made_at})`);
-  const r = await dbCall('purge_place_rankings', { pairs });
+  // 먼저 세서 그 수를 expected_rows 로 선언한다. 서버가 다시 세서 다르면 한 행도 지우지 않는다.
+  const d0 = await dbCall('purge_place_rankings', { pairs, dry: true });
+  console.log(`선언할 행 수: ${d0.rows}행 (백업 ${b.rows}행)`);
+  if (d0.rows !== b.rows) { console.log(`❌ 지울 행(${d0.rows}) ≠ 백업 행(${b.rows}) — 삭제하지 않는다`); process.exit(1); }
+  const r = await dbCall('purge_place_rankings', {
+    pairs, confirm: true, expected_rows: d0.rows, reason: reason.trim(), backup_file: bf,
+  });
   let left = 0;
-  for (const p of r.per) { console.log(`  ${p.date} — 키워드 ${p.keywords}개 / 삭제 ${p.rows}행 / 남음 ${p.left}`); left += p.left; }
+  for (const p of r.per) { console.log(`  ${p.date} — 키워드 ${p.keywords}개 / 삭제 ${p.deleted}행 / 남음 ${p.left}`); left += p.left; }
   console.log(`삭제 완료: 쌍 ${r.pairs}개 / 행 ${r.rows}개 / 남은 행 ${left}개`);
   if (left) console.log('⚠ 남은 행이 있다 — 다시 실행할 것');
 }
