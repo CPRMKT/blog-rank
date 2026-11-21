@@ -516,42 +516,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // ===== 10/26~11/10 플레이스 순위 복원 (2026-11 일회용 — 복원이 끝나면 이 블록과 DB 함수를 지운다) =====
-    // 근거·절차: docs/place-snapshot-recovery-2026-11.md. 날짜 하나 = DB 트랜잭션 하나(restore_place_day).
-    // DB 함수가 구간 밖 날짜·행 수 불일치·이미 있는 쌍·잘못된 행을 전부 거부하고, 넣은 수가 다르면 롤백한다.
-    if (action === 'restore_place_day') {
-      if (!isCron) return res.status(403).json({ ok: false, error: '관리 전용 액션입니다.' });
-      // 시간 창: KST 22:30~05:30 만(크론 06~14시·18:30~22:30 과 겹치지 않게). 시험(dry)도 같다.
-      const kst = new Date(Date.now() + 9 * 3600000); const hm = kst.getUTCHours() * 100 + kst.getUTCMinutes();
-      if (!(hm >= 2230 || hm < 530)) return res.status(400).json({ ok: false, error: `복원·시험은 KST 22:30~05:30 에만 — 지금 ${String(hm).padStart(4, '0')}. 아무것도 하지 않았습니다.` });
-      const ALLOWED = ['date', 'owner_id', 'rows', 'expected_rows', 'reason', 'dry'];
-      const unknown = Object.keys(data || {}).filter((k) => !ALLOWED.includes(k));
-      if (unknown.length) return res.status(400).json({ ok: false, error: `모르는 옵션 ${unknown.join(', ')} — 아무것도 하지 않았습니다.` });
-      const d = String(data.date || '');
-      if (!/^2026-1[01]-\d\d$/.test(d) || d < '2026-10-26' || d > '2026-11-10') return res.status(400).json({ ok: false, error: `복원 구간 밖 날짜 ${d}` });
-      if (!Array.isArray(data.rows) || !Number.isInteger(data.expected_rows) || data.rows.length !== data.expected_rows) {
-        return res.status(400).json({ ok: false, error: '행 배열과 예상 행 수(정수)가 같아야 합니다 — 넣지 않았습니다.' });
-      }
-      const rows = data.rows.map((r) => ({ keyword: String(r.keyword), place_id: String(r.place_id), rank: Number(r.rank) }));
-      const dry = data.dry === true;
-      const t0 = Date.now();
-      try {
-        const result = await supaFetch('/rpc/restore_place_day', {
-          method: 'POST',
-          body: JSON.stringify({ p_date: d, p_owner: data.owner_id, p_rows: rows, p_expected: data.expected_rows, p_reason: String(data.reason || ''), p_dry: dry }),
-        });
-        return res.status(200).json({ ok: true, result, api_ms: Date.now() - t0 });
-      } catch (e) {
-        // 시험 호출은 DB 가 일부러 예외를 내고 롤백한다 — 그 메시지에 측정값이 들어 있다.
-        const m = String(e.message || '');
-        if (dry && m.startsWith('DRY_RUN_OK ')) {
-          let measured = null; try { measured = JSON.parse(m.slice(11)); } catch {}
-          return res.status(200).json({ ok: true, dry: true, rolled_back: true, measured, api_ms: Date.now() - t0 });
-        }
-        return res.status(200).json({ ok: false, error: m, api_ms: Date.now() - t0 });
-      }
-    }
-
     // ===== 블로그 진단 =====
     // 블로그 공개정보(RSS+본문 통계) — NCP /blog-profile 프록시. 새 서버리스 함수 없이 db.js 안에서 처리.
     if (action === 'blog_profile') {
