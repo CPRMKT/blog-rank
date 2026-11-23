@@ -92,7 +92,10 @@ export async function scrapePlaceSearch(keyword, count = 50, budgetMs = 50000) {
       placeId: String(it.id),
       name: it.name || '',
       category: it.category || '',
-      visitorReviews: toNum(it.visitorReviewCount),
+      // 방문자리뷰: 네이버는 리뷰가 없을 때 0 이 아니라 null 을 보낸다(2026-11-22 형태 계수: null 580·"0" 0).
+      // 예전엔 toNum 이 null 을 0 으로 바꿔 '진짜 0'처럼 저장했다 → 값 없음은 NULL 로 저장(2026-11-24 승인).
+      // 블로그리뷰는 진짜 0 을 보내므로 그대로, 저장수는 이미 NULL 처리.
+      visitorReviews: (it.visitorReviewCount == null || String(it.visitorReviewCount).trim() === '') ? null : toNum(it.visitorReviewCount),
       blogReviews: toNum(it.blogCafeReviewCount),
       saves: it.saveCount == null ? null : toNum(it.saveCount),
     });
