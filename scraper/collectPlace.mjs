@@ -6,7 +6,7 @@
 //   COLLECTOR_BASE_URL  Vercel 배포 주소(기본 아래)
 //   SCRAPER_API_KEY     로컬 스크래퍼 Bearer 키 (.env)
 import fs from 'fs';
-import { notifyBatchResult } from './src/notify.mjs';
+import { notifyBatchResult, heldBaseline } from './src/notify.mjs';
 
 const BASE = (process.env.COLLECTOR_BASE_URL || 'https://blog-rank-phi.vercel.app').replace(/\/$/, '');
 const SCRAPER = 'http://127.0.0.1:8080';
@@ -197,6 +197,7 @@ async function main() {
 
     let zeroStreak = 0;            // 연속 0곳 카운터(정상 응답 1건이면 0으로 리셋)
     const totalKw = byKeyword.size;
+    summary.tracked = totalKw;   // 알림 문구용(추적 N개 중 미수집 M개)
     const startedAt = Date.now();
 
     // 마지막 수집일이 오래된 키워드부터 돈다. 중간에 멈춰도 다음 회차에서 그 뒤가 먼저 처리돼
@@ -361,6 +362,12 @@ async function main() {
     process.exitCode = 1;
   } finally {
     // 정상 종료·예외 모두에서 한 번 판단한다(조건에 안 걸리면 조용히 넘어간다).
+    // 알림 판단 재료: 실행 상한(시간), 회차(아침/저녁), 0곳 보류 평소값(최근 7일 같은 회차 중앙값)
+    try {
+      summary.limitH = Math.round(RUN_LIMIT_MS / 3600000);
+      summary.slot = RUN_LIMIT_BASE === EVENING_LIMIT_MS ? 'pm' : 'am';
+      summary.heldBase = heldBaseline(summary.slot, runDate);
+    } catch {}
     try { await notifyBatchResult('플레이스 순위 수집', summary); } catch {}
     // 오늘 보류된 키워드 목록을 파일로 남긴다 — 화면에서 '-'(미노출)와 구분해 "보류"로 표시하는 근거.
     // failures.log는 꼬리 80줄만 읽히므로 186건 같은 대량 보류를 담지 못한다 → 날짜별 파일로 따로 둔다.
