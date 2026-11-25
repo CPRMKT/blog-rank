@@ -196,6 +196,9 @@ async function main() {
     log(`카나리 통과 — ${canaryText}`);
 
     let zeroStreak = 0;            // 연속 0곳 카운터(정상 응답 1건이면 0으로 리셋)
+    // 연속 0곳 구간에서 보류된 키워드(백오프 직전 1·2번째). 백오프로 허용량이 회복되면 다시 조회한다(2026-11-25 제안).
+    // 근거: 11/15~25 백오프 74회 모두 대기 직후 첫 조회가 회복 — 경계에 걸린 키워드는 결과가 없는 게 아니라 허용량 소진.
+    let streakHeld = [];
     const totalKw = byKeyword.size;
     summary.tracked = totalKw;   // 알림 문구용(추적 N개 중 미수집 M개)
     const startedAt = Date.now();
@@ -261,9 +264,26 @@ async function main() {
             log(`  ▶ 대기 종료 — "${keyword}"부터 이어서 진행`);
             zeroStreak = 0;
             try { const again = await scrapeOnce(keyword); if (again.length > 0) { log(`  ↻ "${keyword}" 대기 후 ${again.length}곳(회복)`); items = again; } } catch { /* 유지 */ }
+            // 같은 연속 0곳 구간에서 보류했던 키워드도 다시 조회(최대 2건). 회복되면 저장하고 보류 집계에서 뺀다.
+            for (const h of streakHeld.splice(0)) {
+              try {
+                await sleep(KEYWORD_DELAY_MS);
+                const r = await scrapeOnce(h.keyword);
+                if (r.length === 0) { log(`  ⚠ "${h.keyword}" 대기 후에도 0곳 — 보류 유지`); continue; }
+                for (const owner_id of h.owners) {
+                  await dbSaveWithRetry('save_place_rankings', { keyword: h.keyword, owner_id, checked_date: today, rows: r }, `"${h.keyword}"`);
+                  summary.saved++;
+                }
+                lastMap[h.keyword] = today;
+                summary.zeroHeld--;
+                summary.heldKws = summary.heldKws.filter((k) => k !== h.keyword);
+                log(`  ↻ "${h.keyword}" 대기 후 재조회 ${r.length}곳(회복) → 저장`);
+              } catch (e) { log(`  ⚠ "${h.keyword}" 대기 후 재조회 실패(${String(e.message).slice(0, 60)}) — 보류 유지`); }
+            }
           }
         } else {
           zeroStreak = 0;
+          streakHeld = [];   // 연속이 끊긴 0곳(동래배네스트cc류 단발)은 재조회 대상이 아니다
         }
         // 자체점검②: 재시도 후에도 0곳인데 과거에 정상 데이터가 있던 키워드면 의심 → 저장 보류(기존 스냅샷 보존).
         // 과거에도 늘 0이던 키워드(동래배네스트cc류)만 진짜 0으로 인정하고 기존대로 처리.
@@ -273,6 +293,7 @@ async function main() {
           if (prevRows.length > 0) {
             summary.zeroHeld++;
             summary.heldKws.push(keyword);
+            if (zeroStreak > 0 && zeroStreak < ZERO_STREAK_LIMIT) streakHeld.push({ keyword, owners });
             log(`  ⚠ "${keyword}" 0곳 응답(기존 ${prev.checked_date} ${prevRows.length}곳 이력) → 저장 보류·스냅샷 보존`);
             logFail('place', keyword, `0곳 응답 — 저장 보류(기존 ${prev.checked_date} ${prevRows.length}곳 보존)`);
             await sleep(KEYWORD_DELAY_MS);
