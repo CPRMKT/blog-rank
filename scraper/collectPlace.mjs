@@ -40,6 +40,11 @@ const backoffMin = () => Math.max(1, Math.round(BACKOFF_MS / 60000));
 const LOG_DIR = '/var/log/blog-rank-scraper';
 const FAIL_LOG = `${LOG_DIR}/failures.log`; // 실패 전용 로그(스크립트 공통)
 const LAST_FILE = `${LOG_DIR}/place-last-collected.json`;   // 키워드 -> 마지막 수집일(KST)
+// 백오프 뒤 재조회 하루 상한(2026-11-25 승인 조건: 하루 추가 네이버 요청 약 8건 이하). 회차를 넘어 날짜별로 센다.
+const RETRY_FILE = `${LOG_DIR}/place-held-retry.json`;
+const HELD_RETRY_MAX = parseInt(process.env.PLACE_HELD_RETRY_MAX || '8', 10);
+function retryUsed(date) { try { const j = JSON.parse(fs.readFileSync(RETRY_FILE, 'utf8')); return j.date === date ? j.n : 0; } catch { return 0; } }
+function retryAdd(date) { const n = retryUsed(date) + 1; try { fs.writeFileSync(RETRY_FILE, JSON.stringify({ date, n })); } catch {} return n; }
 
 // 키워드별 마지막 수집일. 파일이 없으면 기존 로그에서 복원한다(첫 실행에도 정렬이 되도록).
 function loadLastCollected() {
@@ -265,7 +270,11 @@ async function main() {
             zeroStreak = 0;
             try { const again = await scrapeOnce(keyword); if (again.length > 0) { log(`  ↻ "${keyword}" 대기 후 ${again.length}곳(회복)`); items = again; } } catch { /* 유지 */ }
             // 같은 연속 0곳 구간에서 보류했던 키워드도 다시 조회(최대 2건). 회복되면 저장하고 보류 집계에서 뺀다.
+            // 오늘 이미 수집된 키워드(저녁 회차의 경계 보류 — 아침 값이 그날 기록으로 남아 있음)는 다시 조회하지 않는다.
             for (const h of streakHeld.splice(0)) {
+              if (lastMap[h.keyword] === today) continue;
+              if (retryUsed(today) >= HELD_RETRY_MAX) { log(`  ⚠ "${h.keyword}" 재조회 하루 상한(${HELD_RETRY_MAX}건) 도달 — 보류 유지`); continue; }
+              retryAdd(today);
               try {
                 await sleep(KEYWORD_DELAY_MS);
                 const r = await scrapeOnce(h.keyword);
